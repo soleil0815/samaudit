@@ -1,0 +1,11 @@
+# SAMAUDIT – direct dependencies (pinned exactly).
+# The complete list used for the build, including all sub-dependencies, is in
+# requirements.txt. Regenerate with:  ./update.sh --lock
+starlette==1.6.0
+uvicorn==0.53.0
+jinja2==3.1.6
+ldap3==2.9.1
+reportlab==5.0.1
+cryptography==50.0.1
+smbprotocol==1.14.0
+tzdata==2025.2

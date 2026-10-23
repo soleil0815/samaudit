@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nav_help', lang) }} – {{ APP_NAME }}{% endblock %}
+{% block body %}
+{% if sess %}{{ super() }}{% else %}
+<main style="max-width:1180px;margin:0 auto">
+  <p style="text-align:right;margin:0 0 -18px"><a href="/lang/de?next=/help" {% if lang == 'de' %}style="font-weight:700"{% endif %}>DE</a> · <a href="/lang/en?next=/help" {% if lang == 'en' %}style="font-weight:700"{% endif %}>EN</a></p>
+  {{ self.content() }}<p style="margin-top:28px"><a href="/login">← {{ t('login_title', lang) }}</a></p></main>
+{% endif %}
+{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ t('nav_help', lang) }}</h1>
+<p>{{ 'Handbuch für Prüfer und Betrieb' if lang == 'de' else 'Manual for auditors and operators' }} · SAMAUDIT v{{ VERSION }}</p></div></div>
+<div class="help-layout">
+  <nav class="help-toc panel" aria-label="{{ 'Inhalt' if lang == 'de' else 'Contents' }}">
+    <b>{{ 'Inhalt' if lang == 'de' else 'Contents' }}</b>
+    <ul>{% for level, id, title in toc %}<li class="lvl{{ level }}"><a href="#{{ id }}">{{ title }}</a></li>{% endfor %}</ul>
+  </nav>
+  <article class="panel panel-pad manual">{{ manual_html|safe }}</article>
+</div>
+{% endblock %}

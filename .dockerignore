@@ -1,0 +1,19 @@
+# Runtime data and local configuration – never part of the image
+data/
+backups/
+.env
+.env.run
+.update-*/
+base-image.lock
+certs/*
+!certs/README.txt
+*.zip
+
+# Development / repository files
+.git
+.github/
+**/__pycache__/
+*.pyc
+.ruff_cache/
+*.md
+!app/docs/*.md

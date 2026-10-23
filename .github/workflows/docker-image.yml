@@ -1,0 +1,98 @@
+# Builds the SAMAUDIT container image on GitHub and publishes it to the
+# GitHub Container Registry: ghcr.io/<owner>/<repo>  (here: ghcr.io/soleil0815/samaudit)
+#
+#   push to main      -> tags: latest, <version from app/version.py>, sha-<commit>
+#   push tag v1.2.3   -> tag:  1.2.3   (the tag must match app/version.py)
+#   pull request      -> build only (test), nothing is published
+#
+# Servers update with:  sh update.sh --pull
+name: Container image
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Read version and base image
+        id: info
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' app/version.py)"
+          base="$(sed -n 's/^ARG PYTHON_IMAGE=//p' Dockerfile | head -1)"
+          # use the pinned digest from base-image.lock if it belongs to the same tag
+          if [ -f base-image.lock ]; then
+            lock="$(grep -v '^#' base-image.lock | head -1 | tr -d '[:space:]')"
+            [ "${lock%%@*}" = "$base" ] && base="$lock"
+          fi
+          if [[ "$GITHUB_REF" == refs/tags/v* ]] && [ "${GITHUB_REF#refs/tags/v}" != "$version" ]; then
+            echo "::error::Git tag ${GITHUB_REF#refs/tags/} does not match app/version.py ($version)"
+            exit 1
+          fi
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "base=$base"       >> "$GITHUB_OUTPUT"
+          echo "image=$image"     >> "$GITHUB_OUTPUT"
+          echo "SAMAUDIT $version, base image $base -> $image"
+
+      - name: Set up QEMU (for arm64)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags
+        id: tags
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.info.outputs.image }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.info.outputs.version }},enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=sha,prefix=sha-,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.tags.outputs.tags }}
+          # only these labels – the image's own OCI labels (title, version) stay as set in the Dockerfile
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          build-args: |
+            PYTHON_IMAGE=${{ steps.info.outputs.base }}
+            APP_VERSION=${{ steps.info.outputs.version }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

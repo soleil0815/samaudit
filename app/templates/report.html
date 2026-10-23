@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}{{ t('report', lang) }} {{ ov.fqdn }} – {{ t('app_name', lang) }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ t('report', lang) }} {{ ov.fqdn }}</h1>
+    <p>{{ scan.started_at|dt(lang) }}, {{ t('started_by', lang)|lower }} {{ scan.started_by }}{% if scan.duration %} ({{ '%.0f'|format(scan.duration) }} s){% endif %}</p>
+  </div>
+  <a class="btn btn-primary" href="/report/{{ scan.id }}/pdf">{{ icon('pdf') }}{{ t('download_pdf', lang) }}</a>
+</div>
+
+<!-- Zusammenfassung -->
+<section class="panel panel-pad">
+  <div class="hero">
+    <div class="seal-wrap">
+      {{ seal(scan.score_global, lang)|safe }}
+      <div class="seal-caption">{{ t('risk_score', lang) }}<br>{{ t('risk_scale', lang) }}</div>
+    </div>
+    <div>
+      <div class="cat-scores">
+        {% for c in CATEGORIES %}{% set v = scores[c] %}
+        <a class="cat-row" href="#cat-{{ c }}" style="--c: var(--c-{{ c }})">
+          <span class="dot"></span>
+          <span class="lbl">{{ t('cat_' ~ c, lang) }}<small>{{ by_cat[c]|length }} {{ t('findings', lang) }}</small></span>
+          <span class="val score {{ level_class(v) }}">{{ v }}</span>
+          <span class="meter"><i class="{{ level_class(v) }}" style="width: {{ [v, 2]|max }}%"></i></span>
+        </a>
+        {% endfor %}
+      </div>
+      <p style="margin:20px 0 0;color:var(--ink-2)">{{ t('summary_text', lang, n=fails|length, c=(by_cat.values()|select|list|length), crit=sev_counts.critical, high=sev_counts.high) }}</p>
+    </div>
+  </div>
+</section>
+
+<div class="grid g-2" style="margin-top:18px">
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('top_findings', lang) }}</h2></div>
+    <div class="panel-body">
+      {% if top %}<ol class="top-list">
+        {% for f in top %}<li><a href="#{{ f.rule_id }}">{{ f.rule.title[lang] }}</a><span class="sev sev-{{ f.severity }}">{{ t('sev_' ~ f.severity, lang) }}</span></li>{% endfor %}
+      </ol>{% else %}<p class="muted">{{ t('no_findings', lang) }}</p>{% endif %}
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>{{ t('overview', lang) }}</h2></div>
+    <div class="panel-body">
+      <dl class="facts">
+        <div><dt>{{ t('users', lang) }}</dt><dd class="num">{{ ov.users.enabled }} <small>/ {{ ov.users.total }}</small></dd></div>
+        <div><dt>{{ t('computers', lang) }}</dt><dd class="num">{{ ov.computers.enabled }} <small>/ {{ ov.computers.total }}</small></dd></div>
+        <div><dt>{{ t('admins', lang) }}</dt><dd class="num">{{ ov.admins }}</dd></div>
+        <div><dt>{{ t('groups', lang) }}</dt><dd class="num">{{ ov.groups }}</dd></div>
+        <div><dt>{{ t('func_level', lang) }}</dt><dd>{{ ov.domain_level }}</dd></div>
+        <div><dt>LAPS</dt><dd class="num">{% if ov.laps.total %}{{ (100 * ov.laps.covered / ov.laps.total)|round|int }} %{% else %}–{% endif %}</dd></div>
+        <div><dt>{{ t('last_backup', lang) }}</dt><dd class="num" style="font-size:15px">{{ tv('@v_never', lang) if ov.last_backup == 'never' else (ov.last_backup or '–') }}</dd></div>
+      </dl>
+      <p class="small muted" style="margin-top:12px">{{ ov.netbios }} ({{ 'Samba AD' if ov.domain_type == 'samba' else 'Windows AD' }}), SID {{ ov.sid }}, {{ t('scanned_with', lang)|lower }} {{ ov.dc_host }}{% if ov.vendor %} ({{ ov.vendor }}){% endif %}{% if ov.unprivileged %}<br>{{ t('scan_rights', lang) }}{% endif %}</p>
+    </div>
+  </section>
+</div>
+
+<nav class="toc" aria-label="{{ t('details', lang) }}">
+  {% for c in CATEGORIES %}<a href="#cat-{{ c }}" style="--c: var(--c-{{ c }})"><i></i>{{ t('cat_' ~ c, lang) }}<b class="score {{ level_class(scores[c]) }}">{{ scores[c] }}</b></a>{% endfor %}
+  <a href="#overview">{{ t('overview', lang) }}</a>
+  <a href="#passed">{{ t('passed', lang) }}</a>
+</nav>
+
+{% if ov.warnings or ov.sysvol.status == 'error' %}
+<div class="alert warn" style="margin-top:18px"><b>{{ t('warnings', lang) }}:</b>
+  {% if ov.sysvol.status == 'error' %}{{ t('sysvol_status', lang) }}: {{ ov.sysvol.error }}. {% endif %}
+  {% for w in ov.warnings %}{{ w }}{% if not loop.last %}; {% endif %}{% endfor %}
+</div>
+{% endif %}
+
+<!-- Befunde je Bereich -->
+{% for c in CATEGORIES %}
+<section class="section" id="cat-{{ c }}">
+  <h2 style="--c: var(--c-{{ c }})"><span class="dot"></span>{{ t('cat_' ~ c, lang) }} <span class="score {{ level_class(scores[c]) }}">{{ scores[c] }}</span></h2>
+  <p class="cat-intro">{{ t('catd_' ~ c, lang) }}</p>
+  <div class="panel findings">
+  {% for f in by_cat[c] %}{% set r = f.rule %}
+    <details class="finding" id="{{ f.rule_id }}">
+      <summary style="--c: var(--sev-{{ f.severity }})">
+        <span class="stripe"></span>
+        <span>
+          <span class="ftitle">{{ r.title[lang] }}</span> {% if f.new %}<span class="tag-new">{{ t('new_since', lang) }}</span>{% endif %}
+          <span class="fmeta"><span class="rid">{{ f.rule_id }}</span><span>{{ f.count }} {{ 'Objekt(e)' if lang == 'de' else 'object(s)' }}</span>{% if f.note %}<span>{{ tv(f.note, lang) }}</span>{% endif %}</span>
+        </span>
+        <span class="fright"><span class="sev sev-{{ f.severity }}">{{ t('sev_' ~ f.severity, lang) }}</span><span class="pts">+{{ f.points }}</span>{{ icon('chev') }}</span>
+      </summary>
+      <div class="fbody">
+        <div>
+          <h4>{{ t('what', lang) }}</h4>
+          <p>{{ r.desc[lang] }}</p>
+        </div>
+        <div>
+          <h4>{{ t('how_fix', lang) }}</h4>
+          <p>{{ r.fix[lang] }}</p>
+          {% if r.code %}<div class="code"><pre>{{ r.code }}</pre><button type="button" data-copy data-done="{{ t('copied', lang) }}">{{ t('copy', lang) }}</button></div>{% endif %}
+        </div>
+        {% if f['items'] and f.columns %}
+        <div class="full">
+          <div class="items-tools">
+            <h4 style="margin:0">{{ t('affected', lang) }} ({{ f.count }})</h4>
+            {% if f['items']|length > 8 %}<input type="search" placeholder="{{ t('filter', lang) }}" data-filter="tbl-{{ f.rule_id }}" aria-label="{{ t('filter', lang) }}">{% endif %}
+          </div>
+          <div class="items"><table id="tbl-{{ f.rule_id }}">
+            <thead><tr>{% for col in f.columns %}<th>{{ t('col_' ~ col, lang) }}</th>{% endfor %}</tr></thead>
+            <tbody>{% for it in f['items'] %}<tr>{% for col in f.columns %}<td class="{{ 'mono' if col in ('dn', 'sid_history', 'file', 'spn') }}">{{ tv(it[col], lang) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+          </table></div>
+          {% if f.count > f['items']|length %}<p class="small muted">{{ t('more_items', lang, n=f.count - f['items']|length) }}</p>{% endif %}
+        </div>
+        {% endif %}
+        {% if r.refs %}<div class="full"><h4>{{ t('references', lang) }}</h4><ul class="refs">{% for lbl, url in r.refs %}<li><a href="{{ url }}" target="_blank" rel="noopener noreferrer">{{ lbl }}</a></li>{% endfor %}</ul></div>{% endif %}
+      </div>
+    </details>
+  {% else %}
+    <p class="panel-pad muted" style="margin:0">{{ t('no_findings', lang) }}</p>
+  {% endfor %}
+  </div>
+</section>
+{% endfor %}
+
+<!-- Domänenüberblick -->
+<section class="section" id="overview">
+  <h2>{{ t('overview', lang) }}</h2>
+  <div class="grid g-2">
+    <div class="panel">
+      <div class="panel-head"><h3>{{ t('dcs', lang) }}</h3></div>
+      <div class="panel-body table-wrap"><table>
+        <thead><tr><th>Name</th><th>{{ t('col_os', lang) }}</th><th>{{ t('col_last_logon', lang) }}</th></tr></thead>
+        <tbody>{% for d in ov.dcs %}<tr><td>{{ d.name }}{% if d.rodc %} <span class="muted small">(RODC)</span>{% endif %}</td><td>{{ d.os }}</td><td class="num">{{ d.last_logon }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>{{ t('pwd_policy', lang) }}</h3></div>
+      <div class="panel-body"><table>
+        <tbody>
+          <tr><td>{{ t('min_length', lang) }}</td><td class="num">{{ ov.policy.min_length }}</td></tr>
+          <tr><td>{{ t('complexity', lang) }}</td><td>{{ t('yes' if ov.policy.complexity else 'no', lang) }}</td></tr>
+          <tr><td>{{ t('history', lang) }}</td><td class="num">{{ ov.policy.history }}</td></tr>
+          <tr><td>{{ t('max_age', lang) }}</td><td class="num">{{ (ov.policy.max_age_days or 0)|round|int }}</td></tr>
+          <tr><td>{{ t('lockout', lang) }}</td><td class="num">{{ ov.policy.lockout_threshold }}</td></tr>
+          <tr><td>{{ t('maq', lang) }}</td><td class="num">{{ ov.maq if ov.maq is not none else '–' }}</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>{{ t('os_dist', lang) }}</h3></div>
+      <div class="panel-body">{{ os_svg|safe }}</div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h3>{{ t('priv_groups', lang) }}</h3></div>
+      <div class="panel-body table-wrap"><table>
+        <thead><tr><th>{{ t('col_group', lang) }}</th><th>{{ t('members', lang) }}</th><th></th></tr></thead>
+        <tbody>{% for g in ov.priv_groups %}<tr><td>{{ g.name }}</td><td class="num">{{ g.count }}</td><td class="small muted">{{ g.members[:6]|join(', ') }}{% if g.members|length > 6 %}, …{% endif %}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </div>
+    {% if ov.trusts %}
+    <div class="panel">
+      <div class="panel-head"><h3>{{ t('trusts', lang) }}</h3></div>
+      <div class="panel-body table-wrap"><table>
+        <thead><tr><th>{{ t('col_trust', lang) }}</th><th>{{ t('col_direction', lang) }}</th><th>{{ t('col_changed', lang) }}</th></tr></thead>
+        <tbody>{% for tr in ov.trusts %}<tr><td>{{ tr.name }}</td><td>{{ t('dir_' ~ tr.direction, lang) }}</td><td class="num">{{ tr.changed }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- Bestanden / nicht prüfbar -->
+<section class="section" id="passed">
+  <h2>{{ t('passed', lang) }} <span class="muted num" style="font-size:16px">{{ passed|length }}</span></h2>
+  <div class="panel panel-pad"><ul class="pass-list">{% for f in passed %}<li>{{ f.rule.title[lang] }}</li>{% endfor %}</ul></div>
+  {% if resolved %}
+  <h2 style="margin-top:22px">{{ t('resolved_since', lang) }}</h2>
+  <div class="panel panel-pad"><ul class="pass-list">{% for r in resolved %}<li>{{ r.title[lang] }}</li>{% endfor %}</ul></div>
+  {% endif %}
+  {% if na %}
+  <h2 style="margin-top:22px">{{ t('not_checked', lang) }} <span class="muted num" style="font-size:16px">{{ na|length }}</span></h2>
+  <div class="panel panel-pad"><ul class="pass-list na">{% for f in na %}<li>{{ f.rule.title[lang] }} <span class="muted small">– {{ t(f.note, lang) if f.note else '' }}</span></li>{% endfor %}</ul></div>
+  {% endif %}
+  <p class="small muted" style="margin-top:18px">{{ t('scope_note', lang) }}</p>
+</section>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ t('login_title', lang) }} – {{ APP_NAME }} v{{ VERSION }}{% endblock %}
+{% block body %}
+{% set fqdn_ = settings.domain_fqdn or ('firma.local' if settings.demo_mode else '') %}
+<div class="login-page">
+  <section class="login-intro">
+    <div class="brandline">{{ logo('lg') }}<span class="wordmark">{{ APP_NAME }}</span><span class="ver">v{{ VERSION }}</span></div>
+    <div class="label">{{ t('domain', lang) }}</div>
+    <h1 class="domain">{{ fqdn_ or '–' }}</h1>
+    <p class="lead">{{ 'Sicherheit der Domäne prüfen, bewerten und gezielt verbessern – mit normalen Benutzerrechten, ganz ohne Admin-Konto.' if lang == 'de' else 'Check, score and improve the security of your domain – with normal user rights, no admin account needed.' }}</p>
+    <div class="steps" aria-hidden="true">
+      <div class="step" style="--c: var(--c-stale)"><i></i><b>{{ 'Altlasten' if lang == 'de' else 'Stale' }}</b><span>{{ 'Konten, Systeme' if lang == 'de' else 'Accounts, systems' }}</span></div>
+      <div class="step" style="--c: var(--c-privileged)"><i></i><b>{{ 'Privilegien' if lang == 'de' else 'Privileges' }}</b><span>{{ 'Admins, Rechte, PKI' if lang == 'de' else 'Admins, rights, PKI' }}</span></div>
+      <div class="step" style="--c: var(--c-trusts)"><i></i><b>{{ 'Vertrauen' if lang == 'de' else 'Trusts' }}</b><span>{{ 'Andere Domänen' if lang == 'de' else 'Other domains' }}</span></div>
+      <div class="step" style="--c: var(--c-anomalies)"><i></i><b>{{ 'Anomalien' if lang == 'de' else 'Anomalies' }}</b><span>{{ 'Richtlinien, GPOs' if lang == 'de' else 'Policies, GPOs' }}</span></div>
+    </div>
+  </section>
+  <section>
+    <form class="panel login-card" method="post" action="/login" autocomplete="off">
+      <h2>{{ t('login_title', lang) }}</h2>
+      {% set dt_ = domain_type() %}
+      <div class="login-target{{ ' missing' if not fqdn_ }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V6.5L12 3l8 3.5V21"/><path d="M9 21v-5h6v5"/><path d="M8 9h.01M12 9h.01M16 9h.01M8 12.5h.01M12 12.5h.01M16 12.5h.01"/></svg>
+        <div>
+          <small>{{ 'Anmeldung an Domäne' if lang == 'de' else 'Signing in to domain' }}</small>
+          <b>{{ fqdn_ or ('nicht konfiguriert (DOMAIN_FQDN)' if lang == 'de' else 'not configured (DOMAIN_FQDN)') }}</b>
+          {% if fqdn_ %}<span>{% if dt_ == 'samba' %}Samba AD{% elif dt_ == 'windows' %}Windows AD{% else %}{{ 'Windows/Samba: automatische Erkennung' if lang == 'de' else 'Windows/Samba: detected automatically' }}{% endif %}{% if settings.netbios %} · {{ settings.netbios }}{% endif %} · {{ 'LDAPS' if settings.ldap_ssl else ('StartTLS' if settings.ldap_starttls else 'LDAP') }}</span>
+          {% if settings.dc_hosts and settings.dc_hosts != [settings.domain_fqdn] %}<span>DC: {{ settings.dc_hosts|join(', ') }}</span>{% endif %}{% endif %}
+        </div>
+      </div>
+      <p class="hint">{{ t('login_hint', lang) }}<br><span class="muted small">{{ 'Prüfer-Gruppe' if lang == 'de' else 'Auditor group' }}: {{ settings.allowed_groups|join(', ') }}</span></p>
+      {% if settings.demo_mode %}<div class="alert warn">{{ t('demo_banner', lang) }} <b>demo / demo</b></div>{% endif %}
+      {% for p in config_problems %}<div class="alert">{{ t('config_error', lang) }}: {{ p }}</div>{% endfor %}
+      {% if error %}<div class="alert" role="alert">{{ t(error, lang) }}</div>{% endif %}
+      <input type="hidden" name="token" value="{{ token }}">
+      <div class="field">
+        <label for="username">{{ t('username', lang) }}</label>
+        <div class="ctrl">{{ icon('user') }}<input id="username" name="username" required autofocus autocapitalize="off" spellcheck="false" placeholder="{{ t('username_ph', lang) }}" maxlength="256"></div>
+      </div>
+      <div class="field">
+        <label for="password">{{ t('password', lang) }}</label>
+        <div class="ctrl">{{ icon('lock') }}<input id="password" name="password" type="password" required autocomplete="current-password" maxlength="512"></div>
+      </div>
+      <button class="btn btn-primary" type="submit" data-busy="{{ t('login_btn', lang) }} …">{{ t('login_btn', lang) }}</button>
+      <div class="login-foot">
+        <span>{{ t('login_footer', lang) }}</span>
+        <span>{{ 'Open Source unter' if lang == 'de' else 'Open source under' }} AGPL-3.0-or-later · <a href="/help" style="color:inherit;text-decoration:underline">{{ t('nav_help', lang) }}</a> · <a href="/privacy" style="color:inherit;text-decoration:underline">{{ t('nav_privacy', lang) }}</a> · <a href="https://helfi.space" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline">helfi.space</a></span>
+        <span class="langs"><a href="/lang/de?next=/login" class="{{ 'on' if lang == 'de' }}">DE</a><a href="/lang/en?next=/login" class="{{ 'on' if lang == 'en' }}">EN</a></span>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

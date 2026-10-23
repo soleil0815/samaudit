@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h1>{{ t('nav_settings', lang) }}</h1><p>{{ t('pins_intro', lang) }}</p></div></div>
+
+<section class="panel panel-pad">
+  <dl class="facts wide">
+    <div><dt>{{ t('domain', lang) }}</dt><dd>{{ settings.domain_fqdn or '–' }}</dd></div>
+    <div><dt>{{ t('type', lang) }}</dt><dd>{% set dt = domain_type() %}{{ 'Samba AD' if dt == 'samba' else ('Windows AD' if dt == 'windows' else '–') }}{% if settings.domain_type == 'auto' %} <small class="muted" style="font:400 12.5px var(--f-body)">({{ t('auto_detected', lang) }})</small>{% endif %}</dd></div>
+    <div><dt>{{ t('dc', lang) }}</dt><dd style="font-size:15px">{% for h in settings.dc_hosts %}{{ h }}<br>{% else %}–{% endfor %}</dd></div>
+    <div><dt>LDAP</dt><dd style="font-size:15px">{{ 'LDAPS' if settings.ldap_ssl else ('StartTLS' if settings.ldap_starttls else 'LDAP') }} :{{ settings.ldap_port }}</dd></div>
+    <div><dt>{{ t('cert_mode', lang) }}</dt><dd style="font-size:15px">{{ t('mode_' ~ settings.ldap_cert_mode, lang) }}</dd></div>
+    <div><dt>{{ t('tz', lang) }}</dt><dd style="font-size:15px">{{ settings.tz }}</dd></div>
+  </dl>
+</section>
+
+<section class="section" id="webcert">
+  <h2>{{ t('webcert_title', lang) }}</h2>
+  <div class="panel panel-pad">
+  {% if not settings.tls_enabled %}<p class="muted" style="margin:0">{{ t('webcert_off', lang) }}</p>
+  {% else %}
+    {% if cert_msg %}<div class="alert ok" role="status">{{ t(cert_msg, lang) }}</div>{% endif %}
+    {% if cert_err %}<div class="alert" role="alert">{{ cert_err }}</div>{% endif %}
+    {% if webcert.error %}<div class="alert">{{ t('webcert_error', lang) }} {{ webcert.error }}</div>{% endif %}
+    {% for w in webcert.warnings or [] %}<div class="alert {{ '' if w == 'cert_expired' else 'warn' }}">{{ t(w, lang) }}</div>{% endfor %}
+    <dl class="facts wide">
+      <div><dt>{{ t('webcert_source', lang) }}</dt><dd style="font-size:15px">
+        {%- if webcert.source == 'upload' %}{{ t('webcert_upload_src', lang) }}
+        {%- elif webcert.source == 'folder' %}{{ t('webcert_folder_src', lang) }}
+        {%- else %}{{ t('webcert_self', lang) }}{% endif %}
+        {%- if webcert.file %}<br><small class="mono">{{ webcert.file }}</small>{% endif %}
+        {%- if webcert.uploaded_at %}<br><small>{{ webcert.uploaded_at|dt(lang) }}{% if webcert.uploaded_by %} · {{ t('webcert_by', lang) }} {{ webcert.uploaded_by }}{% endif %}</small>{% endif %}</dd></div>
+      <div><dt>{{ t('subject', lang) }}</dt><dd style="font-size:15px">{{ webcert.subject or '–' }}</dd></div>
+      <div><dt>{{ t('webcert_issuer', lang) }}</dt><dd style="font-size:15px">{{ webcert.issuer or '–' }}</dd></div>
+      <div><dt>{{ t('valid_until', lang) }}</dt><dd style="font-size:15px">{{ (webcert.not_after or '')[:10] }}{% if webcert.days_left is defined %} <small>({{ webcert.days_left }} {{ t('days', lang) }})</small>{% endif %}</dd></div>
+      <div><dt>{{ t('webcert_names', lang) }}</dt><dd style="font-size:15px">{{ (webcert.sans or [])|join(', ') or '–' }}</dd></div>
+    </dl>
+    <p class="small muted" style="margin:14px 0 0">{{ t('fingerprint', lang) }}: <span class="mono">{{ webcert.fingerprint or '–' }}</span></p>
+
+    <form class="cert-upload" method="post" action="/connection/cert" enctype="multipart/form-data">
+      <h3>{{ t('webcert_upload', lang) }}</h3>
+      <p class="small muted">{{ t('webcert_upload_help', lang) }}</p>
+      <input type="hidden" name="csrf" value="{{ sess.csrf }}">
+      <div class="cert-grid">
+        <div class="field">
+          <label for="certfiles">{{ t('webcert_files', lang) }}</label>
+          <input id="certfiles" name="files" type="file" multiple required accept=".pfx,.p12,.crt,.cer,.pem,.key,.der">
+        </div>
+        <div class="field">
+          <label for="certpw">{{ t('webcert_password', lang) }}</label>
+          <div class="ctrl">{{ icon('lock') }}<input id="certpw" name="password" type="password" autocomplete="off" maxlength="256" placeholder="{{ t('webcert_password_ph', lang) }}"></div>
+        </div>
+      </div>
+      <div class="cert-actions">
+        <button class="btn btn-primary" type="submit" data-busy="{{ t('webcert_upload_btn', lang) }} …">{{ t('webcert_upload_btn', lang) }}</button>
+      </div>
+    </form>
+    {% if webcert.source == 'upload' %}
+    <form method="post" action="/connection/cert/remove" data-confirm="{{ t('webcert_remove_confirm', lang) }}" style="margin-top:12px">
+      <input type="hidden" name="csrf" value="{{ sess.csrf }}">
+      <button class="btn btn-danger" type="submit">{{ t('webcert_remove', lang) }}</button>
+    </form>
+    {% endif %}
+  {% endif %}
+  </div>
+</section>
+
+<section class="section">
+  <h2>{{ t('pins_title', lang) }}</h2>
+  <div class="panel"><div class="panel-body table-wrap" style="padding:10px 20px">
+  {% if pins %}
+  <table>
+    <thead><tr><th>{{ t('dc', lang) }}</th><th>{{ t('subject', lang) }}</th><th>{{ t('fingerprint', lang) }}</th><th>{{ t('valid_until', lang) }}</th><th>{{ t('last_seen', lang) }}</th><th></th></tr></thead>
+    <tbody>{% for p in pins %}
+      <tr>
+        <td>{{ p.host }}</td>
+        <td>{{ p.subject }} <span class="muted small">({{ 'CA' if p.is_ca else 'DC' }})</span></td>
+        <td class="mono">{{ p.fingerprint[:32] }}<br>{{ p.fingerprint[32:] }}</td>
+        <td class="num">{{ (p.not_after or '')[:10] }}</td>
+        <td class="num">{{ p.last_seen|dt(lang) }}</td>
+        <td><form method="post" action="/connection/reset" data-confirm="{{ t('pin_confirm', lang) }}">
+          <input type="hidden" name="csrf" value="{{ sess.csrf }}"><input type="hidden" name="host" value="{{ p.host }}">
+          <button class="btn btn-danger" type="submit">{{ t('pin_reset', lang) }}</button></form></td>
+      </tr>{% endfor %}</tbody>
+  </table>
+  {% else %}<p class="muted" style="margin:14px 0">{{ t('pins_none', lang) }}</p>{% endif %}
+  </div></div>
+</section>
+{% endblock %}

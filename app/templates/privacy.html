@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nav_privacy', lang) }} – {{ APP_NAME }}{% endblock %}
+{% block body %}
+{% if sess %}{{ super() }}{% else %}
+<main style="max-width:860px;margin:0 auto">{{ self.content() }}<p style="margin-top:28px"><a href="/login">← {{ t('login_title', lang) }}</a></p></main>
+{% endif %}
+{% endblock %}
+{% block content %}
+{% set rd = settings.report_retention_days %}{% set ad = settings.audit_retention_days %}
+<div class="page-head"><div><h1>{{ t('nav_privacy', lang) }}</h1>
+<p>{{ 'Welche Daten SAMAUDIT verarbeitet, wozu und wie lange.' if lang == 'de' else 'Which data SAMAUDIT processes, why and for how long.' }}</p></div></div>
+<section class="panel panel-pad privacy">
+{% if lang == 'de' %}
+  <h3>Verantwortliche Stelle</h3>
+  <p>{{ settings.privacy_contact or 'Der Betreiber dieser SAMAUDIT-Installation. (Kontakt kann über PRIVACY_CONTACT hinterlegt werden.)' }}</p>
+  <h3>Zweck</h3>
+  <p>Prüfung und Verbesserung der Sicherheit des Active Directory (IT-Sicherheit, Art. 32 DSGVO).</p>
+  <h3>Welche Daten werden verarbeitet?</h3>
+  <ul>
+    <li><b>Aus dem Active Directory:</b> Kontonamen, Gruppenmitgliedschaften, Zeitpunkt der letzten Anmeldung und Passwortänderung, Konto-Einstellungen, Computernamen und Betriebssysteme. Passwörter oder Passwort-Hashes werden <b>nicht</b> ausgelesen.</li>
+    <li><b>Zur Nutzung von SAMAUDIT:</b> Benutzername der Prüfer, Zeitpunkt und IP-Adresse von Anmeldungen und Aktionen (Protokoll).</li>
+    <li><b>Passwort der Prüfer:</b> nur verschlüsselt im Arbeitsspeicher während der Sitzung, nie auf Datenträger.</li>
+  </ul>
+  <h3>Speicherdauer</h3>
+  <ul>
+    <li>Berichte: {% if rd %}{{ rd }} {{ t('days', lang) }}, danach automatische Löschung{% else %}{{ t('never_auto', lang) }}{% endif %} (oder manuell unter „Berichte“).</li>
+    <li>Protokoll: {% if ad %}{{ ad }} {{ t('days', lang) }}{% else %}{{ t('never_auto', lang) }}{% endif %}.</li>
+    <li>Sitzungen: Ende bei Abmeldung, nach {{ settings.session_timeout_min }} Minuten Inaktivität oder Neustart.</li>
+  </ul>
+  <h3>Empfänger und Übermittlung</h3>
+  <p>Keine. Alle Daten bleiben auf diesem Server. SAMAUDIT lädt keine Inhalte aus dem Internet nach, nutzt keine Analyse- oder Tracking-Dienste und darf ausgehend nur die eigenen Domänencontroller erreichen. Keine Übermittlung in Drittländer.</p>
+  <h3>Cookies und Browser-Speicher</h3>
+  <p>Nur technisch notwendige Cookies: Sitzung, Schutz vor Formular-Missbrauch (CSRF) und gewählte Sprache. Die gewählte Darstellung (hell/dunkel) wird nur im eigenen Browser gespeichert. Es gibt keine Werbe- oder Statistik-Cookies, daher ist kein Einwilligungsbanner nötig.</p>
+  <h3>Zugriff</h3>
+  <p>Nur Mitglieder der Prüfer-Gruppe ({{ settings.allowed_groups|join(', ') }}); Administrator-Konten sind ausgeschlossen. Alle Anmeldungen und Aktionen werden protokolliert.</p>
+  <h3>Ihre Rechte</h3>
+  <p>Betroffene haben das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung und Widerspruch (Art. 15–21 DSGVO) sowie auf Beschwerde bei einer Aufsichtsbehörde. Wenden Sie sich dazu an die verantwortliche Stelle.</p>
+{% else %}
+  <h3>Controller</h3>
+  <p>{{ settings.privacy_contact or 'The operator of this SAMAUDIT installation. (A contact can be configured via PRIVACY_CONTACT.)' }}</p>
+  <h3>Purpose</h3>
+  <p>Assessing and improving the security of Active Directory (IT security, Art. 32 GDPR).</p>
+  <h3>Data processed</h3>
+  <ul>
+    <li><b>From Active Directory:</b> account names, group memberships, last logon and password change times, account settings, computer names and operating systems. Passwords or password hashes are <b>not</b> read.</li>
+    <li><b>Use of SAMAUDIT:</b> auditor user names, time and IP address of sign-ins and actions (activity log).</li>
+    <li><b>Auditor password:</b> encrypted in memory during the session only, never written to disk.</li>
+  </ul>
+  <h3>Retention</h3>
+  <ul>
+    <li>Reports: {% if rd %}{{ rd }} {{ t('days', lang) }}, then deleted automatically{% else %}{{ t('never_auto', lang) }}{% endif %} (or manually under "Reports").</li>
+    <li>Activity log: {% if ad %}{{ ad }} {{ t('days', lang) }}{% else %}{{ t('never_auto', lang) }}{% endif %}.</li>
+    <li>Sessions: end at sign-out, after {{ settings.session_timeout_min }} minutes of inactivity or on restart.</li>
+  </ul>
+  <h3>Recipients and transfers</h3>
+  <p>None. All data stays on this server. SAMAUDIT loads nothing from the internet, uses no analytics or tracking and may only connect to the domain controllers. No transfers to third countries.</p>
+  <h3>Cookies and browser storage</h3>
+  <p>Only technically necessary cookies: session, CSRF protection and language. The chosen theme is stored in your browser only. No advertising or statistics cookies, so no consent banner is required.</p>
+  <h3>Access</h3>
+  <p>Members of the auditor group only ({{ settings.allowed_groups|join(', ') }}); administrator accounts are excluded. All sign-ins and actions are logged.</p>
+  <h3>Your rights</h3>
+  <p>Data subjects have the right of access, rectification, erasure, restriction and objection (Art. 15–21 GDPR) and may lodge a complaint with a supervisory authority. Please contact the controller.</p>
+{% endif %}
+</section>
+{% endblock %}

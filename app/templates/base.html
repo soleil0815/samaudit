@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>{% block title %}{{ APP_NAME }} v{{ VERSION }}{% endblock %}</title>
+  <link rel="icon" href="/static/img/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css?v={{ VERSION }}">
+  <script src="/static/theme-init.js?v={{ VERSION }}"></script>
+  <script src="/static/app.js?v={{ VERSION }}" defer></script>
+</head>
+<body>
+{% macro icon(name) -%}
+  {%- if name == 'home' -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>
+  {%- elif name == 'reports' -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13h6M10 17h6"/></svg>
+  {%- elif name == 'rules' -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.2 1.2L6.8 5M3.5 12l1.2 1.2 2.1-2.2M3.5 18l1.2 1.2 2.1-2.2"/></svg>
+  {%- elif name == 'audit' -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+  {%- elif name == 'link' -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7"/></svg>
+  {%- elif name == 'play' -%}<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+  {%- elif name == 'pdf' -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 19.5h14"/></svg>
+  {%- elif name == 'chev' -%}<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+  {%- elif name == 'user' -%}<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5z"/></svg>
+  {%- elif name == 'logout' -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H14"/><path d="M4 12h11"/><path d="m11 8 4 4-4 4"/></svg>
+  {%- elif name == 'help' -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.8"/><path d="M12 17.2h.01"/></svg>
+  {%- elif name == 'lock' -%}<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 10V8a5 5 0 0 1 10 0v2h.5A1.5 1.5 0 0 1 19 11.5v8a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10zm2 0h6V8a3 3 0 0 0-6 0z"/></svg>
+  {%- endif -%}
+{%- endmacro %}
+{% macro logo(cls='') -%}
+<span class="logo-tile {{ cls }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 4.5 5.3v5.9c0 5 3.2 8.6 7.5 10.3 4.3-1.7 7.5-5.3 7.5-10.3V5.3Z" fill="#fff"/><path d="m8.6 11.9 2.4 2.4 4.4-4.6" fill="none" stroke="#6366e6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+{%- endmacro %}
+{% block body %}
+<div class="shell">
+  <aside class="rail">
+    <a class="brand" href="/">{{ logo() }}<span class="brand-text"><span><span class="wordmark">{{ APP_NAME }}</span><span class="ver">v{{ VERSION }}</span></span><small>{{ settings.domain_fqdn or 'firma.local' }}</small></span></a>
+    <nav class="nav" aria-label="Navigation">
+      <a href="/" {% if path == '/' %}aria-current="page"{% endif %}>{{ icon('home') }}{{ t('nav_dashboard', lang) }}</a>
+      <a href="/scans" {% if path.startswith('/scans') or path.startswith('/report') %}aria-current="page"{% endif %}>{{ icon('reports') }}{{ t('nav_scans', lang) }}</a>
+      <a href="/rules" {% if path == '/rules' %}aria-current="page"{% endif %}>{{ icon('rules') }}{{ t('nav_rules', lang) }}</a>
+      <a href="/connection" {% if path == '/connection' %}aria-current="page"{% endif %}>{{ icon('link') }}{{ t('nav_settings', lang) }}</a>
+      <a href="/audit" {% if path == '/audit' %}aria-current="page"{% endif %}>{{ icon('audit') }}{{ t('nav_audit', lang) }}</a>
+      <a href="/help" {% if path == '/help' %}aria-current="page"{% endif %}>{{ icon('help') }}{{ t('nav_help', lang) }}</a>
+    </nav>
+    <div class="rail-foot">
+      {% if sess %}<div class="who-row">
+        <div class="who">{{ sess.display }}<small>{{ sess.groups|join(', ') }}</small></div>
+        <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ sess.csrf }}"><button class="logout-btn" type="submit" title="{{ t('logout', lang) }}" aria-label="{{ t('logout', lang) }}">{{ icon('logout') }}</button></form>
+      </div>{% endif %}
+      <div class="switches">
+        <a href="/lang/de?next={{ path }}" class="{{ 'on' if lang == 'de' }}" hreflang="de">DE</a>
+        <a href="/lang/en?next={{ path }}" class="{{ 'on' if lang == 'en' }}" hreflang="en">EN</a>
+        <button type="button" data-theme-btn data-label-dark="{{ 'Dunkel' if lang == 'de' else 'Dark' }}" data-label-light="{{ 'Hell' if lang == 'de' else 'Light' }}" aria-label="{{ t('theme', lang) }}">{{ 'Dunkel' if lang == 'de' else 'Dark' }}</button>
+      </div>
+      <span class="tzinfo"><a href="/privacy" style="color:inherit">{{ t('nav_privacy', lang) }}</a> · {{ t('tz', lang) }}: {{ settings.tz }}<br><a href="https://helfi.space" target="_blank" rel="noopener noreferrer" style="color:inherit">helfi.space</a></span>
+    </div>
+  </aside>
+  <main>
+    {% if settings.demo_mode %}<div class="demo-bar">{{ t('demo_banner', lang) }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% endblock %}
+</body>
+</html>

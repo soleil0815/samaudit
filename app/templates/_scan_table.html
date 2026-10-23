@@ -1,0 +1,34 @@
+<div class="table-wrap">
+<table>
+  <thead><tr>
+    <th>{{ t('date', lang) }}</th><th>{{ t('risk_score', lang) }}</th>
+    {% for c in CATEGORIES %}<th>{{ t('cat_' ~ c, lang) }}</th>{% endfor %}
+    <th>{{ t('findings', lang) }}</th><th>{{ t('started_by', lang) }}</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for s in scans %}
+    <tr>
+      <td class="num">{{ s.started_at|dt(lang) }}</td>
+      {% if s.status == 'done' %}
+        <td><span class="score {{ level_class(s.score_global) }}">{{ s.score_global }}</span></td>
+        {% for c in CATEGORIES %}<td class="num">{{ s['score_' ~ c] }}</td>{% endfor %}
+        <td class="num">{{ s.n_fail }}</td>
+      {% else %}
+        <td colspan="{{ CATEGORIES|length + 2 }}"><span class="{{ 'sev sev-critical' if s.status == 'error' else 'muted' }}">{{ t('st_' ~ s.status, lang) }}</span></td>
+      {% endif %}
+      <td>{{ s.started_by }}</td>
+      <td><div class="row-actions">
+        {% if s.status == 'done' %}
+          <a href="/report/{{ s.id }}">{{ t('open_report', lang) }}</a>
+          <a href="/report/{{ s.id }}/pdf">PDF</a>
+        {% elif s.status == 'running' %}<a href="/scan/{{ s.id }}">{{ t('st_running', lang) }}</a>{% endif %}
+        {% if s.status != 'running' and allow_delete %}
+        <form method="post" action="/report/{{ s.id }}/delete" data-confirm="{{ t('confirm_delete', lang) }}">
+          <input type="hidden" name="csrf" value="{{ sess.csrf }}"><button class="btn btn-danger" type="submit">{{ t('delete', lang) }}</button>
+        </form>{% endif %}
+      </div></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>

@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h1>{{ t('nav_scans', lang) }}</h1></div></div>
+<section class="panel"><div class="panel-body" style="padding:10px 18px 14px">
+{% if scans %}{% set allow_delete = True %}{% include "_scan_table.html" %}{% else %}<p class="empty">{{ t('no_scans', lang) }}</p>{% endif %}
+</div></section>
+{% endblock %}

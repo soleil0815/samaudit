@@ -1,0 +1,45 @@
+# Runtime data – contains reports, vulnerabilities, certificates and keys
+data/*
+!data/.gitkeep
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+certs/*
+!certs/README.txt
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+
+# Exported reports and backups
+*.pdf
+*.tgz
+*.tar.gz
+*.zip
+
+# Local configuration (.env)
+.env
+.env.*
+!.env.example
+
+# Python / Editor / System
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Backups of update.sh and temporary files
+backups/
+requirements.txt.new
+.samaudit-manifest
+.update-*/
+*.new.*

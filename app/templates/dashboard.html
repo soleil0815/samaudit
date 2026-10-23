@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">{{ t('domain', lang) }}</div>
+    <h1>{{ (overview.fqdn if overview else None) or settings.domain_fqdn or 'firma.local' }}</h1>
+    <p>{% if latest %}{{ t('last_scan', lang) }}: {{ latest.started_at|dt(lang) }}{% else %}{{ t('nav_dashboard', lang) }}{% endif %}</p>
+  </div>
+  {% if running %}
+    <a class="btn btn-ghost" href="/scan/{{ running.id }}">{{ t('scan_running', lang) }}</a>
+  {% else %}
+  <form method="post" action="/scan">
+    <input type="hidden" name="csrf" value="{{ sess.csrf }}">
+    <button class="btn btn-primary" type="submit" data-busy="{{ t('scan_running', lang) }}">{{ icon('play') }}{{ t('start_scan', lang) }}</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if not latest %}
+  <div class="panel empty">
+    {{ logo('lg') }}
+    <p>{{ t('no_scans', lang) }}</p>
+    <p class="small muted">{{ t('scan_hint', lang) }}</p>
+  </div>
+{% else %}
+  <section class="panel panel-pad">
+    <div class="hero">
+      <div class="seal-wrap">
+        {{ seal(latest.score_global, lang)|safe }}
+        <div class="seal-caption">{{ t('risk_score', lang) }}<br>{{ t('risk_scale', lang) }}</div>
+      </div>
+      <div>
+        <div class="cat-scores">
+          {% for c in CATEGORIES %}{% set v = latest['score_' ~ c] %}
+          <a class="cat-row" href="/report/{{ latest.id }}#cat-{{ c }}" style="--c: var(--c-{{ c }})">
+            <span class="dot"></span>
+            <span class="lbl">{{ t('cat_' ~ c, lang) }}<small>{{ t('catd_' ~ c, lang) }}</small></span>
+            <span class="val score {{ level_class(v) }}">{{ v }}</span>
+            <span class="meter"><i class="{{ level_class(v) }}" style="width: {{ [v, 2]|max }}%"></i></span>
+          </a>
+          {% endfor %}
+        </div>
+        <div class="sev-tally" style="margin-top:22px">
+          {% for sv in SEVERITIES if sv != 'info' %}
+          <div class="t" style="--c: var(--sev-{{ sv }})"><b>{{ sev_counts[sv] }}</b><span>{{ t('sev_' ~ sv, lang) }}</span></div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid g-2" style="margin-top:18px">
+    <section class="panel">
+      <div class="panel-head"><h2>{{ t('top_findings', lang) }}</h2><a class="small" href="/report/{{ latest.id }}">{{ t('open_report', lang) }}</a></div>
+      <div class="panel-body">
+        {% if top %}
+        <ol class="top-list">
+          {% for f in top %}
+          <li><a href="/report/{{ latest.id }}#{{ f.rule_id }}">{{ rules[f.rule_id].title[lang] }}</a><span class="sev sev-{{ f.severity }}">{{ t('sev_' ~ f.severity, lang) }}</span></li>
+          {% endfor %}
+        </ol>
+        {% else %}<p class="muted">{{ t('no_findings', lang) }}</p>{% endif %}
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>{{ t('trend', lang) }}</h2></div>
+      <div class="panel-body">
+        {% if trend_svg %}{{ trend_svg|safe }}{% else %}<p class="muted small">{{ 'Der Verlauf erscheint ab dem zweiten Scan.' if lang == 'de' else 'The trend appears after the second scan.' }}</p>{% endif %}
+        {% if overview %}
+        <dl class="facts" style="margin-top:14px">
+          <div><dt>{{ t('users', lang) }}</dt><dd class="num">{{ overview.users.enabled }} <small>{{ t('enabled', lang) }}</small></dd></div>
+          <div><dt>{{ t('computers', lang) }}</dt><dd class="num">{{ overview.computers.enabled }} <small>{{ t('enabled', lang) }}</small></dd></div>
+          <div><dt>{{ t('admins', lang) }}</dt><dd class="num">{{ overview.admins }}</dd></div>
+          <div><dt>{{ t('dcs', lang) }}</dt><dd class="num">{{ overview.dcs|length }}</dd></div>
+        </dl>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+
+  <section class="panel" style="margin-top:18px">
+    <div class="panel-head"><h2>{{ t('recent_scans', lang) }}</h2><a class="small" href="/scans">{{ t('nav_scans', lang) }}</a></div>
+    <div class="panel-body">{% include "_scan_table.html" %}</div>
+  </section>
+{% endif %}
+{% endblock %}

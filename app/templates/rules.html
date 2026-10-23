@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h1>{{ t('nav_rules', lang) }}</h1><p>{{ t('catalogue_intro', lang) }} ({{ rules|length }})</p></div></div>
+{% for c in CATEGORIES %}
+<section class="section">
+  <h2>{{ t('cat_' ~ c, lang) }}</h2>
+  <div class="panel"><div class="panel-body table-wrap" style="padding:8px 18px">
+  <table>
+    <thead><tr><th>{{ t('rule_id', lang) }}</th><th>{{ 'Prüfung' if lang == 'de' else 'Check' }}</th><th>{{ t('severity', lang) }}</th><th>{{ t('max_points', lang) }}</th><th>{{ t('platform', lang) }}</th></tr></thead>
+    <tbody>{% for r in rules if r.category == c %}
+      <tr><td class="mono">{{ r.id }}</td><td><b>{{ r.title[lang] }}</b><br><span class="small muted">{{ r.desc[lang] }}</span></td>
+        <td><span class="sev sev-{{ r.severity }}">{{ t('sev_' ~ r.severity, lang) }}</span></td><td class="num">{{ r.points }}</td>
+        <td class="small">{{ r.platforms|join(', ')|replace('windows', 'Windows')|replace('samba', 'Samba') }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div></div>
+</section>
+{% endfor %}
+{% endblock %}

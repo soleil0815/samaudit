@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-head"><div><h1>{{ t('nav_audit', lang) }}</h1><p>{{ t('audit_intro', lang) }}</p></div></div>
+<section class="panel"><div class="panel-body table-wrap" style="padding:8px 18px">
+<table>
+  <thead><tr><th>{{ t('time', lang) }}</th><th>{{ t('user', lang) }}</th><th>{{ t('action', lang) }}</th><th>{{ t('ip', lang) }}</th><th>{{ t('col_detail', lang) }}</th></tr></thead>
+  <tbody>{% for e in entries %}
+    <tr><td class="num">{{ e.ts|dt(lang) }}</td><td>{{ e.user or '–' }}</td>
+      <td>{% if e.action == 'act_login_failed' or e.action == 'act_scan_error' %}<span class="sev sev-high">{{ t(e.action, lang) }}</span>{% else %}{{ t(e.action, lang) }}{% endif %}</td>
+      <td class="mono">{{ e.ip or '' }}</td><td class="small">{{ e.detail or '' }}</td></tr>
+  {% endfor %}</tbody>
+</table></div></section>
+{% endblock %}
