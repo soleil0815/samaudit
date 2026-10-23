@@ -956,3 +956,7 @@ def _scripts(ctx: Ctx):
     sv = need_sysvol(ctx)
     hits = sv.get("script_secrets") or []
     return Hit([{"file": h["file"], "line": str(h["line"]), "kind": h["kind"]} for h in hits]) if hits else None
+
+
+# Prüfkatalog Teil 3 (ab v1.9)
+from . import rules3  # noqa: E402,F401

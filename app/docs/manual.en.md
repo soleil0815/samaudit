@@ -1,6 +1,6 @@
 # SAMAUDIT – Manual
 
-SAMAUDIT assesses the security of your Active Directory (Windows AD or Samba AD). It reads the domain with the rights of a **normal** user account, applies 105 checks and presents the result as a risk score, a detailed report with remediation advice, and a PDF.
+SAMAUDIT assesses the security of your Active Directory (Windows AD or Samba AD). It reads the domain with the rights of a **normal** user account, applies 110 checks and presents the result as a risk score, a detailed report with remediation advice, and a PDF.
 
 The manual has two parts: **Part A** for auditors who use SAMAUDIT in the browser, **Part B** for running it on the server.
 
@@ -68,7 +68,7 @@ In the report, top right: **Download PDF**. The PDF contains a cover page, summa
 
 ### Check catalogue
 
-All 105 checks with ID, area, severity and description. IDs start with `STL-` (stale objects), `PRV-` (privileged accounts), `TRS-` (trusts) and `ANM-` (anomalies).
+All 110 checks with ID, area, severity and description. IDs start with `STL-` (stale objects), `PRV-` (privileged accounts), `TRS-` (trusts) and `ANM-` (anomalies).
 
 ### Connection
 
@@ -152,7 +152,7 @@ The complete list is in the README.
 sh update.sh --pull
 ```
 
-Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.8.0`. If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
+Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.9.0`. If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
 
 **Via ZIP file (local build):**
 

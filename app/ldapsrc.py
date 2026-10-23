@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import ssl
+import uuid
 from dataclasses import dataclass
 
 from .adutil import (
@@ -431,13 +432,14 @@ USER_ATTRS = ["sAMAccountName", "userPrincipalName", "displayName", "userAccount
               "pwdLastSet", "whenCreated", "adminCount", "servicePrincipalName", "primaryGroupID", "sIDHistory",
               "objectSid", "msDS-SupportedEncryptionTypes", "msDS-AllowedToDelegateTo",
               "msDS-AllowedToActOnBehalfOfOtherIdentity", "userPassword", "unixUserPassword", "objectClass",
-              "msDS-KeyCredentialLink"]
+              "msDS-KeyCredentialLink", "altSecurityIdentities"]
 COMPUTER_ATTRS = ["sAMAccountName", "dNSHostName", "operatingSystem", "operatingSystemVersion",
                   "userAccountControl", "lastLogonTimestamp", "pwdLastSet", "whenCreated", "servicePrincipalName",
                   "msDS-AllowedToDelegateTo", "msDS-AllowedToActOnBehalfOfOtherIdentity",
                   "ms-Mcs-AdmPwdExpirationTime", "msLAPS-PasswordExpirationTime", "primaryGroupID",
                   "sIDHistory", "objectSid", "msDS-SupportedEncryptionTypes", "objectClass",
-                  "msDS-RevealOnDemandGroup", "msDS-NeverRevealGroup", "msDS-RevealedUsers"]
+                  "msDS-RevealOnDemandGroup", "msDS-NeverRevealGroup", "msDS-RevealedUsers",
+                  "altSecurityIdentities"]
 
 
 def _account(e: Entry, computer: bool) -> dict:
@@ -461,6 +463,7 @@ def _account(e: Entry, computer: bool) -> dict:
         "rbcd": bool(e.get("msDS-AllowedToActOnBehalfOfOtherIdentity")),
         "classes": [c.lower() for c in as_strs(e.get("objectClass"))],
         "key_cred": bool(e.get("msDS-KeyCredentialLink")),
+        "alt_sec_ids": as_strs(e.get("altSecurityIdentities")),
     }
     if computer:
         legacy = e.get("ms-Mcs-AdmPwdExpirationTime")
@@ -575,10 +578,12 @@ def collect(conn, progress) -> dict:
 
     progress(55, "phase_groups")
     groups = []
-    for e in search(conn, dn, "(objectClass=group)", ["sAMAccountName", "objectSid", "member", "groupType"]):
+    for e in search(conn, dn, "(objectClass=group)", ["sAMAccountName", "objectSid", "member", "groupType",
+                                                     "whenCreated"]):
         sid = sid_to_str((e.get("objectSid") or [None])[0])
         groups.append({"dn": e.dn, "sam": as_str(e.get("sAMAccountName")) or "", "sid": sid,
-                       "rid": sid_rid(sid), "members": _full_members(conn, e)})
+                       "rid": sid_rid(sid), "members": _full_members(conn, e),
+                       "created": gentime_to_dt(e.get("whenCreated"))})
     if root_sid != domain_sid:
         # Enterprise/Schema Admins liegen in der Stammdomäne
         for e in safe("root_groups", lambda: search(
@@ -626,6 +631,7 @@ def collect(conn, progress) -> dict:
         "tombstone_lifetime": as_int(ds.get("tombstoneLifetime")) if ds else None,
     }
     config.update(safe("extras", lambda: _collect_extras(conn, dn, config_nc, dse), {}) or {})
+    config["dmsa"] = safe("dmsa", lambda: _collect_dmsa(conn, dn, schema_nc))
 
     psos = []
     for e in safe("psos", lambda: search(conn, f"CN=Password Settings Container,CN=System,{dn}",
@@ -755,6 +761,31 @@ def _last_backup(conn, dn: str):
                 except ValueError:
                     return gentime_to_dt(m.group(1))
     return "never"
+
+
+DMSA_CLASS = "msDS-DelegatedManagedServiceAccount"
+
+
+def _collect_dmsa(conn, dn: str, schema_nc: str) -> dict:
+    """Delegierte MSAs (Windows Server 2025): Wer darf sie anlegen, und auf wen verweisen bestehende?"""
+    cls = search(conn, schema_nc, f"(&(objectClass=classSchema)(lDAPDisplayName={DMSA_CLASS}))",
+                 ["schemaIDGUID"], paged=False)
+    if not cls:
+        return {"schema": False}
+    raw = (cls[0].get("schemaIDGUID") or [None])[0]
+    guid = str(uuid.UUID(bytes_le=bytes(raw))) if isinstance(raw, (bytes, bytearray)) and len(raw) == 16 else None
+    containers = []
+    flt = ("(|(objectClass=organizationalUnit)(distinguishedName=CN=Users,{0})(distinguishedName=CN=Computers,{0})"
+           "(distinguishedName=CN=Managed Service Accounts,{0}))").format(_escape(dn))
+    for e in search(conn, dn, flt, ["nTSecurityDescriptor"], sd=True):
+        containers.append({"dn": e.dn, "sd": parse_sd(e.get("nTSecurityDescriptor"))})
+    accounts = []
+    for e in search(conn, dn, f"(objectClass={DMSA_CLASS})",
+                    ["sAMAccountName", "msDS-ManagedAccountPrecededByLink", "msDS-DelegatedMSAState"]):
+        accounts.append({"dn": e.dn, "sam": as_str(e.get("sAMAccountName")) or "",
+                         "preceded_by": as_strs(e.get("msDS-ManagedAccountPrecededByLink")),
+                         "state": as_int(e.get("msDS-DelegatedMSAState"))})
+    return {"schema": True, "guid": guid, "containers": containers, "accounts": accounts}
 
 
 def _collect_extras(conn, dn: str, config_nc: str, dse: dict) -> dict:

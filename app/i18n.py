@@ -248,6 +248,19 @@ T: dict[str, dict[str, str]] = {
     "v_server": {"de": "Server", "en": "Server"},
     "v_entra_connect": {"de": "vermutlich Entra ID Connect", "en": "probably Entra ID Connect"},
     "v_all": {"de": "(alle Zwecke)", "en": "(all purposes)"},
+    "v_rc4_only": {"de": "nur RC4 erlaubt ({arg})", "en": "RC4 only ({arg})"},
+    "v_no_aes_keys": {"de": "keine AES-Schlüssel (Passwort zu alt)", "en": "no AES keys (password too old)"},
+    "v_server_auth": {"de": "Serverauthentifizierung", "en": "Server authentication"},
+    "v_wsus_https": {"de": "Serverauthentifizierung – WSUS per HTTPS im Einsatz", "en": "Server authentication – WSUS over HTTPS in use"},
+    "v_dmsa_create": {"de": "darf dMSAs anlegen ({arg} OU/Container)", "en": "may create dMSAs ({arg} OU/containers)"},
+    "v_dmsa_link_priv": {"de": "dMSA verweist auf privilegiertes Konto!", "en": "dMSA linked to privileged account!"},
+    "v_dmsa_link": {"de": "dMSA verweist auf aktives Konto", "en": "dMSA linked to enabled account"},
+    "v_uniq_off_1": {"de": "UPN-Eindeutigkeitsprüfung aus", "en": "UPN uniqueness check off"},
+    "v_uniq_off_2": {"de": "SPN-Eindeutigkeitsprüfung aus", "en": "SPN uniqueness check off"},
+    "v_uniq_off_3": {"de": "UPN- und SPN-Eindeutigkeitsprüfung aus", "en": "UPN and SPN uniqueness checks off"},
+    "v_invisible": {"de": "unsichtbares Zeichen im {arg}", "en": "invisible character in {arg}"},
+    "v_upn_is_sam": {"de": "UPN entspricht Anmeldename von {arg}", "en": "UPN equals logon name of {arg}"},
+    "v_duplicate": {"de": "{arg} mehrfach vergeben", "en": "duplicate {arg}"},
     "n_no_laps_schema": {"de": "LAPS ist nicht im Schema", "en": "LAPS not in schema"},
     "computer": {"de": "Computer", "en": "Computer"},
     "v_history": {"de": "Kennwortchronik", "en": "Password history"},
@@ -348,8 +361,10 @@ def t(key: str, lang: str = "de", **kw) -> str:
 
 def tv(value, lang: str = "de") -> str:
     """Übersetzt Werte aus Befunden, die mit '@' beginnen."""
-    if isinstance(value, str) and value.startswith("@") and value[1:] in T:
-        return t(value[1:], lang)
+    if isinstance(value, str) and value.startswith("@"):
+        key, _, arg = value[1:].partition("|")
+        if key in T:
+            return t(key, lang, arg=arg) if arg else t(key, lang)
     return "" if value is None else str(value)
 
 

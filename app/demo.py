@@ -16,6 +16,7 @@ from .adutil import (
 )
 
 DOM_SID = "S-1-5-21-1004336348-1177238915-682003330"
+DMSA_GUID = "0feb936f-47b3-49f2-9386-1dedc2c23765"
 DN = "DC=firma,DC=local"
 FQDN = "firma.local"
 
@@ -75,6 +76,11 @@ def build() -> dict:
                    last=1, pwd=2400, spns=["MSSQLSvc/srv-sql01.firma.local:1433", "MSSQLSvc/srv-sql01.firma.local"])
     user("svc_web", ou="OU=Dienstkonten,OU=IT", uac=UAC_NORMAL_ACCOUNT | UAC_DONT_EXPIRE_PASSWORD, last=2,
          pwd=1300, spns=["HTTP/intranet.firma.local"], enc_types=0x1F)
+    user("svc_sap", ou="OU=Dienstkonten,OU=IT", uac=UAC_NORMAL_ACCOUNT | UAC_DONT_EXPIRE_PASSWORD, last=1,
+         pwd=700, spns=["SAP/sap-prod.firma.local"], enc_types=0x4)
+    user("m.praktikant", last=3, pwd=50, spns=["HTTP/intranet.firma.local\u200b"])
+    user("p.weiss", last=6, pwd=80, upn="Administrator")
+    user("vertrieb.zert", last=9, pwd=120, alt_sec_ids=["X509:<RFC822>vertrieb@firma.de"])
     user("krbtgt_18842", ou=None, uac=UAC_NORMAL_ACCOUNT | UAC_ACCOUNTDISABLE, last=None, pwd=1200, created=1300)
     svc_sync = user("svc_sync", ou="OU=Dienstkonten,OU=IT", uac=UAC_NORMAL_ACCOUNT | UAC_DONT_EXPIRE_PASSWORD,
                     last=1, pwd=900)
@@ -140,6 +146,8 @@ def build() -> dict:
          last=0, pwd=10, created=2400)
     dc02 = comp("DC02", "Windows Server 2012 R2 Standard", ou="OU=Domain Controllers", uac=dc_uac, laps=False, pgid=516,
          last=1, pwd=12, created=3000)
+    comp("DC03", "Windows Server 2025 Standard", ou="OU=Domain Controllers", uac=dc_uac, laps=False, pgid=516,
+         last=0, pwd=8, created=120)
     comp("SRV-APP01", "Windows Server 2016 Standard", ou="OU=Server",
          uac=UAC_WORKSTATION_TRUST_ACCOUNT | UAC_TRUSTED_FOR_DELEGATION, laps=False)
     comp("SRV-WEB01", "Windows Server 2022 Standard", ou="OU=Server",
@@ -227,6 +235,9 @@ def build() -> dict:
     rodc["never_reveal"] = []
     rodc["revealed"] = [adm[1]["dn"]]
     adm[4]["key_cred"] = True
+    adm[2]["alt_sec_ids"] = ["X509:<I>DC=local,DC=firma,CN=FIRMA-CA<S>CN=adm.weber,OU=Admins,OU=IT,DC=firma,DC=local"]
+    groups.append({"dn": gdn("Read-only Domain Controllers"), "sam": "Read-only Domain Controllers",
+                   "sid": f"{DOM_SID}-521", "rid": 521, "members": [], "created": ago(2350)})
     groups.append({"dn": gdn("Denied RODC Password Replication Group"), "sam": "Denied RODC Password Replication Group",
                    "sid": f"{DOM_SID}-572", "rid": 572, "members": []})
     groups.append({"dn": gdn("Allowed RODC Password Replication Group"), "sam": "Allowed RODC Password Replication Group",
@@ -275,6 +286,10 @@ def build() -> dict:
         {"name": "EnrollmentAgent-Alt", "display": "Registrierungs-Agent (alt)", "name_flag": 0, "enroll_flag": 0,
          "ra_signature": 0, "ekus": ["1.3.6.1.4.1.311.20.2.1"], "published": True, "schema_version": 2,
          "sd": {"owner": f"{DOM_SID}-512", "aces": [ace(f"{DOM_SID}-513", ADS_RIGHT_DS_CONTROL_ACCESS,
+                                                         GUID_CERT_ENROLL)]}},
+        {"name": "Webserver-Intern", "display": "Webserver intern", "name_flag": 0x1, "enroll_flag": 0,
+         "ra_signature": 0, "ekus": ["1.3.6.1.5.5.7.3.1"], "published": True, "schema_version": 2,
+         "sd": {"owner": f"{DOM_SID}-512", "aces": [ace(f"{DOM_SID}-515", ADS_RIGHT_DS_CONTROL_ACCESS,
                                                          GUID_CERT_ENROLL)]}},
         {"name": "SubCA", "display": "Untergeordnete Zertifizierungsstelle", "name_flag": 0x1, "enroll_flag": 0,
          "ra_signature": 0, "ekus": [], "published": False,
@@ -328,11 +343,18 @@ def build() -> dict:
                         "sd": {"owner": None, "aces": [ace("S-1-5-11", 0x1)]}},
                        {"name": "_msdcs.firma.local", "dn": "", "allow_update": 2, "sd": {"owner": None, "aces": []}},
                    ],
-                   "last_backup": ago(52), "sysvol_repl": "dfsr"},
+                   "last_backup": ago(52), "sysvol_repl": "dfsr",
+                   "dmsa": {"schema": True, "guid": DMSA_GUID, "containers": [
+                       {"dn": f"OU=Server,{DN}", "sd": {"owner": f"{DOM_SID}-512", "aces": [
+                           ace(f"{DOM_SID}-1051", 0x1), ace(f"{DOM_SID}-512", 0x000F01FF)]}},
+                       {"dn": f"OU=Clients,{DN}", "sd": {"owner": f"{DOM_SID}-512", "aces": [
+                           ace(f"{DOM_SID}-1051", 0x1, DMSA_GUID)]}}],
+                       "accounts": [{"dn": f"CN=dmsa_backup,CN=Managed Service Accounts,{DN}", "sam": "dmsa_backup$",
+                                     "preceded_by": [svc_backup["dn"]], "state": 1}]}},
         "psos": [{"name": "PSO-Admins", "min_length": 14, "complexity": True, "reversible": False,
                   "lockout_threshold": 5, "applies_to": [it_admins], "precedence": 10}],
         "pki": {"cas": [{"name": "FIRMA-CA", "host": "srv-ca01.firma.local", "dn": "CN=FIRMA-CA,CN=Enrollment Services",
-                         "templates": ["User", "WebServer-Export", "VPN-Alt", "EnrollmentAgent-Alt"],
+                         "templates": ["User", "WebServer-Export", "VPN-Alt", "EnrollmentAgent-Alt", "Webserver-Intern"],
                          "certs": [_demo_ca_cert()], "sd": None,
                          "enroll_servers": ["1\n4\n0\nhttp://srv-ca01.firma.local/FIRMA-CA_CES_Kerberos/service.svc/CES\n0"]}],
                 "templates": templates, "objects": [

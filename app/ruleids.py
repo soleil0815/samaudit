@@ -112,4 +112,10 @@ LEGACY_IDS = {
     "A-PSLogging": "ANM-41",
     "A-LSAProtection": "ANM-42",
     "A-ScriptPasswords": "ANM-43",
+    # ab v1.9
+    "S-KerberosRC4": "STL-21",
+    "S-WeakCertMapping": "STL-22",
+    "P-ADCS-ESC17": "PRV-36",
+    "P-dMSA": "PRV-37",
+    "A-UPNSPNUniqueness": "ANM-44",
 }
