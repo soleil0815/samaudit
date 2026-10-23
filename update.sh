@@ -17,13 +17,20 @@
 # Reproducibility: on the first run the base image is pinned to its immutable digest
 # (file base-image.lock). All Python packages are pinned exactly in requirements.txt.
 # Requires Docker only – no Docker Compose.
+# Windows line endings (CRLF, e.g. after copying/editing on Windows) are repaired automatically.
+# The trailing "#" on the next two lines keeps them working even while the file still has CRLF.
+if grep -q "$(printf '\r')" "$0" 2>/dev/null; then echo "update.sh: converting Windows line endings (CRLF -> LF) …"; sed -i 's/\r$//' "$0" && exec bash "$0" "$@"; echo "Please run: sed -i 's/\r\$//' update.sh" >&2; exit 1; fi #
 # Started with "sh update.sh"? Then re-run automatically with bash (the script needs bash).
-if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
+if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi #
 set -euo pipefail
 ORIG_ARGS=("$@")
 ORIG_PWD="$PWD"
 cd "$(dirname "$0")"
 INSTALL_DIR="$PWD"
+# Files that break with Windows line endings (shell scripts, Dockerfile, package lists)
+for f in entrypoint.sh Dockerfile requirements.txt requirements.in .env.example; do
+  if [ -f "$f" ] && [ -w "$f" ] && grep -q $'\r' "$f"; then sed -i 's/\r$//' "$f"; echo "Converted Windows line endings in $f"; fi
+done
 
 SERVICE=samaudit
 CONTAINER=samaudit
@@ -58,7 +65,7 @@ for a in "$@"; do
         [ ${#m[@]} -gt 0 ] || { echo "ZIP file not found: $a"; exit 2; }
         ZIPS+=("${m[@]}")
       fi ;;
-    -h|--help) sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '3,19p' "$INSTALL_DIR/update.sh" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $a (see --help)"; exit 2 ;;
   esac
 done

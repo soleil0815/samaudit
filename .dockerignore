@@ -17,3 +17,4 @@ certs/*
 .ruff_cache/
 *.md
 !app/docs/*.md
+!THIRD-PARTY-NOTICES.md

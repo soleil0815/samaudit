@@ -4,7 +4,7 @@
 ARG PYTHON_IMAGE=python:3.13.16-slim
 FROM ${PYTHON_IMAGE}
 
-ARG APP_VERSION=1.8.0
+ARG APP_VERSION=1.8.1
 LABEL org.opencontainers.image.title="SAMAUDIT" \
       org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.description="Security assessment for Active Directory (Windows AD / Samba AD)" \
@@ -31,6 +31,8 @@ RUN pip install --no-deps --only-binary=:all: -r requirements.txt \
 
 COPY app ./app
 COPY run.py entrypoint.sh ./
+# Licence (AGPL-3.0-or-later) and third-party notices travel with the image
+COPY LICENSE NOTICE THIRD-PARTY-NOTICES.md /app/
 # Shipped with the image so "update.sh --pull" can keep the local copies up to date
 COPY update.sh .env.example /app/dist/
 COPY certs/README.txt /app/dist/certs-README.txt

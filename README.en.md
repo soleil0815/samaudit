@@ -1,8 +1,13 @@
-# SAMAUDIT v1.8.0 – Active Directory security assessment
+# SAMAUDIT v1.8.1 – Active Directory security assessment
 
 *Deutsche Version: [README.md](README.md)* · **Manual:** [app/docs/manual.en.md](app/docs/manual.en.md) (also in the web interface under **Help**)
 
 Self-hosted web application that reads a Windows or Samba AD domain, runs **105 security checks** and presents the result as a risk score (0–100), a detailed report with remediation advice, and a PDF export – in German or English.
+
+## New in 1.8.1
+
+- **Windows line endings are repaired:** if `update.sh` was copied or edited via Windows (CRLF), `sh update.sh` aborted with "Syntax error: "(" unexpected". The script now converts itself (and `entrypoint.sh`, `Dockerfile`, package lists) automatically; `.gitattributes` makes Git check the files out with LF even on Windows.
+- **Licence:** `LICENSE` holds the full GNU AGPL v3 text, the copyright notice is in `NOTICE`; both are also shipped in the container image.
 
 ## New in 1.8.0
 
@@ -401,7 +406,7 @@ It builds for `linux/amd64` and `linux/arm64`, using the pinned base image (from
 
 Website: [helfi.space](https://helfi.space)
 
-SAMAUDIT is free software under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later), see `LICENSE`. Anyone who modifies SAMAUDIT and makes it available to others over a network must also provide the modified source code. Libraries and fonts used: `THIRD-PARTY-NOTICES.md`.
+SAMAUDIT is free software under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later); licence text in `LICENSE`, copyright notice in `NOTICE`. Anyone who modifies SAMAUDIT and makes it available to others over a network must also provide the modified source code. Libraries and fonts used: `THIRD-PARTY-NOTICES.md`.
 
 **Usage notice:** SAMAUDIT is an assessment tool for administrators and security staff. Only use it on domains you are explicitly authorised to assess. The software is provided **without any warranty**; scores are indications and do not replace expert review. No liability is accepted for damage caused by using it or misinterpreting its results (see sections 15 and 16 of the licence).
 

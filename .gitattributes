@@ -1,0 +1,14 @@
+# Always check out with Linux line endings (LF) – also on Windows –
+# otherwise update.sh / entrypoint.sh fail with "Syntax error" on the server.
+* text=auto eol=lf
+*.sh  text eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.jpg binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+*.zip binary

@@ -1,8 +1,13 @@
-# SAMAUDIT v1.8.0 – Sicherheitsprüfung für Active Directory
+# SAMAUDIT v1.8.1 – Sicherheitsprüfung für Active Directory
 
 *English version: [README.en.md](README.en.md)* · **Handbuch:** [app/docs/handbuch.de.md](app/docs/handbuch.de.md) (auch in der Weboberfläche unter **Hilfe**)
 
 Selbst gehostete Webanwendung, die eine Windows- oder Samba-AD-Domäne ausliest, **105 Sicherheitsprüfungen** durchführt und das Ergebnis als Risikowert (0–100), detaillierten Bericht mit Maßnahmen und PDF ausgibt – auf Deutsch oder Englisch.
+
+## Neu in 1.8.1
+
+- **Windows-Zeilenenden werden repariert:** Wurde `update.sh` über Windows kopiert oder bearbeitet (CRLF), brach `sh update.sh` mit „Syntax error: "(" unexpected“ ab. Das Skript wandelt sich jetzt selbst (und `entrypoint.sh`, `Dockerfile`, Paketlisten) automatisch um; `.gitattributes` sorgt dafür, dass Git die Dateien auch unter Windows mit LF auscheckt.
+- **Lizenz:** `LICENSE` enthält den vollständigen Text der GNU AGPL v3, der Copyright-Hinweis steht in `NOTICE`; beide liegen auch im Container-Image.
 
 ## Neu in 1.8.0
 
@@ -396,7 +401,7 @@ Gebaut wird für `linux/amd64` und `linux/arm64`, mit dem fixierten Basisimage (
 
 Webseite: [helfi.space](https://helfi.space)
 
-SAMAUDIT ist freie Software unter der **GNU Affero General Public License v3.0 oder später** (AGPL-3.0-or-later), siehe `LICENSE`. Wer SAMAUDIT verändert und anderen über ein Netzwerk zur Verfügung stellt, muss den geänderten Quellcode ebenfalls bereitstellen. Verwendete Bibliotheken und Schriften: `THIRD-PARTY-NOTICES.md`.
+SAMAUDIT ist freie Software unter der **GNU Affero General Public License v3.0 oder später** (AGPL-3.0-or-later), Lizenztext in `LICENSE`, Copyright-Hinweis in `NOTICE`. Wer SAMAUDIT verändert und anderen über ein Netzwerk zur Verfügung stellt, muss den geänderten Quellcode ebenfalls bereitstellen. Verwendete Bibliotheken und Schriften: `THIRD-PARTY-NOTICES.md`.
 
 **Nutzungshinweis:** SAMAUDIT ist ein Prüfwerkzeug für Administratoren und Sicherheitsverantwortliche. Verwenden Sie es nur in Domänen, für die Sie ausdrücklich berechtigt sind. Die Software wird **ohne jede Gewährleistung** bereitgestellt; die Bewertungen sind Hinweise und ersetzen keine fachliche Prüfung. Für Schäden durch Einsatz oder Fehlinterpretation der Ergebnisse wird keine Haftung übernommen (siehe Abschnitte 15 und 16 der Lizenz).
 
