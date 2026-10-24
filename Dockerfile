@@ -4,7 +4,7 @@
 ARG PYTHON_IMAGE=python:3.13.16-slim
 FROM ${PYTHON_IMAGE}
 
-ARG APP_VERSION=1.9.2
+ARG APP_VERSION=1.9.3
 LABEL org.opencontainers.image.title="SAMAUDIT" \
       org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.description="Security assessment for Active Directory (Windows AD / Samba AD)" \
@@ -23,11 +23,15 @@ WORKDIR /app
 
 # Install exactly the pinned list (no re-resolution), then verify consistency.
 # Time zone data comes from the pinned tzdata package (instead of apt, whose versions change).
+# pip itself is removed afterwards: it is not needed at runtime and carries its own bundled
+# libraries (urllib3, certifi, msgpack, pkg_resources …) that show up in vulnerability scans.
 COPY requirements.txt .
-RUN pip install --no-deps --only-binary=:all: -r requirements.txt \
+RUN pip install --no-deps --only-binary=:all: --no-cache-dir -r requirements.txt \
  && pip check \
  && python -c "import os, shutil, tzdata; shutil.copytree(os.path.join(os.path.dirname(tzdata.__file__), 'zoneinfo'), '/usr/share/zoneinfo', dirs_exist_ok=True)" \
- && ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
+ && ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime && echo "$TZ" > /etc/timezone \
+ && python -m pip uninstall -y pip \
+ && rm -rf /usr/local/lib/python3*/ensurepip /root/.cache
 
 COPY app ./app
 COPY run.py entrypoint.sh ./
