@@ -361,14 +361,14 @@ def resolve_group_sids(conn, specs: list[str], domain_sid: str, root_sid: str, b
 
 
 def _netbios(conn, dse: dict, base_dn: str) -> str:
-    if settings.netbios:
-        return settings.netbios
+    """NetBIOS-Name der Domäne – bevorzugt aus dem Verzeichnis (DOMAIN_NETBIOS nur als Ersatz)."""
     try:
         res = search(conn, f"CN=Partitions,{dse.get('config_nc') or ''}",
                      f"(&(objectClass=crossRef)(nCName={_escape(base_dn)}))", ["nETBIOSName"], paged=False)
-        return (as_str(res[0].get("nETBIOSName")) or "") if res else ""
+        nb = (as_str(res[0].get("nETBIOSName")) or "") if res else ""
     except Exception:  # noqa: BLE001
-        return ""
+        nb = ""
+    return nb or settings.netbios
 
 
 def _verify_identity(conn, me: Entry, dse: dict, base_dn: str) -> None:

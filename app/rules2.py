@@ -718,7 +718,8 @@ def _audit(ctx: Ctx):
     legacy: dict = {}
     for g in ctx.gpo_guids("dc"):
         adv.update(sv.get("audit", {}).get(g) or {})
-        legacy.update((sv.get("secedit", {}).get(g) or {}).get("Event Audit") or {})
+        legacy.update({str(k).lower(): v for k, v in
+                       ((sv.get("secedit", {}).get(g) or {}).get("Event Audit") or {}).items()})
     need = {
         "Credential Validation": ("0cce923f-69ae-11d9-bed3-505054503030", "AuditAccountLogon"),
         "Kerberos Authentication Service": ("0cce9242-69ae-11d9-bed3-505054503030", "AuditAccountLogon"),
@@ -737,7 +738,7 @@ def _audit(ctx: Ctx):
         if v is None:
             v = adv.get(f"audit {name}".lower())
         if v is None and not adv:
-            v = as_num(legacy.get(leg))
+            v = as_num(legacy.get(leg.lower()))
         if not v:
             missing.append(name)
     if not missing:

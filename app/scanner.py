@@ -41,7 +41,6 @@ SECTION_RULES = {
     "dsheuristics": ("A-AnonymousAccess", "A-DSHeuristicsSDProp", "A-UPNSPNUniqueness", "A-Tombstone"),
     "recyclebin": ("A-RecycleBin",),
     "laps_schema": ("S-LAPS",),
-    "gmsa": ("S-Kerberoast", "P-KerberoastAdmin"),
     "root_groups": ("P-SchemaEnterpriseAdmins",),
 }
 
@@ -49,6 +48,17 @@ SECTION_RULES = {
 def _blocked(rule, failed: set[str]) -> bool:
     lid = getattr(rule, "legacy_id", rule.id)
     return any(lid.startswith(p) for sec in failed for p in SECTION_RULES.get(sec, ()))
+
+
+def _remember_dc_names(model: dict) -> None:
+    """DNS-Namen der DCs merken – damit das LDAPS-Pinning einen weiteren DC erkennt (siehe pins.check)."""
+    try:
+        names = sorted({(c.get("dns") or "").lower() for c in model.get("computers", [])
+                        if (c.get("is_dc") or c.get("is_rodc")) and c.get("dns")})
+        if names:
+            db.set_kv("dc_names", ",".join(names))
+    except Exception as e:  # noqa: BLE001
+        log.debug("dc_names: %s", e)
 
 
 def evaluate(model: dict) -> tuple[list[dict], dict]:
@@ -168,6 +178,7 @@ def _run(scan_id: int, bind_name: str, password: str) -> None:
             conn = ldapsrc.open_connection(bind_name, password)
             try:
                 model = ldapsrc.collect(conn, progress)
+                _remember_dc_names(model)
             finally:
                 try:
                     conn.unbind()

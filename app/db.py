@@ -300,7 +300,8 @@ def list_pins() -> list[dict]:
 def delete_pins(host: str | None = None) -> int:
     with conn() as c:
         if host:
-            cur = c.execute("DELETE FROM cert_pins WHERE host=?", (host.lower(),))
+            h = host.lower()     # „firma.local“ entfernt auch „firma.local [10.0.0.1]“ usw.
+            cur = c.execute("DELETE FROM cert_pins WHERE host=? OR substr(host, 1, ?)=?", (h, len(h) + 2, h + " ["))
         else:
             cur = c.execute("DELETE FROM cert_pins")
         return cur.rowcount

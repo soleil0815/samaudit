@@ -15,7 +15,8 @@ Vier unabhängige Prüfungen (Weboberfläche, LDAP/SYSVOL, Prüfregeln, Build/Up
   - Sperrlisten, die sich nicht auflösen lassen, führen zur Abweisung statt zum Durchlassen.
 - **LDAPS-Vertrauen:**
   - Das DC-Zertifikat muss ein Serverzertifikat sein und den beim ersten Kontakt gesehenen DNS-Namen tragen. Ein von der Unternehmens-CA für beliebige Rechner oder Benutzer ausgestelltes Zertifikat wird abgewiesen.
-  - Neue Adressen eines bereits gemerkten Namens werden nicht mehr automatisch vertraut.
+  - Eine neue Adresse eines bereits gemerkten Namens (z. B. der zweite DC, wenn der erste ausfällt) wird nur übernommen, wenn ihr Zertifikat zu einem DC der Domäne gehört (bekannt aus dem letzten Scan).
+  - `python -m app.pins reset firma.local` entfernt jetzt auch alle Einträge „firma.local [IP]“.
   - Das Zurücksetzen gemerkter Zertifikate geht standardmäßig nur noch auf dem Server (`PIN_RESET_WEB`).
 - **Login-Sperre:** gilt jetzt auch bei vielen gleichzeitigen Versuchen. Wiederholte gesperrte Versuche füllen das Protokoll nicht mehr.
 - **Robustheit:**

@@ -15,7 +15,8 @@ Four independent reviews (web interface, LDAP/SYSVOL, check rules, build/update/
   - Deny groups that cannot be resolved now reject the sign-in instead of letting it pass.
 - **LDAPS trust:**
   - The DC certificate must be a server certificate carrying the DNS name seen on first contact. A certificate the enterprise CA issued for any computer or user is rejected.
-  - New addresses of an already pinned name are no longer trusted automatically.
+  - A new address of an already pinned name (e.g. the second DC when the first one fails) is only accepted if its certificate belongs to a DC of the domain (known from the last scan).
+  - `python -m app.pins reset firma.local` now also removes all "firma.local [IP]" entries.
   - Resetting pins works only on the server by default (`PIN_RESET_WEB`).
 - **Login lockout:** now holds even against many parallel attempts. Repeated locked-out attempts no longer flood the log.
 - **Robustness:**

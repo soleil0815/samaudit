@@ -186,20 +186,47 @@ def check(host: str, chain: list[bytes]) -> dict:
 
     family = [p for p in db.family_pins(base) if p["host"] != host.lower()]
     if family:
+        # Weitere Adresse eines bereits gemerkten Namens (z. B. zweiter DC hinter dem Domänennamen):
+        # nur übernehmen, wenn das Zertifikat erkennbar zu einem DC dieser Domäne gehört.
+        dcs = known_dc_names()
+
+        def plausible_dc() -> bool:
+            if dcs:
+                return bool(names & dcs) or _host_matches(base, names)
+            b = base.lower()
+            return any(n == b or n.endswith("." + b) for n in names)
+
         for p in family:
-            if _anchor_matches(p, fp, path, anchor) and (_names_of(p) & names or _host_matches(base, names)):
+            if not _anchor_matches(p, fp, path, anchor):
+                continue
+            if not _names_of(p) or _names_of(p) & names or plausible_dc():
                 db.save_pin(host, p["fingerprint"], p["subject"], p["not_after"], bool(p["is_ca"]), p["der"],
                             ",".join(sorted(names)))
                 db.touch_pin(host)
                 return {"first_use": False, "fingerprint": p["fingerprint"]}
+        if not any(p["is_ca"] for p in family) and plausible_dc():
+            # selbstsignierte DC-Zertifikate (z. B. Samba): jeder DC hat sein eigenes – erster Kontakt wie bisher
+            return _first_use(host, anchor, fp, names, note="weiterer DC")
         db.audit("act_cert_mismatch", detail=f"{host}: neue Adresse mit unbekanntem Zertifikat "
                                              f"({', '.join(sorted(names))[:120]}, SHA256 {fp[:23]}…)")
         raise PinMismatch(host, family[0]["fingerprint"], fp)
 
+    return _first_use(host, anchor, fp, names)
+
+
+def known_dc_names() -> set[str]:
+    """DNS-Namen der DCs aus dem letzten Scan (leer, solange noch kein Scan lief)."""
+    try:
+        return {n for n in (db.get_kv("dc_names") or "").split(",") if n}
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def _first_use(host: str, anchor, fp: str, names: set[str], note: str = "") -> dict:
     from cryptography.hazmat.primitives.serialization import Encoding
     subject, not_after, is_ca = _describe(anchor)
     db.save_pin(host, fp, subject, not_after, is_ca, anchor.public_bytes(Encoding.DER), ",".join(sorted(names)))
-    db.audit("act_cert_pinned", detail=f"{host}: {subject} SHA256 {fp[:23]}…")
+    db.audit("act_cert_pinned", detail=f"{host}: {subject} SHA256 {fp[:23]}…" + (f" ({note})" if note else ""))
     log.warning("LDAPS: Zertifikat von %s automatisch vertraut und gemerkt (%s, SHA256 %s)", host, subject, fp)
     return {"first_use": True, "fingerprint": fp, "subject": subject}
 

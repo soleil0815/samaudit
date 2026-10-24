@@ -246,6 +246,11 @@ async def login_submit(request: Request):
             db.audit("act_login_failed", username[:80], ip, e.code)
             code = "bad_credentials" if e.code == "user_not_found" else e.code
             return RedirectResponse(f"/login?e={code}", status_code=303)
+        except Exception as e:  # noqa: BLE001 – technischer Fehler (DC, Netzwerk): kein Fehlversuch
+            auth.release_attempt(username, ip, mark)
+            log.warning("Login fehlgeschlagen für %r von %s: %s", username[:80], ip, e)
+            db.audit("act_login_failed", username[:80], ip, "bind_failed")
+            return RedirectResponse("/login?e=bind_failed", status_code=303)
         auth.release_attempt(username, ip, mark)
         auth.clear_failures(username, ip)
         sess = auth.create(res.sam, res.display_name, res.upn, res.bind_name, res.matched_groups, password, ip)

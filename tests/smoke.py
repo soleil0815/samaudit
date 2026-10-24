@@ -128,9 +128,12 @@ def rejected(host, chain) -> bool:
 
 check(rejected("firma.local [10.0.0.1]", [leaf("eve.firma.local", SA), ca_der]), "Pin: fremder Name derselben CA abgewiesen")
 check(rejected("firma.local [10.0.0.1]", [leaf("dc01.firma.local", CA_), ca_der]), "Pin: Client-Zertifikat abgewiesen")
-check(rejected("firma.local [10.0.0.9]", [leaf("eve.firma.local", SA), ca_der]), "Pin: neue Adresse ohne Bezug abgewiesen")
-check(not pins.check("firma.local [10.0.0.2]", [leaf("firma.local", SA), ca_der])["first_use"],
-      "Pin: neue Adresse mit Domänenname übernommen")
+db.set_kv("dc_names", "dc01.firma.local,dc02.firma.local")     # aus dem letzten Scan bekannt
+check(rejected("firma.local [10.0.0.9]", [leaf("eve.firma.local", SA), ca_der]), "Pin: neue Adresse, kein DC → abgewiesen")
+check(not pins.check("firma.local [10.0.0.2]", [leaf("dc02.firma.local", SA), ca_der])["first_use"],
+      "Pin: zweiter DC (Ausfall des ersten) übernommen")
+check(pins.check("samba.lan [10.0.1.1]", [leaf("dc1.samba.lan", SA)])["first_use"] is not None, "Pin: Samba ohne CA-Kette")
+check(db.delete_pins("firma.local") >= 2, "Pin: Zurücksetzen per Name entfernt alle Adressen")
 
 print(f"\n{len(failures)} Fehler")
 sys.exit(1 if failures else 0)
