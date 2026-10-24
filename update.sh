@@ -26,7 +26,7 @@ set -euo pipefail
 ORIG_ARGS=("$@")
 ORIG_PWD="$PWD"
 cd "$(dirname "$0")"
-INSTALL_DIR="$PWD"
+INSTALL_DIR="$(pwd -P)"
 # Files that break with Windows line endings (shell scripts, Dockerfile, package lists)
 for f in entrypoint.sh Dockerfile requirements.txt requirements.in .env.example; do
   if [ -f "$f" ] && [ -w "$f" ] && grep -q $'\r' "$f"; then sed -i 's/\r$//' "$f"; echo "Converted Windows line endings in $f"; fi
@@ -84,6 +84,18 @@ ask()  {  # ask "question" Y|N (default)  → 0 = yes
   else read -r -p "$1 [y/N] " a; [[ "$a" =~ ^[yYjJ] ]]; fi
 }
 
+ask_strict() {  # like ask, but -y does NOT answer it (security-relevant questions) → 0 = yes
+  local a
+  [ -t 0 ] || return 1
+  read -r -p "$1 [y/N] " a; [[ "$a" =~ ^[yYjJ] ]]
+}
+safe_rel() {  # safe_rel PATH → 0 if PATH is a plain relative path inside the SAMAUDIT folder
+  local p="$1"
+  [[ -n "$p" && "$p" != /* && ! "$p" =~ (^|/)\.\.(/|$) && ! "$p" =~ [[:cntrl:]] ]] || return 1
+  local d; d="$(cd "$(dirname "$p")" 2>/dev/null && pwd -P)" || return 0   # folder does not exist yet: fine
+  [[ "$d/" == "$INSTALL_DIR/"* || "$d" == "$INSTALL_DIR" ]]
+}
+
 command -v docker >/dev/null || die "docker is not installed."
 docker info >/dev/null 2>&1 || die "Cannot access Docker – run with sudo or add the user to the 'docker' group."
 
@@ -119,6 +131,8 @@ install_package() {
   local tmp; tmp="$(mktemp -d "$INSTALL_DIR/.update-XXXXXX")"
   trap 'rm -rf "$tmp"' EXIT
   extract_zip "$zip" "$tmp" >/dev/null 2>&1 || die "ZIP file is damaged or unreadable: $zip"
+  # never trust links or odd names from a package
+  [ -z "$(find "$tmp" -type l | head -1)" ] || die "The ZIP contains symbolic links – refusing to install it."
   local src; src="$(dirname "$(find "$tmp" -maxdepth 3 -path '*/app/version.py' | head -1)")"
   src="${src%/app}"
   [ -n "$src" ] && [ -f "$src/app/version.py" ] && [ -f "$src/Dockerfile" ] && [ -f "$src/update.sh" ] \
@@ -139,6 +153,8 @@ install_package() {
 
   # list of package files (relative)
   local list; list="$(cd "$src" && find . -type f | sed 's#^\./##' | grep -Ev "$PROTECTED_RE" | grep -Ev '^certs/' | sort)"
+  local bad; bad="$(grep -E '(^/|(^|/)\.\.(/|$)|[[:cntrl:]])' <<< "$list" | head -3 || true)"
+  [ -z "$bad" ] || die "The ZIP contains unsafe file names: $bad"
   # certs/README.txt may be updated
   [ -f "$src/certs/README.txt" ] && list="$(printf '%s\ncerts/README.txt\n' "$list" | sort -u)"
 
@@ -157,6 +173,7 @@ install_package() {
   local n=0 f
   while IFS= read -r f; do
     [ -n "$f" ] || continue
+    safe_rel "$f" || die "Unsafe path in package: $f"
     mkdir -p "$(dirname "$f")"
     # copy first, then rename: this safely replaces even the currently running update.sh
     cp -p "$src/$f" "$f.new.$$" && mv -f "$f.new.$$" "$f"
@@ -169,7 +186,8 @@ install_package() {
   if [ -f "$MANIFEST" ]; then
     while IFS= read -r f; do
       [ -n "$f" ] || continue
-      if [[ ! "$f" =~ $PROTECTED_RE ]] && ! grep -qxF "$f" <<< "$list" && [ -f "$f" ]; then
+      safe_rel "$f" || { warn "skipping unsafe manifest entry: $f"; continue; }
+      if [[ ! "$f" =~ $PROTECTED_RE ]] && ! grep -qxF "$f" <<< "$list" && [ -f "$f" ] && [ ! -L "$f" ]; then
         rm -f "$f"; removed=$((removed + 1)); echo "   removed (no longer included): $f"
       fi
     done < "$MANIFEST"
@@ -295,21 +313,25 @@ ensure_network() {
 }
 
 start_container() {  # start_container IMAGE
-  local image="$1" port extra=() h
+  local image="$1" port extra=() h dns=() hosts=()
   port="$(env_get PORT)"; port="${port:-9400}"
   [[ "$port" =~ ^[0-9]+$ ]] || die "PORT in .env is not a number: $port"
   # optional: DNS servers and fixed host entries for the DCs (DOCKER_DNS / DOCKER_EXTRA_HOSTS in .env)
-  for h in $(env_get DOCKER_DNS | tr ',;' '  '); do extra+=(--dns "$h"); done
-  for h in $(env_get DOCKER_EXTRA_HOSTS | tr ',;' '  '); do extra+=(--add-host "$h"); done
+  read -r -a dns <<< "$(env_get DOCKER_DNS | tr ',;' '  ')"
+  read -r -a hosts <<< "$(env_get DOCKER_EXTRA_HOSTS | tr ',;' '  ')"
+  for h in "${dns[@]}"; do extra+=(--dns "$h"); done
+  for h in "${hosts[@]}"; do extra+=(--add-host "$h"); done
   make_runenv
   ensure_network
   # Do not delete the current container, set it aside – for a rollback if the new one does not run
-  docker rm -f "$CONTAINER-old" "$CONTAINER-alt" >/dev/null 2>&1 || true
+  docker rm -f "$CONTAINER-alt" >/dev/null 2>&1 || true
   if docker inspect "$CONTAINER" >/dev/null 2>&1; then
-    docker stop "$CONTAINER" >/dev/null 2>&1 || true
-    docker rename "$CONTAINER" "$CONTAINER-old"
-    docker update --restart=no "$CONTAINER-old" >/dev/null 2>&1 || true
+    # rename first (works while running), then stop – a failed rename leaves the service untouched
+    docker rename "$CONTAINER" "$CONTAINER-old" || die "Could not set the current container aside – nothing changed."
     HAVE_OLD=1
+    trap 'echo; warn "interrupted – restoring the previous version"; rollback; rm -f "$INSTALL_DIR/.env.run"; exit 130' INT TERM HUP
+    docker update --restart=no "$CONTAINER-old" >/dev/null 2>&1 || true
+    docker stop "$CONTAINER-old" >/dev/null 2>&1 || true
   fi
   docker run -d --name "$CONTAINER" --hostname "$CONTAINER" \
     --restart unless-stopped \
@@ -339,6 +361,25 @@ rollback() {  # discard the new container, start the previous one again
 }
 trap 'rm -f "$INSTALL_DIR/.env.run"' EXIT
 
+# An earlier run was interrupted while switching containers? Then "samaudit-old" may be the last working
+# version – restore it instead of throwing it away.
+recover_interrupted() {
+  docker inspect "$CONTAINER-old" >/dev/null 2>&1 || return 0
+  local health
+  health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER" 2>/dev/null || echo missing)"
+  if [ "$health" = healthy ]; then
+    docker rm -f "$CONTAINER-old" >/dev/null 2>&1 || true      # left over, current one works
+    return 0
+  fi
+  warn "Found the previous version ($CONTAINER-old) from an interrupted update – restoring it."
+  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  docker rename "$CONTAINER-old" "$CONTAINER" || die "Could not restore $CONTAINER-old – please check: docker ps -a"
+  docker update --restart=unless-stopped "$CONTAINER" >/dev/null 2>&1 || true
+  docker start "$CONTAINER" >/dev/null 2>&1 || true
+  echo "   previous version restored."
+}
+recover_interrupted
+
 running_version() {
   docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$CONTAINER" 2>/dev/null || true
 }
@@ -362,10 +403,16 @@ if [ "$PULL" = 1 ]; then
     [ -f "$tmpd/.env.example" ] && cp "$tmpd/.env.example" ".env.example.new.$$" && mv -f ".env.example.new.$$" .env.example
     [ -f "$tmpd/certs-README.txt" ] && mkdir -p certs && cp "$tmpd/certs-README.txt" certs/README.txt
     if [ -f "$tmpd/update.sh" ] && ! cmp -s "$tmpd/update.sh" update.sh; then
-      cp "$tmpd/update.sh" "update.sh.new.$$" && chmod 755 "update.sh.new.$$" && mv -f "update.sh.new.$$" update.sh
-      rm -rf "$tmpd"
-      echo "   update.sh was updated from the image – continuing with the new version"
-      exec bash ./update.sh "${ORIG_ARGS[@]}" --skip-self-update
+      # update.sh runs with your rights on the host – never replace it unasked (not even with -y)
+      cp "$tmpd/update.sh" update.sh.new && chmod 644 update.sh.new
+      echo "   The image contains a newer update.sh (saved as update.sh.new; changes: diff update.sh update.sh.new)."
+      if ask_strict "   Use the new update.sh now?"; then
+        chmod 755 update.sh.new && mv -f update.sh.new update.sh
+        rm -rf "$tmpd"
+        echo "   update.sh replaced – continuing with the new version"
+        exec bash ./update.sh "${ORIG_ARGS[@]}" --skip-self-update
+      fi
+      echo "   keeping the current update.sh"
     fi
     rm -rf "$tmpd"
   }
@@ -384,7 +431,8 @@ else
   IMAGE="samaudit:$APP_VERSION"
 fi
 
-OLD_VERSION="$(running_version)"
+OLD_VERSION="$(running_version | tr -cd '0-9A-Za-z.-')"
+APP_VERSION="$(printf '%s' "${APP_VERSION:-}" | tr -cd '0-9A-Za-z.-')"
 echo "SAMAUDIT: installed ${OLD_VERSION:-–}  →  new ${APP_VERSION:-?}"
 
 # ---------------------------------------------------------------------------
@@ -484,13 +532,16 @@ for ((i = 0; i < HEALTH_TIMEOUT; i += 3)); do
   status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER" 2>/dev/null || echo missing)"
   case "$status" in
     healthy) break ;;
-    unhealthy|exited|dead|missing) break ;;
+    unhealthy|exited|dead|missing|restarting) break ;;
+    running) [ "$i" -ge 15 ] && { status=healthy; break; } ;;   # image without health check
   esac
   sleep 3
 done
 if [ "$status" != "healthy" ]; then
   docker logs --tail 40 "$CONTAINER" || true
   rollback
+  [ -n "$(ls -1 data/samaudit.db.vor-*.bak 2>/dev/null | head -1)" ] && \
+    echo "   Note: if the new version changed the database, a copy from before is in data/samaudit.db.vor-*.bak"
   die "New container is not ready (status: $status, log above). The previous version keeps running."
 fi
 NEW_VERSION="$(running_version)"
@@ -498,6 +549,7 @@ echo "   ${c_ok}running${c_off} – version $NEW_VERSION"
 # app log messages that are worth showing (the app logs in German)
 docker logs --since 5m "$CONTAINER" 2>&1 | grep -E "ERROR|Konfiguration:|Zertifikat" | tail -5 || true
 
+trap - INT TERM HUP
 docker rm -f "$CONTAINER-old" >/dev/null 2>&1 || true   # previous version no longer needed
 
 # ---------------------------------------------------------------------------

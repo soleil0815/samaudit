@@ -1,10 +1,10 @@
-# SAMAUDIT – reproducible build
-# Base image pinned exactly. On the first build update.sh replaces it automatically with the
-# immutable digest (file base-image.lock), so later builds use the bit-identical base as well.
+# SAMAUDIT – pinned build (versions fixed; not bit-for-bit reproducible)
+# Base image pinned by tag. On the first local build update.sh additionally pins it to its
+# immutable digest (file base-image.lock), so later local builds use the same base.
 ARG PYTHON_IMAGE=python:3.13.16-slim
 FROM ${PYTHON_IMAGE}
 
-ARG APP_VERSION=1.9.1
+ARG APP_VERSION=1.9.2
 LABEL org.opencontainers.image.title="SAMAUDIT" \
       org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.description="Security assessment for Active Directory (Windows AD / Samba AD)" \

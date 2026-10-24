@@ -514,6 +514,8 @@ async def cert_remove(request: Request):
 @require
 async def pin_reset(request: Request):
     form = await form_of(request)
+    if not settings.pin_reset_web:
+        return RedirectResponse("/connection", status_code=303)
     if await check_csrf(request, form):
         host = (form.get("host") or "").strip()
         if host:

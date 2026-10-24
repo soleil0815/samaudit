@@ -43,3 +43,4 @@ requirements.txt.new
 .samaudit-manifest
 .update-*/
 *.new.*
+update.sh.new

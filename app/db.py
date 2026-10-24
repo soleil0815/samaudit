@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 import threading
@@ -13,6 +14,7 @@ from datetime import datetime, timezone
 from .config import settings
 
 _lock = threading.RLock()
+log = logging.getLogger("samaudit.db")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS scans (
@@ -115,9 +117,33 @@ def conn():
             raise
 
 
+def _backup_before_migration(c: sqlite3.Connection, tag: str) -> None:
+    """Vor einer Schemaänderung eine Kopie der Datenbank in data/ ablegen (für den Fall eines Rückfalls)."""
+    dest = f"{settings.db_path}.vor-{tag}.bak"
+    if os.path.exists(dest):
+        return
+    try:
+        target = sqlite3.connect(dest)
+        with target:
+            c.backup(target)
+        target.close()
+        os.chmod(dest, 0o600)
+        log.info("Datenbank vor Schemaänderung gesichert: %s", dest)
+    except Exception as e:  # noqa: BLE001
+        log.warning("Sicherung vor Schemaänderung fehlgeschlagen: %s", e)
+
+
+def _migrate(c: sqlite3.Connection) -> None:
+    cols = {r[1] for r in c.execute("PRAGMA table_info(cert_pins)").fetchall()}
+    if "names" not in cols:
+        _backup_before_migration(c, "pin-names")
+        c.execute("ALTER TABLE cert_pins ADD COLUMN names TEXT")
+
+
 def init() -> None:
     with conn() as c:
         c.executescript(SCHEMA)
+        _migrate(c)
         # Scans, die beim letzten Beenden noch liefen, als abgebrochen markieren
         c.execute("UPDATE scans SET status='error', error='Abgebrochen (Neustart)' WHERE status='running'")
     try:
@@ -239,10 +265,25 @@ def get_pin(host: str) -> dict | None:
     return dict(r) if r else None
 
 
-def save_pin(host: str, fp: str, subject: str, not_after: str, is_ca: bool, der: bytes) -> None:
+def save_pin(host: str, fp: str, subject: str, not_after: str, is_ca: bool, der: bytes, names: str = "") -> None:
     with conn() as c:
-        c.execute("""INSERT OR REPLACE INTO cert_pins(host, fingerprint, subject, not_after, is_ca, der, first_seen, last_seen)
-                     VALUES(?,?,?,?,?,?,?,?)""", (host.lower(), fp, subject, not_after, int(is_ca), der, now_iso(), now_iso()))
+        c.execute("""INSERT OR REPLACE INTO cert_pins(host, fingerprint, subject, not_after, is_ca, der, first_seen, last_seen, names)
+                     VALUES(?,?,?,?,?,?,?,?,?)""", (host.lower(), fp, subject, not_after, int(is_ca), der, now_iso(), now_iso(),
+                                                  names))
+
+
+def set_pin_names(host: str, names: str) -> None:
+    with conn() as c:
+        c.execute("UPDATE cert_pins SET names=? WHERE host=?", (names, host.lower()))
+
+
+def family_pins(base: str) -> list[dict]:
+    """Alle gemerkten Einträge eines konfigurierten Namens (\"name\" und \"name [IP]\")."""
+    b = base.lower()
+    with conn() as c:
+        rows = c.execute("SELECT * FROM cert_pins WHERE host=? OR substr(host, 1, ?)=?",
+                         (b, len(b) + 2, b + " [")).fetchall()
+    return [dict(r) for r in rows]
 
 
 def touch_pin(host: str) -> None:

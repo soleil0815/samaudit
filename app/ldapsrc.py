@@ -127,6 +127,8 @@ def normalize_username(username: str) -> tuple[str, str]:
         raise AuthError("invalid_user")
     if "\\" in u:
         u = u.split("\\", 1)[1]
+    if not u or u.startswith("@") or u.endswith("@") or u.count("@") > 1:
+        raise AuthError("invalid_user")
     if "@" in u:
         return u, u
     # implizite UPN (sAMAccountName@DNS-Domäne) funktioniert in AD und Samba
@@ -150,6 +152,7 @@ def open_connection(bind_name: str, password: str):
                 _server(addr), user=bind_name, password=password,
                 authentication=ldap3.SIMPLE, auto_bind=ldap3.AUTO_BIND_NONE,
                 read_only=True, raise_exceptions=False, auto_range=False,
+                auto_referrals=False,          # nie einem Verweis folgen (würde das Passwort erneut senden)
                 receive_timeout=max(settings.ldap_timeout, 30),
             )
             conn.open()
@@ -229,7 +232,22 @@ def search(conn, base: str, flt: str, attrs: list[str], scope: str = "SUBTREE", 
         for e in conn.response or []:
             if e.get("type") == "searchResEntry":
                 out.append(Entry(e.get("dn", ""), e.get("raw_attributes", {})))
+    _check_result(conn, base)
     return out
+
+
+class SearchFailed(Exception):
+    """Suche abgebrochen oder unvollständig – Ergebnis darf nicht als „leer = bestanden“ gelten."""
+
+
+def _check_result(conn, base: str) -> None:
+    res = getattr(conn, "result", None) or {}
+    code = res.get("result", 0)
+    if code in (0, None):
+        return
+    if code == 32:                       # noSuchObject: Basis existiert nicht → wirklich leer
+        return
+    raise SearchFailed(f"{base}: {res.get('description')} ({code}) {res.get('message') or ''}".strip())
 
 
 def base_entry(conn, dn: str, attrs: list[str], sd: bool = False) -> Entry | None:
@@ -245,12 +263,16 @@ def _full_members(conn, e: Entry) -> list[str]:
     """Liest 'member' inkl. Range-Retrieval (>1500 Mitglieder)."""
     members = as_strs(e.get("member"))
     range_key = next((k for k in e.keys() if k.startswith("member;range=")), None)
-    while range_key:
+    rounds = 0
+    while range_key and rounds < 2000:
+        rounds += 1
         members += as_strs(e.get(range_key))
         m = re.match(r"member;range=(\d+)-(\*|\d+)", range_key)
         if not m or m.group(2) == "*":
             break
         nxt = int(m.group(2)) + 1
+        if nxt <= int(m.group(1)):
+            break                          # Bereich geht nicht voran – abbrechen statt endlos schleifen
         e2 = base_entry(conn, e.dn, [f"member;range={nxt}-*"])
         if not e2:
             break
@@ -291,6 +313,8 @@ def _object_sid(conn, dn: str) -> str | None:
 
 
 BUILTIN = {544, 545, 546, 548, 549, 550, 551, 552, 554, 557, 560, 561}
+# Admin-Gruppen, die in JEDER Domäne der Gesamtstruktur zur Abweisung führen
+FOREST_PRIV_RIDS = {"512", "516", "518", "519", "520", "521", "526", "527"}
 
 
 def domain_type_for(dse: dict) -> str:
@@ -300,8 +324,10 @@ def domain_type_for(dse: dict) -> str:
     return dse.get("detected_type") or "windows"
 
 
-def resolve_group_sids(conn, specs: list[str], domain_sid: str, root_sid: str, base_dn: str) -> dict[str, str]:
-    """Gruppenangaben (RID:x, SID, Name, DN) → {SID: Anzeigename}."""
+def resolve_group_sids(conn, specs: list[str], domain_sid: str, root_sid: str, base_dn: str,
+                       strict: bool = False) -> dict[str, str]:
+    """Gruppenangaben (RID:x, SID, Name, DN) → {SID: Anzeigename}.
+    strict: Suchfehler abbrechen (für Sperrlisten – dort darf ein Fehler nie „durchlassen“ bedeuten)."""
     out: dict[str, str] = {}
     for item in specs:
         it = item.strip()
@@ -328,25 +354,48 @@ def resolve_group_sids(conn, specs: list[str], domain_sid: str, root_sid: str, b
                     if sid:
                         out[sid] = it
             except Exception as e:  # noqa: BLE001
+                if strict:
+                    raise AuthError("bind_failed", f"Gruppe {it} nicht auflösbar: {e}") from e
                 log.warning("Gruppe %s nicht auflösbar: %s", it, e)
     return out
 
 
-def _verify_identity(conn, me: Entry) -> None:
-    """Gegenprobe per LDAP „Who am I?“ (RFC 4532): stimmt das gebundene Konto mit dem gefundenen überein?
-    Wird der Befehl nicht unterstützt, genügt die eindeutige Suche oben."""
+def _netbios(conn, dse: dict, base_dn: str) -> str:
+    if settings.netbios:
+        return settings.netbios
+    try:
+        res = search(conn, f"CN=Partitions,{dse.get('config_nc') or ''}",
+                     f"(&(objectClass=crossRef)(nCName={_escape(base_dn)}))", ["nETBIOSName"], paged=False)
+        return (as_str(res[0].get("nETBIOSName")) or "") if res else ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _verify_identity(conn, me: Entry, dse: dict, base_dn: str) -> None:
+    """Gegenprobe per LDAP „Who am I?“ (RFC 4532): stimmt das gebundene Konto – samt Domäne – mit dem
+    gefundenen überein? Windows-DCs unterstützen den Befehl immer; fehlt die Antwort dort, wird abgewiesen."""
+    must = dse.get("detected_type") == "windows"
     try:
         who = conn.extend.standard.who_am_i()
     except Exception as e:  # noqa: BLE001
+        if must:
+            raise AuthError("user_not_found", f"whoami: {e}") from e
         log.debug("whoami nicht verfügbar: %s", e)
         return
     if not who:
+        if must:
+            raise AuthError("user_not_found", "whoami leer")
         return
     who = str(who)
     if who.lower().startswith("dn:"):
         ok = who[3:].strip().lower() == (me.dn or "").lower()
     elif who.lower().startswith("u:"):
-        ok = who[2:].split("\\")[-1].split("@")[0].lower() == (as_str(me.get("sAMAccountName")) or "").lower()
+        acct = who[2:]
+        dom, _, name = acct.rpartition("\\")
+        ok = name.split("@")[0].lower() == (as_str(me.get("sAMAccountName")) or "").lower()
+        nb = _netbios(conn, dse, base_dn)
+        if ok and dom and nb and dom.lower() != nb.lower():
+            ok = False                     # gleiches Konto, aber andere Domäne der Gesamtstruktur
     else:
         return
     if not ok:
@@ -373,18 +422,21 @@ def authenticate(username: str, password: str) -> AuthResult:
             flt = (f"(&(objectCategory=person)(objectClass=user)(|(sAMAccountName={_escape(sam)})"
                    f"(userPrincipalName={_escape(sam + '@' + settings.domain_fqdn)})))")
         res = search(conn, base_dn, flt, ["sAMAccountName", "userPrincipalName", "displayName",
-                                          "objectSid", "userAccountControl"], paged=False)
+                                          "objectSid", "userAccountControl", "sIDHistory"], paged=False)
         if len(res) != 1:
             if len(res) > 1:
                 log.warning("Anmeldename %s ist mehrdeutig (%d Konten) – abgewiesen", ident, len(res))
             raise AuthError("user_not_found")
         me = res[0]
-        _verify_identity(conn, me)
+        _verify_identity(conn, me, dse, base_dn)
         uac = as_int(me.get("userAccountControl"), 0) or 0
         if uac & UAC_ACCOUNTDISABLE:
             raise AuthError("account_unusable")
         my_sid = sid_to_str(me.get("objectSid", [None])[0]) or ""
+        if not my_sid.startswith("S-1-5-21-"):
+            raise AuthError("user_not_found", "objectSid fehlt")
         domain_sid = my_sid.rsplit("-", 1)[0]
+        history = {s for s in (sid_to_str(x) for x in (me.get("sIDHistory") or [])) if s}
 
         # Effektive Gruppen (rekursiv, inkl. primärer Gruppe) über tokenGroups
         tg = base_entry(conn, me.dn, ["tokenGroups"])
@@ -397,10 +449,18 @@ def authenticate(username: str, password: str) -> AuthResult:
         if dse.get("root_nc") and dse["root_nc"].lower() != base_dn.lower():
             root_sid = _object_sid(conn, dse["root_nc"]) or domain_sid
 
-        # 1) Privilegierte Konten immer abweisen (auch das eingebaute Administrator-Konto)
-        denied = resolve_group_sids(conn, settings.denied_groups, domain_sid, root_sid, base_dn)
-        hit = sorted({denied[s] for s in token_sids if s in denied})
-        if hit or my_sid.endswith(("-500", "-502")):
+        # 1) Privilegierte Konten immer abweisen (auch das eingebaute Administrator-Konto).
+        #    Geprüft werden Gruppen-SIDs und der SID-Verlauf. Zusätzlich gelten die Admin-Gruppen JEDER Domäne
+        #    der Gesamtstruktur (Organisations-/Schema-Admins liegen in der Stammdomäne, deren SID ein
+        #    untergeordneter DC nicht immer liefert).
+        check_sids = token_sids | history
+        denied = resolve_group_sids(conn, settings.denied_groups, domain_sid, root_sid, base_dn, strict=True)
+        hit = sorted({denied[s] for s in check_sids if s in denied})
+        hit += sorted({f"RID:{s.rsplit('-', 1)[1]} ({s})" for s in check_sids
+                       if s not in denied and s.startswith("S-1-5-21-") and s.rsplit("-", 1)[1] in FOREST_PRIV_RIDS})
+        if history & {f"S-1-5-32-{r}" for r in (544, 548, 549, 550, 551)}:
+            hit.append("SID-Verlauf: BUILTIN")
+        if hit or my_sid.endswith(("-500", "-502")) or any(h.endswith(("-500", "-502")) for h in history):
             log.warning("Anmeldung von %s abgewiesen: privilegiertes Konto (%s)", ident, ", ".join(hit) or "RID 500")
             raise AuthError("privileged_denied", ", ".join(hit))
         # 2) Mitglied einer Prüfer-Gruppe?
@@ -484,7 +544,8 @@ def _account(e: Entry, computer: bool) -> dict:
             "upn": as_str(e.get("userPrincipalName")) or "",
             "display": as_str(e.get("displayName")) or "",
             "has_userpassword": bool(e.get("userPassword") or e.get("unixUserPassword")),
-            "is_gmsa": "msds-groupmanagedserviceaccount" in d["classes"],
+            # verwaltete Dienstkonten (gMSA und sMSA): zufällige, automatisch gewechselte Passwörter
+            "is_gmsa": bool({"msds-groupmanagedserviceaccount", "msds-managedserviceaccount"} & set(d["classes"])),
             "admin_count": as_int(e.get("adminCount"), 0) or 0,
         })
     return d
@@ -504,12 +565,15 @@ def collect(conn, progress) -> dict:
     """Sammelt alle Daten für die Prüfregeln. `progress(pct, phase)`."""
     warnings: list[str] = []
 
+    failed: set[str] = set()
+
     def safe(label, fn, default=None):
         try:
             return fn()
         except Exception as e:  # noqa: BLE001
             log.warning("Abschnitt %s fehlgeschlagen: %s", label, e)
             warnings.append(f"{label}: {e}")
+            failed.add(label)
             return default
 
     progress(5, "phase_domain")
@@ -557,7 +621,10 @@ def collect(conn, progress) -> dict:
     acl = {"domain_root": parse_sd(d.get("nTSecurityDescriptor"))}
 
     progress(12, "phase_users")
-    users = [_account(e, False) for e in search(conn, dn, "(&(objectCategory=person)(objectClass=user))", USER_ATTRS)]
+    # ohne Vertrauensstellungs-Konten (INTERDOMAIN_TRUST_ACCOUNT, 0x800) – die melden sich nie an
+    users = [_account(e, False) for e in search(
+        conn, dn, "(&(objectCategory=person)(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2048)))",
+        USER_ATTRS)]
     # (Group) Managed Service Accounts
     users += safe("gmsa", lambda: [_account(e, False) for e in search(
         conn, dn, "(|(objectClass=msDS-GroupManagedServiceAccount)(objectClass=msDS-ManagedServiceAccount))",
@@ -720,7 +787,8 @@ def collect(conn, progress) -> dict:
 
     return {
         "meta": {"domain_type": dtype, "vendor": dse.get("vendor") or "", "unprivileged": True,
-                 "dc_host": getattr(conn, "_samaudit_host", ""), "warnings": warnings, "demo": False},
+                 "dc_host": getattr(conn, "_samaudit_host", ""), "warnings": warnings, "demo": False,
+                 "failed_sections": sorted(failed)},
         "rootdse": dse, "domain": domain, "users": users, "computers": computers, "groups": groups,
         "trusts": trusts, "acl": acl, "config": config, "psos": psos, "pki": {"cas": cas, "templates": templates, "objects": pki_objects},
         "gpos": gpos, "gpo_links": gpo_links,

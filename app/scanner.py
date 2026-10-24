@@ -26,15 +26,45 @@ class ScanBusy(Exception):
     pass
 
 
+# Datenabschnitte der Sammlung → abhängige Regeln (interne Namen). Ist ein Abschnitt beim Lesen
+# fehlgeschlagen, gelten diese Regeln als „nicht prüfbar“ – leere Daten dürfen nie „bestanden“ ergeben.
+SECTION_RULES = {
+    "trusts": ("T-",),
+    "pki_cas": ("P-ADCS-", "A-CAWeakCrypto"),
+    "pki_templates": ("P-ADCS-",),
+    "pki_obj": ("P-ADCS-ESC5", "A-CAWeakCrypto"),
+    "psos": ("A-WeakPSO",),
+    "gpos": ("P-GPOWrite",),
+    "dc_owner": ("P-DCOwner",),
+    "dc_ou": ("P-DCOUACL",),
+    "adminsdholder": ("P-AdminSDHolder",),
+    "dsheuristics": ("A-AnonymousAccess", "A-DSHeuristicsSDProp", "A-UPNSPNUniqueness", "A-Tombstone"),
+    "recyclebin": ("A-RecycleBin",),
+    "laps_schema": ("S-LAPS",),
+    "gmsa": ("S-Kerberoast", "P-KerberoastAdmin"),
+    "root_groups": ("P-SchemaEnterpriseAdmins",),
+}
+
+
+def _blocked(rule, failed: set[str]) -> bool:
+    lid = getattr(rule, "legacy_id", rule.id)
+    return any(lid.startswith(p) for sec in failed for p in SECTION_RULES.get(sec, ()))
+
+
 def evaluate(model: dict) -> tuple[list[dict], dict]:
     ctx = Ctx(model, settings)
     dtype = ctx.domain_type
+    failed = set((model.get("meta") or {}).get("failed_sections") or [])
     results = []
     for r in RULES:
         res = {"rule_id": r.id, "category": r.category, "state": "pass", "severity": r.severity,
                "points": 0, "count": 0, "items": [], "note": None}
         if dtype not in r.platforms:
             res.update(state="na", note="na_platform")
+            results.append(res)
+            continue
+        if _blocked(r, failed):
+            res.update(state="na", note="na_section")
             results.append(res)
             continue
         try:

@@ -77,12 +77,13 @@
         <td class="mono">{{ p.fingerprint[:32] }}<br>{{ p.fingerprint[32:] }}</td>
         <td class="num">{{ (p.not_after or '')[:10] }}</td>
         <td class="num">{{ p.last_seen|dt(lang) }}</td>
-        <td><form method="post" action="/connection/reset" data-confirm="{{ t('pin_confirm', lang) }}">
+        <td>{% if settings.pin_reset_web %}<form method="post" action="/connection/reset" data-confirm="{{ t('pin_confirm', lang) }}">
           <input type="hidden" name="csrf" value="{{ sess.csrf }}"><input type="hidden" name="host" value="{{ p.host }}">
-          <button class="btn btn-danger" type="submit">{{ t('pin_reset', lang) }}</button></form></td>
+          <button class="btn btn-danger" type="submit">{{ t('pin_reset', lang) }}</button></form>{% endif %}</td>
       </tr>{% endfor %}</tbody>
   </table>
   {% else %}<p class="muted" style="margin:14px 0">{{ t('pins_none', lang) }}</p>{% endif %}
+  {% if not settings.pin_reset_web %}<p class="muted small" style="margin:10px 0 4px">{{ t('pin_reset_cli', lang) }} <code>docker exec samaudit python -m app.pins reset &lt;{{ t('dc', lang) }}&gt;</code></p>{% endif %}
   </div></div>
 </section>
 {% endblock %}

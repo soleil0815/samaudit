@@ -76,7 +76,7 @@ All 110 checks with ID, area, severity and description. IDs start with `STL-` (s
 - **HTTPS certificate of the web interface:** shows the active certificate (source, issuer, expiry date, fingerprint) and warnings (expired, expiring soon, server name missing from the certificate).
   - **Upload your own certificate:** select a PFX file (e.g. exported from a Windows CA) with its password **or** certificate + private key → **Upload and activate**. It becomes active immediately, without a restart; reload the page afterwards. Before installing, SAMAUDIT checks that certificate and key match, that it is valid and that the key is strong enough (RSA at least 2048 bits).
   - **Remove uploaded certificate** restores the previous one.
-- **Trusted DC certificates:** SAMAUDIT remembers each DC's certificate on first contact and later rejects a foreign certificate (protection against man-in-the-middle). After an **intended** certificate or CA change, use **Reset** here – it is remembered again on the next contact.
+- **Trusted DC certificates:** SAMAUDIT remembers each DC's certificate and DNS name on first contact and later rejects a foreign certificate (protection against man-in-the-middle) – including one the same enterprise CA issued for another computer or user. Normal renewals stay valid. After an **intended** certificate or CA change (or a new DC), reset it – for security reasons on the server: `docker exec samaudit python -m app.pins reset <DC>`. With `PIN_RESET_WEB=true` in `.env` the **Reset** button here works as well.
 
 ### Activity log
 
@@ -100,7 +100,7 @@ Bottom left: **DE / EN** switches the language, **Dark / Light** the appearance.
 | The auditor group does not exist | Create the group in the domain (operations, Part B). |
 | The account is locked / disabled / must change its password | Resolve in the domain (e.g. change the password on a PC). |
 | No domain controller reachable | Check network and `DC_HOSTS` (Part B). |
-| The domain controller's certificate has changed | Possible attack **or** intended certificate change. If intended: reset under **Connection**. |
+| The domain controller's certificate has changed | Possible attack **or** intended certificate change / new DC. If intended: on the server `docker exec samaudit python -m app.pins reset <DC>`. |
 | Session expired | Sign in again. |
 
 ## Part B – Operations
@@ -156,7 +156,7 @@ The complete list is in the README.
 sh update.sh --pull
 ```
 
-Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.9.1`. If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
+Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.9.2`. If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
 
 **Via ZIP file (local build):**
 

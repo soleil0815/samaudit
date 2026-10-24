@@ -8,8 +8,8 @@ from .adutil import (
     UAC_DONT_EXPIRE_PASSWORD, ace_grants_control, classify_os, fmt_date, now_utc, sid_domain,
 )
 from .analysis import Ctx
-from .rules import (ATT, MS, Hit, NotApplicable, _lowpriv_enroll, acc, admin_item, enabled_computers, need_sysvol, rule,
-                    unprivileged)
+from .rules import (ATT, MS, Hit, NotApplicable, _lowpriv_enroll, acc, admin_item, check_gpos_readable,
+                    enabled_computers, need_sysvol, rule, unprivileged)
 
 ADS_RIGHT_DS_CREATE_CHILD = 0x1
 
@@ -25,6 +25,7 @@ def _cfg(ctx: Ctx) -> dict:
 def gpo_values(ctx: Ctx, guids: list[str], key: str) -> list[tuple[str, object]]:
     """Werte eines Registry-Schlüssels aus GptTmpl.inf (Registry Values) und Registry.pol der GPOs."""
     sv = need_sysvol(ctx)
+    check_gpos_readable(ctx, guids)
     key = key.lower().lstrip("\\")
     out = []
     for g in guids:
@@ -386,9 +387,13 @@ def _esc9(ctx: Ctx):
             continue
         ekus = set(t.get("ekus") or [])
         auth = not ekus or bool(ekus & AUTH_EKUS)
-        if t.get("enroll_flag", 0) & 0x80000 and auth:
+        # bereits als ESC1 bzw. ESC17 gewertet (frei wählbarer Name ohne Genehmigung)? Dann nicht doppelt zählen
+        free_name = bool(t.get("name_flag", 0) & 0x1) and not (t.get("enroll_flag", 0) & 0x2) \
+            and not t.get("ra_signature", 0)
+        covered = free_name and (auth or "1.3.6.1.5.5.7.3.1" in ekus)
+        if t.get("enroll_flag", 0) & 0x80000 and auth and not covered:
             items.append({"template": t["display"], "detail": "ESC9", "principal": ", ".join(who)})
-        if t.get("schema_version") == 1 and t.get("name_flag", 0) & 0x1:
+        if t.get("schema_version") == 1 and t.get("name_flag", 0) & 0x1 and not covered:
             items.append({"template": t["display"], "detail": "ESC15", "principal": ", ".join(who)})
     return Hit(items) if items else None
 
@@ -430,6 +435,9 @@ def _esc8(ctx: Ctx):
             for part in line.split("\n"):
                 if part.strip().lower().startswith("http://"):
                     items.append({"value": part.strip(), "detail": ca.get("name")})
+    if not items and (ctx.m.get("pki") or {}).get("cas"):
+        # Die klassische Web-Registrierung (/certsrv) steht nicht im AD – per LDAP nicht beurteilbar
+        raise NotApplicable("na_esc8_certsrv")
     return Hit(items) if items else None
 
 
@@ -450,26 +458,43 @@ def _ca_crypto(ctx: Ctx):
         certs += c.get("certs", [])
     for o in pki.get("objects", []):
         certs += o.get("certs", [])
-    seen, items, worst = set(), [], 0
+    def not_after(cert):
+        try:
+            return cert.not_valid_after_utc
+        except AttributeError:
+            return cert.not_valid_after.replace(tzinfo=now_utc().tzinfo)
+
+    loaded, seen = [], set()
     for der in certs:
         if der in seen:
             continue
         seen.add(der)
         try:
-            cert = x509.load_der_x509_certificate(der)
+            loaded.append(x509.load_der_x509_certificate(der))
         except Exception:  # noqa: BLE001
             continue
+    # Nach einer CA-Erneuerung bleiben alte Zertifikate in AD stehen – bewertet wird je CA nur das neueste
+    newest: dict[str, object] = {}
+    for cert in loaded:
+        key_ = cert.subject.rfc4514_string()
+        if key_ not in newest or not_after(cert) > not_after(newest[key_]):
+            newest[key_] = cert
+    items, worst = [], 0
+    for cert in newest.values():
         name = cert.subject.rfc4514_string()[:80]
-        algo = (cert.signature_hash_algorithm.name if cert.signature_hash_algorithm else "?").lower()
+        try:
+            algo = (cert.signature_hash_algorithm.name if cert.signature_hash_algorithm else "?").lower()
+        except Exception:  # noqa: BLE001 – unbekanntes Verfahren
+            algo = "?"
         if algo in ("md5", "sha1"):
-            items.append({"detail": name, "value": algo.upper(), "recommended": "SHA-256"}); worst = max(worst, 2)
+            # bei selbstsignierten Stammzertifikaten ist die eigene Signatur ohne Bedeutung
+            root = cert.issuer == cert.subject
+            items.append({"detail": name, "value": algo.upper(), "recommended": "SHA-256"})
+            worst = max(worst, 1 if root else 2)
         key = cert.public_key()
         if isinstance(key, rsa.RSAPublicKey) and key.key_size < 2048:
             items.append({"detail": name, "value": f"RSA {key.key_size}", "recommended": "RSA ≥ 3072"}); worst = 3
-        try:
-            na = cert.not_valid_after_utc
-        except AttributeError:
-            na = cert.not_valid_after.replace(tzinfo=now_utc().tzinfo)
+        na = not_after(cert)
         days = (na - now_utc()).days
         if days < 0:
             items.append({"detail": name, "value": fmt_date(na), "recommended": "@v_renew_expired"}); worst = 3
@@ -552,7 +577,7 @@ def _pwd_details(ctx: Ctx):
       columns=["value"])
 def _dns_update(ctx: Ctx):
     zones = _cfg(ctx).get("dns_zones")
-    if zones is None:
+    if not zones:
         raise NotApplicable("na_unknown")
     hits = [z for z in zones if z.get("allow_update") == 1]
     return Hit([{"value": z["name"]} for z in hits]) if hits else None
@@ -569,7 +594,7 @@ def _dns_update(ctx: Ctx):
       columns=["value", "principal"])
 def _dns_create(ctx: Ctx):
     zones = _cfg(ctx).get("dns_zones")
-    if zones is None:
+    if not zones:
         raise NotApplicable("na_unknown")
     low = ctx.low_priv_sids()
     items = []
@@ -612,7 +637,9 @@ def _backup(ctx: Ctx):
       columns=["value", "recommended"])
 def _tombstone(ctx: Ctx):
     v = _cfg(ctx).get("tombstone_lifetime")
-    if v is None or v >= 180:
+    if v is None:
+        v = 60                      # nicht gesetzt = Windows-Standard 60 Tage
+    if v >= 180:
         return None
     return Hit([{"value": str(v), "recommended": "180"}])
 
@@ -627,7 +654,7 @@ def _tombstone(ctx: Ctx):
 def _frs(ctx: Ctx):
     v = _cfg(ctx).get("sysvol_repl")
     if v is None:
-        return None
+        raise NotApplicable("na_unknown")
     return Hit([{"value": "FRS"}]) if v == "frs" else None
 
 
@@ -663,6 +690,7 @@ def _gpo_list(ctx: Ctx, vals) -> str:
       refs=[("Microsoft: DC print spooler", f"{MS}/windows-server/security/windows-services/security-guidelines-for-disabling-system-services-in-windows-server")])
 def _spooler(ctx: Ctx):
     sv = need_sysvol(ctx)
+    check_gpos_readable(ctx, ctx.gpo_guids("dc"))
     state = None
     for g in ctx.gpo_guids("dc"):
         sect = (sv.get("secedit", {}).get(g) or {}).get("Service General Setting") or {}
@@ -685,6 +713,7 @@ def _spooler(ctx: Ctx):
       refs=[("Microsoft: Audit policy recommendations", f"{MS}/windows-server/identity/ad-ds/plan/security-best-practices/audit-policy-recommendations")])
 def _audit(ctx: Ctx):
     sv = need_sysvol(ctx)
+    check_gpos_readable(ctx, ctx.gpo_guids("dc"))
     adv: dict = {}
     legacy: dict = {}
     for g in ctx.gpo_guids("dc"):
@@ -718,6 +747,15 @@ def _audit(ctx: Ctx):
     return Hit([{"detail": m} for m in missing], points=5, severity="low")
 
 
+SAFE_PRINCIPAL_NAMES = {
+    "administrators", "administratoren", "domain admins", "domänen-admins", "enterprise admins",
+    "organisations-admins", "system", "local service", "lokaler dienst", "network service", "netzwerkdienst",
+    "backup operators", "sicherungs-operatoren", "server operators", "server-operatoren", "account operators",
+    "konten-operatoren", "print operators", "druck-operatoren", "enterprise domain controllers",
+    "domänencontroller der organisation", "service", "dienst",
+}
+
+
 @rule(id="A-DCPrivileges", category="anomalies", severity="critical", points=20,
       title={"de": "Gefährliche Benutzerrechte auf DCs", "en": "Dangerous user rights on DCs"},
       desc={"de": "Über die Benutzerrechtezuweisung der DC-Richtlinien haben Nicht-Administratoren Rechte wie "
@@ -733,11 +771,13 @@ def _dc_privs(ctx: Ctx):
               "SeLoadDriverPrivilege", "SeTcbPrivilege", "SeCreateTokenPrivilege", "SeAssignPrimaryTokenPrivilege",
               "SeEnableDelegationPrivilege", "SeSecurityPrivilege", "SeSystemEnvironmentPrivilege",
               "SeManageVolumePrivilege", "SeInteractiveLogonRight", "SeRemoteInteractiveLogonRight", "SeImpersonatePrivilege"}
+    check_gpos_readable(ctx, ctx.gpo_guids("dc"))
+    canon = {d.lower(): d for d in danger}
     effective: dict[str, tuple[str, list[str]]] = {}
     for g in ctx.gpo_guids("dc"):
         for k, v in ((sv.get("secedit", {}).get(g) or {}).get("Privilege Rights") or {}).items():
-            if k in danger:
-                effective[k] = (g, [x.strip().lstrip("*") for x in v.split(",") if x.strip()])
+            if k.lower() in canon:
+                effective[canon[k.lower()]] = (g, [x.strip().lstrip("*") for x in v.split(",") if x.strip()])
     ok = ctx.safe_sids() | {"S-1-5-19", "S-1-5-20", "S-1-5-6", "S-1-5-32-551", "S-1-5-32-549", "S-1-5-32-548",
                             "S-1-5-32-550", "S-1-5-17", "S-1-5-32-568"}
     items = []
@@ -750,16 +790,14 @@ def _dc_privs(ctx: Ctx):
                     continue
                 name = ctx.name(p.upper())
             else:
-                low = p.lower()
-                if any(x in low for x in ("administrators", "administratoren", "domain admins", "domänen-admins",
-                                          "enterprise admins", "organisations-admins", "system", "local service",
-                                          "network service", "lokaler dienst", "netzwerkdienst", "nt service\\",
-                                          "service", "dienst", "backup operators", "sicherungs-operatoren",
-                                          "server operators", "server-operatoren", "account operators",
-                                          "konten-operatoren", "print operators", "druck-operatoren",
-                                          "enterprise domain controllers")):
+                # Namen statt SIDs: nur exakt bekannte Standard-Prinzipale durchlassen (ohne Domänen-Präfix)
+                short = p.lower().split("\\")[-1].strip()
+                if short in SAFE_PRINCIPAL_NAMES or p.lower().startswith("nt service\\"):
                     continue
                 name = p
+            # Exchange /PrepareAD vergibt „Überwachungs- und Sicherheitsprotokoll verwalten“ an Exchange Servers
+            if priv == "SeSecurityPrivilege" and name.lower() in ("exchange servers", "exchange-server"):
+                continue
             items.append({"privilege": priv, "principal": name, "gpo": ctx.gpo_name(g)})
     return Hit(items) if items else None
 
@@ -794,12 +832,11 @@ def _lmhash(ctx: Ctx):
 
 @rule(id="A-ZeroLogon", category="anomalies", severity="critical", points=25,
       title={"de": "Unsichere Netlogon-Verbindungen erlaubt (ZeroLogon)", "en": "Vulnerable Netlogon connections allowed (ZeroLogon)"},
-      desc={"de": "Eine Richtlinie lässt anfällige Netlogon-Verbindungen zu oder schaltet den vollständigen Schutz ab. "
+      desc={"de": "Eine Richtlinie lässt anfällige Netlogon-Verbindungen für bestimmte Konten zu (VulnerableChannelAllowList). "
                   "Damit ist CVE-2020-1472 (ZeroLogon) ausnutzbar – die Übernahme eines DCs ohne Passwort.",
             "en": "A policy allows vulnerable Netlogon connections (CVE-2020-1472)."},
-      fix={"de": "„Domänencontroller: Anfällige Netlogon-Verbindungen für sicheren Kanal zulassen“ entfernen und "
-                 "FullSecureChannelProtection nicht auf 0 setzen.",
-           "en": "Remove the vulnerable channel allow list and keep FullSecureChannelProtection enabled."},
+      fix={"de": "„Domänencontroller: Anfällige Netlogon-Verbindungen für sicheren Kanal zulassen“ entfernen.",
+           "en": "Remove the vulnerable channel allow list."},
       columns=["detail", "gpo"], platforms=("windows",),
       refs=[("Microsoft KB4557222", "https://support.microsoft.com/kb/4557222")])
 def _zerologon(ctx: Ctx):
@@ -807,10 +844,7 @@ def _zerologon(ctx: Ctx):
     al = gpo_values(ctx, ctx.gpo_guids("dc"), r"Netlogon\Parameters\VulnerableChannelAllowList")
     if al:
         items.append({"detail": "VulnerableChannelAllowList", "gpo": _gpo_list(ctx, al)})
-    fs = [(g, v) for g, v in gpo_values(ctx, ctx.gpo_guids("dc"), r"Netlogon\Parameters\FullSecureChannelProtection")
-          if as_num(v) == 0]
-    if fs:
-        items.append({"detail": "FullSecureChannelProtection=0", "gpo": _gpo_list(ctx, fs)})
+    # FullSecureChannelProtection wirkt seit der Erzwingung (Februar 2021) nicht mehr – nicht werten
     return Hit(items) if items else None
 
 
