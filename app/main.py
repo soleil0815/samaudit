@@ -100,7 +100,10 @@ async def form_of(request: Request) -> dict[str, str]:
 
 def render(request: Request, name: str, ctx: dict, status: int = 200) -> Response:
     lang = lang_of(request)
-    base = {"request": request, "lang": lang, "sess": session_of(request), "path": request.url.path}
+    from . import news
+    base = {"request": request, "lang": lang, "sess": session_of(request), "path": request.url.path,
+            "news_unseen": news.unseen(request.cookies.get(news.COOKIE)), "news_headline": news.headline,
+            "news_text": news.text}
     base.update(ctx)
     return templates.TemplateResponse(request, name, base, status_code=status)
 
@@ -401,6 +404,26 @@ async def privacy_page(request: Request):
     return render(request, "privacy.html", {})
 
 
+def _mark_news_seen(resp: Response) -> Response:
+    from . import news
+    resp.set_cookie(news.COOKIE, VERSION, max_age=365 * 86400, samesite="lax", secure=settings.cookie_secure,
+                    httponly=True)
+    return resp
+
+
+async def news_page(request: Request):
+    from . import news
+    resp = render(request, "news.html", {"entries": news.ENTRIES, "news_text": news.text,
+                                         "news_new": {r["version"] for r in news.unseen(request.cookies.get(news.COOKIE))},
+                                         "news_unseen": []})
+    return _mark_news_seen(resp)
+
+
+async def news_seen(request: Request):
+    """Hinweis auf der Übersicht ausblenden (wie der Sprachwechsel nur ein Cookie)."""
+    return _mark_news_seen(RedirectResponse(safe_next(request.query_params.get("next", "/")), status_code=303))
+
+
 async def help_page(request: Request):
     from .mdhelp import manual
     html, toc = manual(lang_of(request))
@@ -533,6 +556,8 @@ routes = [
     Route("/connection", connection_page),
     Route("/privacy", privacy_page),
     Route("/help", help_page),
+    Route("/news", news_page),
+    Route("/news/seen", news_seen),
     Route("/connection/reset", pin_reset, methods=["POST"]),
     Route("/connection/cert", cert_upload, methods=["POST"]),
     Route("/connection/cert/remove", cert_remove, methods=["POST"]),

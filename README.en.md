@@ -1,8 +1,12 @@
-# SAMAUDIT v1.9.0 – Active Directory security assessment
+# SAMAUDIT v1.9.1 – Active Directory security assessment
 
 *Deutsche Version: [README.md](README.md)* · **Manual:** [app/docs/manual.en.md](app/docs/manual.en.md) (also in the web interface under **Help**)
 
 Self-hosted web application that reads a Windows or Samba AD domain, runs **110 security checks** and presents the result as a risk score (0–100), a detailed report with remediation advice, and a PDF export – in German or English.
+
+## New in 1.9.1
+
+- **What's new in the app:** bottom left, **What's new** lists the changes per version – marked as feature, security, fix or notice (e.g. on the RC4 deprecation). New entries are indicated by a small dot (orange for security) and, once, by a slim dismissible line on the overview. The entries ship with the update (`app/docs/news.json`); nothing is loaded from the internet, only a cookie remembers the last version seen.
 
 ## New in 1.9.0
 
@@ -310,7 +314,7 @@ curl -k https://localhost:9400/healthz               # version and status
 
 ### Update
 
-**With the image from GitHub:** `sh update.sh --pull` – pulls `ghcr.io/soleil0815/samaudit:latest`, backs up first, starts the new version, verifies it and falls back to the previous one on problems. A specific version: `sh update.sh --pull=1.9.0`. If the image is already current, nothing happens. Other image (e.g. a fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in `.env`.
+**With the image from GitHub:** `sh update.sh --pull` – pulls `ghcr.io/soleil0815/samaudit:latest`, backs up first, starts the new version, verifies it and falls back to the previous one on problems. A specific version: `sh update.sh --pull=1.9.1`. If the image is already current, nothing happens. Other image (e.g. a fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in `.env`.
 
 **With a ZIP or the source code (local build):**
 
@@ -402,15 +406,16 @@ The repository contains a GitHub Actions workflow (`.github/workflows/docker-ima
 
 | Event | Image tags |
 |---|---|
-| push to `main` | `latest`, `<version from app/version.py>`, `sha-<commit>` |
-| git tag `v1.9.0` | `1.9.0` (must match `app/version.py`) |
+| push to `main` | `latest`, `<version from app/version.py>`, `sha-<commit>` – afterwards the workflow creates the git tag `v<version>` and a GitHub release automatically (text from `app/docs/news.json`) if the version does not exist yet |
+| git tag `v1.9.1` | `1.9.1` (must match `app/version.py`) |
 | pull request | built only (test), not published |
+| pull request from a branch `claude/…` (prepared by Claude) | merged automatically after a successful test build and published like a push to `main` |
 
 It builds for `linux/amd64` and `linux/arm64`, using the pinned base image (from `base-image.lock` if present) and the pinned packages; the image carries SBOM and provenance attestations.
 
 **Private repository:** the image (package `samaudit` under *Packages*) is private as well. On the server, log in once: `docker login ghcr.io -u <github-user>` – password: a *personal access token (classic)* with the `read:packages` scope. Alternatively make the package public under *Package settings*.
 
-**Publishing a new version:** raise the version in `app/version.py`, commit and push to `main` – after a few minutes the image is ready and servers fetch it with `sh update.sh --pull`.
+**Publishing a new version:** raise the version in `app/version.py`, add an entry to `app/docs/news.json`, push to `main` or merge the pull request – after a few minutes the image is available as `latest` and `<version>`, tag and release are created automatically. Servers fetch it with `sh update.sh --pull`; tools watching `latest` such as Dockhand or Watchtower pull it by themselves.
 
 ## Licence and use
 

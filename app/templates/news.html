@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nav_news', lang) }} – {{ APP_NAME }}{% endblock %}
+{% block body %}
+{% if sess %}{{ super() }}{% else %}
+<main style="max-width:980px;margin:0 auto">
+  <p style="text-align:right;margin:0 0 -18px"><a href="/lang/de?next=/news" {% if lang == 'de' %}style="font-weight:700"{% endif %}>DE</a> · <a href="/lang/en?next=/news" {% if lang == 'en' %}style="font-weight:700"{% endif %}>EN</a></p>
+  {{ self.content() }}<p style="margin-top:28px"><a href="/login">← {{ t('login_title', lang) }}</a></p></main>
+{% endif %}
+{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ t('nav_news', lang) }}</h1>
+<p>{{ t('news_intro', lang) }}</p></div></div>
+<div class="news-list">
+{% for r in entries %}
+  <section class="panel panel-pad news-entry{{ ' is-new' if r.version in news_new }}">
+    <header>
+      <h2>v{{ r.version }}</h2>
+      {% if r.date %}<span class="muted small">{{ r.date[8:10] ~ '.' ~ r.date[5:7] ~ '.' ~ r.date[:4] if lang == 'de' else r.date }}</span>{% endif %}
+      {% if r.version == VERSION %}<span class="tag-new">{{ t('news_current', lang) }}</span>{% elif r.version in news_new %}<span class="tag-new">{{ t('news_unread', lang) }}</span>{% endif %}
+    </header>
+    <ul>
+    {% for i in r['items'] %}
+      <li><span class="news-type t-{{ i.type }}">{{ t('news_' ~ i.type, lang) }}</span><span>{{ news_text(i, lang) }}</span></li>
+    {% endfor %}
+    </ul>
+  </section>
+{% endfor %}
+</div>
+{% endblock %}

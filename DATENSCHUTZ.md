@@ -13,7 +13,7 @@
 | **Zugriffskontrolle** | Nur Mitglieder der Prüfer-Gruppe; Admin-Konten werden abgewiesen. Sperre nach Fehlversuchen, Sitzungs-Timeout, CSRF-Schutz. |
 | **Vertraulichkeit** | HTTPS; Passwort der Prüfer nur verschlüsselt im Arbeitsspeicher; Datenordner nur für den Programmbenutzer lesbar (`chmod 700`); Container ohne Root-Rechte, schreibgeschützt. |
 | **Nachvollziehbarkeit** | Protokoll aller Anmeldungen (auch abgewiesener), Scans, Exporte, Löschungen und blockierten Verbindungen. |
-| **Cookies** | Nur technisch notwendige (Sitzung, CSRF, Sprache) – kein Einwilligungsbanner erforderlich (§ 25 Abs. 2 TDDDG). |
+| **Cookies** | Nur technisch notwendige (Sitzung, CSRF, Sprache, zuletzt gesehene Version der Neuigkeiten) – kein Einwilligungsbanner erforderlich (§ 25 Abs. 2 TDDDG). |
 | **Transparenz** | Öffentliche Seite `/privacy` („Datenschutz“) mit Zweck, Datenarten, Speicherdauer und Rechten; Kontakt über `PRIVACY_CONTACT`. |
 | **Löschung auf Anforderung** | Einzelne Berichte unter „Berichte“ löschbar; vollständige Löschung durch Entfernen des Ordners `data`. |
 

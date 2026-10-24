@@ -2,8 +2,13 @@
 # GitHub Container Registry: ghcr.io/<owner>/<repo>  (here: ghcr.io/soleil0815/samaudit)
 #
 #   push to main      -> tags: latest, <version from app/version.py>, sha-<commit>
+#                        then the git tag v<version> and a GitHub release are created
+#                        automatically (notes from app/docs/news.json), if not there yet
 #   push tag v1.2.3   -> tag:  1.2.3   (the tag must match app/version.py)
 #   pull request      -> build only (test), nothing is published
+#   pull request from a branch claude/... of this repository (changes prepared by Claude):
+#                        if the test build succeeds, it is merged automatically and the
+#                        publish run above is started for main (latest, version, tag, release)
 #
 # Servers update with:  sh update.sh --pull
 name: Container image
@@ -48,6 +53,10 @@ jobs:
             exit 1
           fi
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          # What's new in the app: every release should have an entry in app/docs/news.json
+          if ! grep -q "\"version\": \"$version\"" app/docs/news.json; then
+            echo "::warning::app/docs/news.json has no entry for $version (shown in the app under \"What's new\")"
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "base=$base"       >> "$GITHUB_OUTPUT"
           echo "image=$image"     >> "$GITHUB_OUTPUT"
@@ -96,3 +105,62 @@ jobs:
           sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    # after a successful publish from main: tag v<version> + GitHub release (once per version)
+    needs: build
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Create tag and release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' app/version.py)"
+          if gh release view "v$version" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "v$version already exists - nothing to do"
+            exit 0
+          fi
+          python3 - "$version" "${GITHUB_REPOSITORY,,}" > notes.md <<'PY'
+          import json, sys
+          v, repo = sys.argv[1], sys.argv[2]
+          label = {"feature": "Funktion", "security": "Sicherheit", "fix": "Fehlerbehebung", "notice": "Hinweis"}
+          entry = next((e for e in json.load(open("app/docs/news.json", encoding="utf-8")) if e.get("version") == v), None)
+          for i in (entry or {}).get("items", []):
+              print(f"- **{label.get(i.get('type'), 'Info')}:** {i.get('de') or i.get('en')}")
+          print(f"\nImage: `ghcr.io/{repo}:{v}` (auch `latest`) – Update: `sh update.sh --pull`")
+          PY
+          gh release create "v$version" --target "$GITHUB_SHA" --title "SAMAUDIT $version" --notes-file notes.md
+
+  automerge:
+    # PRs from claude/... branches of this repository: merge after a green test build and publish.
+    # A merge made with GITHUB_TOKEN does not trigger "push" workflows, so the publish run is
+    # started explicitly via workflow_dispatch (which GITHUB_TOKEN is allowed to trigger).
+    needs: build
+    if: >-
+      github.event_name == 'pull_request' &&
+      startsWith(github.head_ref, 'claude/') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - name: Merge and publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --merge --delete-branch
+          gh workflow run docker-image.yml --repo "$GITHUB_REPOSITORY" --ref main
+          echo "PR #$PR merged - publish run for main started"

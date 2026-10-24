@@ -1,8 +1,12 @@
-# SAMAUDIT v1.9.0 – Sicherheitsprüfung für Active Directory
+# SAMAUDIT v1.9.1 – Sicherheitsprüfung für Active Directory
 
 *English version: [README.en.md](README.en.md)* · **Handbuch:** [app/docs/handbuch.de.md](app/docs/handbuch.de.md) (auch in der Weboberfläche unter **Hilfe**)
 
 Selbst gehostete Webanwendung, die eine Windows- oder Samba-AD-Domäne ausliest, **110 Sicherheitsprüfungen** durchführt und das Ergebnis als Risikowert (0–100), detaillierten Bericht mit Maßnahmen und PDF ausgibt – auf Deutsch oder Englisch.
+
+## Neu in 1.9.1
+
+- **Neuigkeiten in der App:** Unten links unter **Neuigkeiten** steht, was sich je Version geändert hat – gekennzeichnet als Funktion, Sicherheit, Fehlerbehebung oder Hinweis (z. B. zur RC4-Abschaltung). Neue Einträge zeigt ein kleiner Punkt an (orange bei Sicherheit) sowie einmalig eine schmale Zeile auf der Übersicht, die sich ausblenden lässt. Die Einträge kommen mit dem Update (`app/docs/news.json`), es wird nichts aus dem Internet geladen; nur ein Cookie merkt sich die zuletzt gesehene Version.
 
 ## Neu in 1.9.0
 
@@ -305,7 +309,7 @@ curl -k https://localhost:9400/healthz               # Version und Zustand
 
 ### Update
 
-**Mit dem Image von GitHub:** `sh update.sh --pull` – holt `ghcr.io/soleil0815/samaudit:latest`, sichert vorher, startet die neue Version, prüft sie und fällt bei Problemen auf die bisherige zurück. Eine bestimmte Version: `sh update.sh --pull=1.9.0`. Ist das Image schon aktuell, passiert nichts. Anderes Image (z. B. Fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in der `.env`.
+**Mit dem Image von GitHub:** `sh update.sh --pull` – holt `ghcr.io/soleil0815/samaudit:latest`, sichert vorher, startet die neue Version, prüft sie und fällt bei Problemen auf die bisherige zurück. Eine bestimmte Version: `sh update.sh --pull=1.9.1`. Ist das Image schon aktuell, passiert nichts. Anderes Image (z. B. Fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in der `.env`.
 
 **Mit ZIP oder Quellcode (lokaler Build):**
 
@@ -397,15 +401,16 @@ Das Repository enthält einen GitHub-Actions-Workflow (`.github/workflows/docker
 
 | Ereignis | Image-Tags |
 |---|---|
-| Push auf `main` | `latest`, `<Version aus app/version.py>`, `sha-<commit>` |
-| Git-Tag `v1.9.0` | `1.9.0` (muss zu `app/version.py` passen) |
+| Push auf `main` | `latest`, `<Version aus app/version.py>`, `sha-<commit>` – danach legt der Workflow automatisch das Git-Tag `v<Version>` und ein GitHub-Release an (Text aus `app/docs/news.json`), falls es die Version noch nicht gibt |
+| Git-Tag `v1.9.1` | `1.9.1` (muss zu `app/version.py` passen) |
 | Pull Request | wird nur gebaut (Test), nicht veröffentlicht |
+| Pull Request aus einem Branch `claude/…` (von Claude vorbereitet) | nach erfolgreichem Testbau automatisch übernommen und veröffentlicht wie ein Push auf `main` |
 
 Gebaut wird für `linux/amd64` und `linux/arm64`, mit dem fixierten Basisimage (aus `base-image.lock`, falls vorhanden) und den fixierten Paketen; das Image enthält SBOM und Provenance-Angaben.
 
 **Privates Repository:** Das Image (Paket `samaudit` unter *Packages*) ist dann ebenfalls privat. Auf dem Server einmalig anmelden: `docker login ghcr.io -u <GitHub-Benutzer>` – als Passwort ein *Personal Access Token (classic)* mit dem Recht `read:packages`. Alternativ das Paket unter *Package settings* öffentlich schalten.
 
-**Neue Version veröffentlichen:** Version in `app/version.py` erhöhen, committen und auf `main` pushen – nach wenigen Minuten steht das Image bereit, die Server holen es mit `sh update.sh --pull`.
+**Neue Version veröffentlichen:** Version in `app/version.py` erhöhen, Eintrag in `app/docs/news.json` ergänzen, auf `main` pushen bzw. den Pull Request zusammenführen – nach wenigen Minuten steht das Image als `latest` und `<Version>` bereit, Tag und Release entstehen automatisch. Server holen es mit `sh update.sh --pull`; Werkzeuge wie Dockhand oder Watchtower, die `latest` beobachten, ziehen es von selbst.
 
 ## Lizenz und Nutzung
 
