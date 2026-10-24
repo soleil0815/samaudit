@@ -1,10 +1,13 @@
 # Weekly vulnerability scan of the published image ghcr.io/<owner>/<repo>:latest.
 #
-# New vulnerabilities are found in images long after they were built. If the published image has
-# CRITICAL/HIGH findings with an available fix, this workflow starts a rebuild of main: the build pulls
-# the current base image (Debian security updates) and is scanned again before it replaces `latest`.
-# If the rebuild cannot fix it (e.g. a Python package needs a new version), that run fails –
-# GitHub then notifies the repository owner by e-mail.
+# New vulnerabilities are found in images long after they were built. This workflow only REPORTS –
+# it never rebuilds or publishes anything. The owner decides what happens next.
+#
+#   findings (CRITICAL/HIGH with an available fix)  -> GitHub issue "Sicherheitsscan …" (label security-scan)
+#                                                      with the list, the owner is mentioned (notification);
+#                                                      if the issue is already open, a comment is added
+#   clean again                                      -> the open issue is closed automatically
+#   scan itself failed                               -> issue/comment as well (nothing is assumed to be fine)
 name: Security scan
 
 on:
@@ -21,7 +24,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-      actions: write
+      issues: write
     steps:
       - name: Check out
         uses: actions/checkout@v7
@@ -55,15 +58,55 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
-      - name: Rebuild with current base image
-        if: steps.scan.outcome == 'failure'
+      - name: Report as GitHub issue (no rebuild)
+        if: always()
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          IMAGE: ${{ steps.img.outputs.image }}
         run: |
-          rc="$(cat "$RUNNER_TEMP/trivy-report/rc" 2>/dev/null || echo 1)"
-          if [ "$rc" = 3 ]; then
-            gh workflow run docker-image.yml --repo "$GITHUB_REPOSITORY" --ref main
-            echo "::warning::Fixable vulnerabilities in latest – rebuild of main started (it is scanned again before publishing)."
+          set -euo pipefail
+          report="$RUNNER_TEMP/trivy-report"
+          rc="$(cat "$report/rc" 2>/dev/null || echo 1)"
+          label="security-scan"
+          gh label create "$label" --repo "$GITHUB_REPOSITORY" --color B60205 \
+            --description "Findings of the weekly vulnerability scan" >/dev/null 2>&1 || true
+          open="$(gh issue list --repo "$GITHUB_REPOSITORY" --label "$label" --state open --json number --jq '.[0].number // empty')"
+
+          if [ "$rc" = 0 ]; then
+            if [ -n "$open" ]; then
+              gh issue comment "$open" --repo "$GITHUB_REPOSITORY" \
+                --body "Erneuter Scan von \`$IMAGE\` ohne behebbare kritische/hohe Schwachstellen – erledigt. ([Lauf]($RUN_URL))"
+              gh issue close "$open" --repo "$GITHUB_REPOSITORY"
+            fi
+            exit 0
           fi
-          exit 1     # mark this run as failed so the owner is notified
+
+          {
+            if [ "$rc" = 3 ]; then
+              echo "Der wöchentliche Scan hat im veröffentlichten Image \`$IMAGE\` **kritische oder hohe Schwachstellen gefunden, für die es eine Korrektur gibt**."
+              echo
+              echo "Es wurde **nichts neu gebaut oder veröffentlicht** – bitte entscheiden, wie es weitergeht (z. B. Claude beauftragen, die Pakete zu aktualisieren)."
+              echo
+              echo '```'
+              head -c 50000 "$report/blocking-list.txt" 2>/dev/null || true
+              echo '```'
+            else
+              echo "Der wöchentliche Scan von \`$IMAGE\` ist **fehlgeschlagen** (Exit-Code $rc) – das Image konnte nicht geprüft werden."
+            fi
+            echo
+            echo "Vollständiger Bericht: [Lauf]($RUN_URL) (Zusammenfassung und Artefakt \`trivy-report-latest\`)"
+            echo
+            echo "@$OWNER"
+          } > body.md
+
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body-file body.md
+          else
+            title="Sicherheitsscan: behebbare Schwachstellen im Image (latest)"
+            [ "$rc" = 3 ] || title="Sicherheitsscan fehlgeschlagen (latest)"
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label "$label" --body-file body.md
+          fi
+          exit 1     # mark the run as failed as well
