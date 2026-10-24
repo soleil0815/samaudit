@@ -409,6 +409,7 @@ The repository contains a GitHub Actions workflow (`.github/workflows/docker-ima
 | push to `main` | `latest`, `<version from app/version.py>`, `sha-<commit>` – afterwards the workflow creates the git tag `v<version>` and a GitHub release automatically (text from `app/docs/news.json`) if the version does not exist yet |
 | git tag `v1.9.1` | `1.9.1` (must match `app/version.py`) |
 | pull request | built only (test), not published |
+| pull request from a branch `claude/…` (prepared by Claude) | merged automatically after a successful test build and published like a push to `main` |
 
 It builds for `linux/amd64` and `linux/arm64`, using the pinned base image (from `base-image.lock` if present) and the pinned packages; the image carries SBOM and provenance attestations.
 

@@ -404,6 +404,7 @@ Das Repository enthält einen GitHub-Actions-Workflow (`.github/workflows/docker
 | Push auf `main` | `latest`, `<Version aus app/version.py>`, `sha-<commit>` – danach legt der Workflow automatisch das Git-Tag `v<Version>` und ein GitHub-Release an (Text aus `app/docs/news.json`), falls es die Version noch nicht gibt |
 | Git-Tag `v1.9.1` | `1.9.1` (muss zu `app/version.py` passen) |
 | Pull Request | wird nur gebaut (Test), nicht veröffentlicht |
+| Pull Request aus einem Branch `claude/…` (von Claude vorbereitet) | nach erfolgreichem Testbau automatisch übernommen und veröffentlicht wie ein Push auf `main` |
 
 Gebaut wird für `linux/amd64` und `linux/arm64`, mit dem fixierten Basisimage (aus `base-image.lock`, falls vorhanden) und den fixierten Paketen; das Image enthält SBOM und Provenance-Angaben.
 
