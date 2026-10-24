@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.9.6",
+    "date": "2026-10-24",
+    "items": [
+      {
+        "type": "security",
+        "de": "Alles im Image bleibt aktuell: Debian, Python und jetzt auch alle Python-Pakete werden bei jedem Bau – auch beim wöchentlichen Neubau – in der neuesten Version installiert. Veröffentlicht wird nur, wenn der Test im fertigen Image und der Schwachstellen-Scan bestanden sind.",
+        "en": "Everything in the image stays current: Debian, Python and now also all Python packages are installed in their newest version on every build – including the weekly rebuild. It is published only if the test inside the finished image and the vulnerability scan pass."
+      }
+    ]
+  },
+  {
     "version": "1.9.5",
     "date": "2026-10-24",
     "items": [

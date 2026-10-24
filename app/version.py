@@ -2,4 +2,4 @@
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
 """Programmname und Version."""
 APP_NAME = "SAMAUDIT"
-VERSION = "1.9.5"
+VERSION = "1.9.6"
