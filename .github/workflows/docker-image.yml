@@ -48,9 +48,9 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-      - name: Install pinned packages
+      - name: Install newest packages
         run: |
-          python -m pip install --no-deps --only-binary=:all: -r requirements.txt
+          python -m pip install --upgrade --upgrade-strategy eager --only-binary=:all: -r requirements.txt
           python -m pip check
       - name: Smoke test
         run: python tests/smoke.py
@@ -74,11 +74,6 @@ jobs:
           set -euo pipefail
           version="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' app/version.py)"
           base="$(sed -n 's/^ARG PYTHON_IMAGE=//p' Dockerfile | head -1)"
-          # use the pinned digest from base-image.lock if it belongs to the same tag
-          if [ -f base-image.lock ]; then
-            lock="$(grep -v '^#' base-image.lock | head -1 | tr -d '[:space:]')"
-            [ "${lock%%@*}" = "$base" ] && base="$lock"
-          fi
           if [[ "$GITHUB_REF" == refs/tags/v* ]] && [ "${GITHUB_REF#refs/tags/v}" != "$version" ]; then
             echo "::error::Git tag ${GITHUB_REF#refs/tags/} does not match app/version.py ($version)"
             exit 1
@@ -141,6 +136,18 @@ jobs:
             APP_VERSION=${{ steps.info.outputs.version }}
             SECURITY_UPDATES=${{ steps.info.outputs.week }}
           cache-from: type=gha
+
+      - name: Smoke test inside the built image (exact package versions of this build)
+        shell: bash
+        run: |
+          docker run --rm --entrypoint python -v "$PWD/tests:/app/tests:ro" samaudit-scan:ci tests/smoke.py
+          {
+            echo "## Package versions in this image"
+            echo '```'
+            docker run --rm --entrypoint python samaudit-scan:ci -c "import platform; print('Python', platform.python_version())"
+            docker run --rm --entrypoint sh samaudit-scan:ci -c '. /etc/os-release; echo "$PRETTY_NAME"; cat /app/package-versions.txt'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Vulnerability scan (Trivy) – blocks publishing on fixable CRITICAL/HIGH findings
         run: .github/scripts/trivy.sh samaudit-scan:ci
@@ -264,6 +271,15 @@ jobs:
           label="security-scan"
           gh label create "$label" --repo "$GITHUB_REPOSITORY" --color B60205 \
             --description "Weekly rebuild / vulnerability scan" >/dev/null 2>&1 || true
+          # Python 3.13 reaches end of life on 2029-10-31 – from six months before, remind to lift the base
+          if [ "$(date -u +%Y%m%d)" -ge 20290430 ]; then
+            gh label create base-upgrade --repo "$GITHUB_REPOSITORY" --color FBCA04 >/dev/null 2>&1 || true
+            if [ -z "$(gh issue list --repo "$GITHUB_REPOSITORY" --label base-upgrade --state open --json number --jq '.[0].number // empty')" ]; then
+              gh issue create --repo "$GITHUB_REPOSITORY" --label base-upgrade \
+                --title "Unterbau anheben: Python 3.13 erhält ab 31.10.2029 keine Updates mehr" \
+                --body "Das Image baut auf Python 3.13. Dessen Unterstützung endet am 31.10.2029 – danach gibt es keine Sicherheitskorrekturen mehr. Bitte rechtzeitig auf die nächste Python-Version umstellen (Basisimage im Dockerfile, Tests). @$OWNER"
+            fi
+          fi
           open="$(gh issue list --repo "$GITHUB_REPOSITORY" --label "$label" --state open --json number --jq '.[0].number // empty')"
           if [ "$TEST" = success ] && [ "$BUILD" = success ]; then
             if [ -n "$open" ]; then

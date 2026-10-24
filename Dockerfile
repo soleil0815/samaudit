@@ -1,11 +1,11 @@
 # SAMAUDIT – container image
-# Base image: newest Python 3.13 patch release on Debian (slim). The GitHub build pulls the current
-# 3.13.x every time (weekly rebuild) – bug and security fixes of Python itself, no jump to 3.14.
-# Local builds via update.sh pin the base to its digest in base-image.lock (refresh: --refresh-base).
+# Base image: newest Python 3.13 patch release on the current Debian (slim). Every build pulls the
+# current 3.13.x (weekly rebuild on GitHub) – bug and security fixes of Python itself. Moving to the
+# next Python minor version ("lifting the base") is a deliberate step before 3.13 reaches end of life.
 ARG PYTHON_IMAGE=python:3.13-slim
 FROM ${PYTHON_IMAGE}
 
-ARG APP_VERSION=1.9.5
+ARG APP_VERSION=1.9.6
 LABEL org.opencontainers.image.title="SAMAUDIT" \
       org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.description="Security assessment for Active Directory (Windows AD / Samba AD)" \
@@ -32,13 +32,15 @@ RUN echo "Debian updates: $SECURITY_UPDATES" \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
-# Install exactly the pinned list (no re-resolution), then verify consistency.
-# Time zone data comes from the pinned tzdata package (instead of apt, whose versions change).
+# Install the NEWEST version of every Python package (policy: nothing outdated in the image) and
+# verify consistency. The resulting versions are recorded in /app/package-versions.txt.
+# Time zone data comes from the tzdata package.
 # pip itself is removed afterwards: it is not needed at runtime and carries its own bundled
 # libraries (urllib3, certifi, msgpack, pkg_resources …) that show up in vulnerability scans.
 COPY requirements.txt .
-RUN pip install --no-deps --only-binary=:all: --no-cache-dir -r requirements.txt \
+RUN pip install --upgrade --upgrade-strategy eager --only-binary=:all: --no-cache-dir -r requirements.txt \
  && pip check \
+ && pip freeze --all --exclude pip > /app/package-versions.txt \
  && python -c "import os, shutil, tzdata; shutil.copytree(os.path.join(os.path.dirname(tzdata.__file__), 'zoneinfo'), '/usr/share/zoneinfo', dirs_exist_ok=True)" \
  && ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime && echo "$TZ" > /etc/timezone \
  && python -m pip uninstall -y pip \

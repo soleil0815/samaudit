@@ -1,8 +1,14 @@
-# SAMAUDIT v1.9.5 – Sicherheitsprüfung für Active Directory
+# SAMAUDIT v1.9.6 – Sicherheitsprüfung für Active Directory
 
 *English version: [README.en.md](README.en.md)* · **Handbuch:** [app/docs/handbuch.de.md](app/docs/handbuch.de.md) (auch in der Weboberfläche unter **Hilfe**)
 
 Selbst gehostete Webanwendung, die eine Windows- oder Samba-AD-Domäne ausliest, **110 Sicherheitsprüfungen** durchführt und das Ergebnis als Risikowert (0–100), detaillierten Bericht mit Maßnahmen und PDF ausgibt – auf Deutsch oder Englisch.
+
+## Neu in 1.9.6
+
+- **Alles im Image bleibt aktuell:** Neben Debian und Python werden jetzt auch alle Python-Pakete (inkl. Unterabhängigkeiten) bei jedem Bau in der neuesten Version installiert – auch beim wöchentlichen Neubau. `requirements.txt` enthält nur noch Mindestversionen. Der Rauchtest läuft jetzt im fertigen Image, also mit genau den Paketversionen, die veröffentlicht würden; zusammen mit dem Trivy-Scan entscheidet er, ob `latest` erneuert wird. Die Versionen jedes Images stehen in `/app/package-versions.txt` und in der Zusammenfassung des GitHub-Laufs.
+- **Unterbau anheben:** Nur der Wechsel auf die nächste Python-Hauptversion bleibt ein bewusster Schritt. Ab Mai 2029 erinnert der wöchentliche Lauf per Issue daran, dass Python 3.13 am 31.10.2029 ausläuft.
+- `update.sh` holt bei jedem lokalen Bau das aktuelle Basisimage; `--lock` und `--refresh-base` werden nicht mehr gebraucht.
 
 ## Neu in 1.9.5
 
@@ -381,7 +387,7 @@ curl -k https://localhost:9400/healthz               # Version und Zustand
 
 ### Update
 
-**Mit dem Image von GitHub:** `sh update.sh --pull` – holt `ghcr.io/soleil0815/samaudit:latest`, sichert vorher, startet die neue Version, prüft sie und fällt bei Problemen auf die bisherige zurück. Eine bestimmte Version: `sh update.sh --pull=1.9.5`. Ist das Image schon aktuell, passiert nichts. Anderes Image (z. B. Fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in der `.env`.
+**Mit dem Image von GitHub:** `sh update.sh --pull` – holt `ghcr.io/soleil0815/samaudit:latest`, sichert vorher, startet die neue Version, prüft sie und fällt bei Problemen auf die bisherige zurück. Eine bestimmte Version: `sh update.sh --pull=1.9.6`. Ist das Image schon aktuell, passiert nichts. Anderes Image (z. B. Fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in der `.env`.
 
 **Mit ZIP oder Quellcode (lokaler Build):**
 
@@ -393,7 +399,7 @@ sh update.sh samaudit-*.zip
 
 Mit ZIP zeigt das Skript zuerst installierte und neue Version und fragt nach, sichert die bisherigen Programmdateien nach `backups/program-*.tgz`, spielt die neuen ein und entfernt veraltete Dateien (`.env`, `data/`, `certs/`, `backups/` und `base-image.lock` bleiben unberührt). Am Ende fragt es, ob die ZIP-Datei gelöscht werden soll. Ohne ZIP (`./update.sh`) wird nur neu gebaut und gestartet. Danach
 1. legt eine **Sicherung** in `backups/` an (konsistente Kopie der Datenbank + Zertifikate; die letzten 5 bleiben),
-2. **baut** das Image mit dem fixierten Basisimage und den fixierten Paketen,
+2. **baut** das Image mit dem aktuellen Basisimage, allen Debian-Sicherheitsupdates und den neuesten Paketversionen,
 3. **startet** den Container neu und wartet, bis er als „healthy“ gemeldet wird (sonst Abbruch mit Log-Auszug),
 4. räumt **alte Images** auf (die vorige Version bleibt für einen Rückschritt).
 
@@ -401,12 +407,10 @@ Mit ZIP zeigt das Skript zuerst installierte und neue Version und fragt nach, si
 |---|---|
 | `./update.sh --no-backup` | ohne Sicherung |
 | `./update.sh --no-cache` | komplett neu bauen |
-| `./update.sh --refresh-base` | Python-Basisimage neu holen (Debian-Sicherheitsupdates) und neu festlegen |
-| `./update.sh --lock` | `requirements.txt` aus `requirements.in` neu auflösen (z. B. nach Versionsänderung) |
 
 Fehlt die `.env`, legt das Skript sie aus der Vorlage an und bittet um `DOMAIN_FQDN`. Schlägt der Build fehl, bleibt der laufende Container unverändert.
 
-**Reproduzierbarkeit:** Lokal sind das Python-Basisimage (Digest in `base-image.lock`) und jedes Paket exakt festgelegt; das Image wird ohne Nachauflösung gebaut. Lokal gebaut wird damit dieselbe Basis wie beim ersten Build. Das GitHub-Image wird bewusst vom Tag `python:3.13-slim` gebaut – also immer mit der neuesten Python-3.13-Version (ohne `base-image.lock` im Repository); Paketinhalte werden nicht per Prüfsumme kontrolliert. Das Ergebnis ist also versionsgleich, aber nicht bitgleich reproduzierbar – zumal bei jedem Bau bewusst die aktuellen Debian-Sicherheitsupdates eingespielt werden.
+**Immer aktuell:** Jeder Bau – lokal mit `update.sh` und jede Woche auf GitHub – holt das aktuelle Basisimage `python:3.13-slim` (neueste Python-3.13-Version auf aktuellem Debian), spielt alle Debian-Sicherheitsupdates ein und installiert von jedem Python-Paket die neueste Version (`requirements.txt` enthält nur Mindestversionen). Die genauen Versionen eines Images stehen darin unter `/app/package-versions.txt` und in der Zusammenfassung des GitHub-Laufs. Bewusst geplant wird nur der Sprung auf die nächste Python-Hauptversion („Unterbau anheben“), spätestens vor dem Supportende von Python 3.13 (31.10.2029) – der wöchentliche Lauf erinnert ab Mai 2029 per Issue daran.
 
 **Datenordner und Sicherung:** Alles, was SAMAUDIT speichert, liegt in `./data` im SAMAUDIT-Ordner:
 
@@ -475,13 +479,13 @@ Das Repository enthält einen GitHub-Actions-Workflow (`.github/workflows/docker
 | Ereignis | Image-Tags |
 |---|---|
 | Push auf `main` | `latest`, `<Version aus app/version.py>`, `sha-<commit>` – danach legt der Workflow automatisch das Git-Tag `v<Version>` und ein GitHub-Release an (Text aus `app/docs/news.json`), falls es die Version noch nicht gibt |
-| Git-Tag `v1.9.5` | `1.9.5` (muss zu `app/version.py` passen) |
+| Git-Tag `v1.9.6` | `1.9.6` (muss zu `app/version.py` passen) |
 | Pull Request | wird nur gebaut (Test), nicht veröffentlicht |
 | jeder Lauf | Schwachstellen-Scan des Images mit Trivy – kritische/hohe Schwachstellen, für die es eine Korrektur gibt, stoppen den Lauf, bevor etwas veröffentlicht wird |
 | wöchentlich (Mo. 04:17 UTC) | Neubau von `main` mit aktuellem Basisimage und allen Debian-Sicherheitsupdates, Rauchtest, Trivy-Scan; bei Erfolg als `latest` (und `sha-…`) veröffentlicht, sonst Issue |
 | Pull Request aus einem Branch `claude/…` (von Claude vorbereitet) | nach erfolgreichem Testbau automatisch übernommen und veröffentlicht wie ein Push auf `main` |
 
-Gebaut wird für `linux/amd64` und `linux/arm64`, mit dem fixierten Basisimage (aus `base-image.lock`, falls vorhanden) und den fixierten Paketen; das Image enthält SBOM und Provenance-Angaben.
+Gebaut wird für `linux/amd64` und `linux/arm64`, mit dem aktuellen Basisimage `python:3.13-slim`, allen Debian-Sicherheitsupdates und den neuesten Paketversionen; vor der Veröffentlichung laufen Rauchtest (im fertigen Image) und Trivy-Scan; das Image enthält SBOM und Provenance-Angaben.
 
 **Privates Repository:** Das Image (Paket `samaudit` unter *Packages*) ist dann ebenfalls privat. Auf dem Server einmalig anmelden: `docker login ghcr.io -u <GitHub-Benutzer>` – als Passwort ein *Personal Access Token (classic)* mit dem Recht `read:packages`. Alternativ das Paket unter *Package settings* öffentlich schalten.
 
@@ -524,7 +528,7 @@ app/
   templates/ static/ pdf_fonts/
 .env.example                      Vorlage für Ihre Einstellungen (.env)
 update.sh                         Neubau/Update mit Sicherung und Prüfung
-requirements.in / requirements.txt  direkte / vollständig fixierte Abhängigkeiten
+requirements.txt     Python-Abhängigkeiten (Mindestversionen, installiert wird jeweils die neueste)
 DATENSCHUTZ.md                    Datenschutz-Unterlagen
 ```
 

@@ -156,7 +156,7 @@ The complete list is in the README.
 sh update.sh --pull
 ```
 
-Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.9.5`. If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
+Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.9.6`. If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
 
 **Via ZIP file (local build):**
 
@@ -168,7 +168,7 @@ sh update.sh samaudit-*.zip
 
 The script shows the installed and the new version and asks for confirmation. It then backs up the current program files (`backups/program-*.tgz`), installs the new ones and removes files that no longer exist in the new version. Your `.env`, `data/`, `certs/` and `backups/` are never changed. Finally it asks whether to delete the ZIP file. Without a ZIP (`./update.sh`) it only rebuilds and restarts, with `--restart` it only restarts.
 
-On every run the script also backs up the database and certificates to `backups/` (the last 5 are kept), rebuilds, starts, checks that it works and removes old images. If the new version does not run, the previous one is started again automatically. Your `.env`, `data/`, `certs/` and `backups/` are kept. Options: `--no-backup`, `--no-cache`, `--refresh-base` (fetch the Python base image with security updates), `--lock` (regenerate the package list), `--help`.
+On every run the script also backs up the database and certificates to `backups/` (the last 5 are kept), rebuilds, starts, checks that it works and removes old images. If the new version does not run, the previous one is started again automatically. Your `.env`, `data/`, `certs/` and `backups/` are kept. Options: `--no-backup`, `--no-cache`, `--help`. Every build fetches the current base image, all security updates and the newest package versions.
 
 ### Outbound connections
 
@@ -196,7 +196,6 @@ SAMAUDIT sends no data to third parties, loads nothing from the internet and del
 | Problem | Solution |
 |---|---|
 | `update.sh` says ".env was missing" | `.env` was created from the template – enter `DOMAIN_FQDN`, run again. |
-| Build fails with "version not found" | `./update.sh --lock`, then `./update.sh`. |
 | No DC reachable | DNS inside the container: add the DCs in `.env` via `DOCKER_EXTRA_HOSTS=dc01.firma.local:10.0.0.10` or set `DOCKER_DNS`, then `sh update.sh --restart`. |
 | Many checks "not checkable (SMB)" | Allow TCP 445 to the DCs or set `SMB_CHECKS=false`. |
 | View logs | `docker logs -f samaudit` |

@@ -30,7 +30,7 @@ Die jeweiligen Lizenztexte liegen den installierten Paketen bei. / Licence texts
 
 ## Docker-Basisimage
 
-`python:3.13-slim` (Debian 13; jeweils neueste Python-3.13-Version, bei lokalen Builds genauer Digest in `base-image.lock`) – enthält Software unter verschiedenen freien Lizenzen; Details im Image unter `/usr/share/doc/*/copyright`.
+`python:3.13-slim` (Debian; jeweils neueste Python-3.13-Version; genaue Paketversionen im Image unter `/app/package-versions.txt`) – enthält Software unter verschiedenen freien Lizenzen; Details im Image unter `/usr/share/doc/*/copyright`.
 
 ## Marken / Trademarks
 
