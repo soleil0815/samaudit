@@ -2,6 +2,8 @@
 # GitHub Container Registry: ghcr.io/<owner>/<repo>  (here: ghcr.io/soleil0815/samaudit)
 #
 #   push to main      -> tags: latest, <version from app/version.py>, sha-<commit>
+#                        then the git tag v<version> and a GitHub release are created
+#                        automatically (notes from app/docs/news.json), if not there yet
 #   push tag v1.2.3   -> tag:  1.2.3   (the tag must match app/version.py)
 #   pull request      -> build only (test), nothing is published
 #
@@ -100,3 +102,36 @@ jobs:
           sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    # after a successful publish from main: tag v<version> + GitHub release (once per version)
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Create tag and release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' app/version.py)"
+          if gh release view "v$version" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "v$version already exists - nothing to do"
+            exit 0
+          fi
+          python3 - "$version" "${GITHUB_REPOSITORY,,}" > notes.md <<'PY'
+          import json, sys
+          v, repo = sys.argv[1], sys.argv[2]
+          label = {"feature": "Funktion", "security": "Sicherheit", "fix": "Fehlerbehebung", "notice": "Hinweis"}
+          entry = next((e for e in json.load(open("app/docs/news.json", encoding="utf-8")) if e.get("version") == v), None)
+          for i in (entry or {}).get("items", []):
+              print(f"- **{label.get(i.get('type'), 'Info')}:** {i.get('de') or i.get('en')}")
+          print(f"\nImage: `ghcr.io/{repo}:{v}` (auch `latest`) – Update: `sh update.sh --pull`")
+          PY
+          gh release create "v$version" --target "$GITHUB_SHA" --title "SAMAUDIT $version" --notes-file notes.md

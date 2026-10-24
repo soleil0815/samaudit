@@ -401,7 +401,7 @@ Das Repository enthält einen GitHub-Actions-Workflow (`.github/workflows/docker
 
 | Ereignis | Image-Tags |
 |---|---|
-| Push auf `main` | `latest`, `<Version aus app/version.py>`, `sha-<commit>` |
+| Push auf `main` | `latest`, `<Version aus app/version.py>`, `sha-<commit>` – danach legt der Workflow automatisch das Git-Tag `v<Version>` und ein GitHub-Release an (Text aus `app/docs/news.json`), falls es die Version noch nicht gibt |
 | Git-Tag `v1.9.1` | `1.9.1` (muss zu `app/version.py` passen) |
 | Pull Request | wird nur gebaut (Test), nicht veröffentlicht |
 
@@ -409,7 +409,7 @@ Gebaut wird für `linux/amd64` und `linux/arm64`, mit dem fixierten Basisimage (
 
 **Privates Repository:** Das Image (Paket `samaudit` unter *Packages*) ist dann ebenfalls privat. Auf dem Server einmalig anmelden: `docker login ghcr.io -u <GitHub-Benutzer>` – als Passwort ein *Personal Access Token (classic)* mit dem Recht `read:packages`. Alternativ das Paket unter *Package settings* öffentlich schalten.
 
-**Neue Version veröffentlichen:** Version in `app/version.py` erhöhen, committen und auf `main` pushen – nach wenigen Minuten steht das Image bereit, die Server holen es mit `sh update.sh --pull`.
+**Neue Version veröffentlichen:** Version in `app/version.py` erhöhen, Eintrag in `app/docs/news.json` ergänzen, auf `main` pushen bzw. den Pull Request zusammenführen – nach wenigen Minuten steht das Image als `latest` und `<Version>` bereit, Tag und Release entstehen automatisch. Server holen es mit `sh update.sh --pull`; Werkzeuge wie Dockhand oder Watchtower, die `latest` beobachten, ziehen es von selbst.
 
 ## Lizenz und Nutzung
 

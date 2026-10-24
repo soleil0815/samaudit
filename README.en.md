@@ -406,7 +406,7 @@ The repository contains a GitHub Actions workflow (`.github/workflows/docker-ima
 
 | Event | Image tags |
 |---|---|
-| push to `main` | `latest`, `<version from app/version.py>`, `sha-<commit>` |
+| push to `main` | `latest`, `<version from app/version.py>`, `sha-<commit>` – afterwards the workflow creates the git tag `v<version>` and a GitHub release automatically (text from `app/docs/news.json`) if the version does not exist yet |
 | git tag `v1.9.1` | `1.9.1` (must match `app/version.py`) |
 | pull request | built only (test), not published |
 
@@ -414,7 +414,7 @@ It builds for `linux/amd64` and `linux/arm64`, using the pinned base image (from
 
 **Private repository:** the image (package `samaudit` under *Packages*) is private as well. On the server, log in once: `docker login ghcr.io -u <github-user>` – password: a *personal access token (classic)* with the `read:packages` scope. Alternatively make the package public under *Package settings*.
 
-**Publishing a new version:** raise the version in `app/version.py`, commit and push to `main` – after a few minutes the image is ready and servers fetch it with `sh update.sh --pull`.
+**Publishing a new version:** raise the version in `app/version.py`, add an entry to `app/docs/news.json`, push to `main` or merge the pull request – after a few minutes the image is available as `latest` and `<version>`, tag and release are created automatically. Servers fetch it with `sh update.sh --pull`; tools watching `latest` such as Dockhand or Watchtower pull it by themselves.
 
 ## Licence and use
 
