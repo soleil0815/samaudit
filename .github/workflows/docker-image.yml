@@ -7,7 +7,7 @@
 #   push tag v1.2.3   -> tag:  1.2.3   (the tag must match app/version.py)
 #   every run         -> Trivy vulnerability scan of the image; fixable CRITICAL/HIGH findings
 #                        stop the run before anything is published (.github/scripts/trivy.sh)
-#   weekly (Mon)      -> rebuild of main with the current base image (Debian security updates),
+#   weekly (Mon)      -> rebuild of main with the current base image and all Debian security updates,
 #                        smoke test + Trivy scan; on success published as latest (+ sha-…).
 #                        The version tag is not overwritten. Failure: latest stays as it is and
 #                        a GitHub issue "Wöchentlicher Neubau …" is opened (job "weekly-report").
@@ -96,6 +96,7 @@ jobs:
             echo "::warning::app/docs/news.json has no entry for $version (shown in the app under \"What's new\")"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"   # forces a fresh "apt-get upgrade" every week
           echo "base=$base"       >> "$GITHUB_OUTPUT"
           echo "image=$image"     >> "$GITHUB_OUTPUT"
           echo "SAMAUDIT $version, base image $base -> $image"
@@ -138,6 +139,7 @@ jobs:
           build-args: |
             PYTHON_IMAGE=${{ steps.info.outputs.base }}
             APP_VERSION=${{ steps.info.outputs.version }}
+            SECURITY_UPDATES=${{ steps.info.outputs.week }}
           cache-from: type=gha
 
       - name: Vulnerability scan (Trivy) – blocks publishing on fixable CRITICAL/HIGH findings
@@ -167,6 +169,7 @@ jobs:
           build-args: |
             PYTHON_IMAGE=${{ steps.info.outputs.base }}
             APP_VERSION=${{ steps.info.outputs.version }}
+            SECURITY_UPDATES=${{ steps.info.outputs.week }}
           provenance: true
           sbom: true
           cache-from: type=gha

@@ -1,8 +1,12 @@
-# SAMAUDIT v1.9.3 – Active Directory security assessment
+# SAMAUDIT v1.9.4 – Active Directory security assessment
 
 *Deutsche Version: [README.md](README.md)* · **Manual:** [app/docs/manual.en.md](app/docs/manual.en.md) (also in the web interface under **Help**)
 
 Self-hosted web application that reads a Windows or Samba AD domain, runs **110 security checks** and presents the result as a risk score (0–100), a detailed report with remediation advice, and a PDF export – in German or English.
+
+## New in 1.9.4
+
+- **Security updates inside the image, every week:** the build now installs all available Debian security updates of the base image. GitHub rebuilds `main` every Monday, tests it, checks it with Trivy and publishes it as `latest` only on success – so the image keeps receiving security updates even without program changes. If the test or scan fails, `latest` stays unchanged and a GitHub issue states the reason (e.g. a Python package that needs a new version, which is then updated specifically).
 
 ## New in 1.9.3
 
@@ -378,7 +382,7 @@ curl -k https://localhost:9400/healthz               # version and status
 
 ### Update
 
-**With the image from GitHub:** `sh update.sh --pull` – pulls `ghcr.io/soleil0815/samaudit:latest`, backs up first, starts the new version, verifies it and falls back to the previous one on problems. A specific version: `sh update.sh --pull=1.9.3`. If the image is already current, nothing happens. Other image (e.g. a fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in `.env`.
+**With the image from GitHub:** `sh update.sh --pull` – pulls `ghcr.io/soleil0815/samaudit:latest`, backs up first, starts the new version, verifies it and falls back to the previous one on problems. A specific version: `sh update.sh --pull=1.9.4`. If the image is already current, nothing happens. Other image (e.g. a fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in `.env`.
 
 **With a ZIP or the source code (local build):**
 
@@ -403,7 +407,7 @@ With a ZIP, the script first shows the installed and new version and asks for co
 
 If `.env` is missing, the script creates it from the template and asks for `DOMAIN_FQDN`. If the build fails, the running container stays unchanged.
 
-**Reproducibility:** Python version (tag + digest in `base-image.lock`) and every package are pinned exactly; the image is built without re-resolution. Local builds therefore use the same base as the first build. The GitHub image is built from the pinned tag `python:3.13.16-slim` (no `base-image.lock` in the repository), and package contents are not hash-checked – the result is version-identical, not bit-for-bit reproducible.
+**Reproducibility:** Python version (tag + digest in `base-image.lock`) and every package are pinned exactly; the image is built without re-resolution. Local builds therefore use the same base as the first build. The GitHub image is built from the pinned tag `python:3.13.16-slim` (no `base-image.lock` in the repository), and package contents are not hash-checked – the result is version-identical, not bit-for-bit reproducible – all the more since every build deliberately installs the current Debian security updates.
 
 **Data folder and backup:** Everything SAMAUDIT stores is in `./data` inside the SAMAUDIT folder:
 
@@ -472,10 +476,10 @@ The repository contains a GitHub Actions workflow (`.github/workflows/docker-ima
 | Event | Image tags |
 |---|---|
 | push to `main` | `latest`, `<version from app/version.py>`, `sha-<commit>` – afterwards the workflow creates the git tag `v<version>` and a GitHub release automatically (text from `app/docs/news.json`) if the version does not exist yet |
-| git tag `v1.9.3` | `1.9.3` (must match `app/version.py`) |
+| git tag `v1.9.4` | `1.9.4` (must match `app/version.py`) |
 | pull request | built only (test), not published |
 | every run | Trivy vulnerability scan of the image – critical/high vulnerabilities with an available fix stop the run before anything is published |
-| weekly (Mon 04:17 UTC) | rebuild of `main` with the current base image, smoke test, Trivy scan; on success published as `latest` (and `sha-…`), otherwise an issue |
+| weekly (Mon 04:17 UTC) | rebuild of `main` with the current base image and all Debian security updates, smoke test, Trivy scan; on success published as `latest` (and `sha-…`), otherwise an issue |
 | pull request from a branch `claude/…` (prepared by Claude) | merged automatically after a successful test build and published like a push to `main` |
 
 It builds for `linux/amd64` and `linux/arm64`, using the pinned base image (from `base-image.lock` if present) and the pinned packages; the image carries SBOM and provenance attestations.

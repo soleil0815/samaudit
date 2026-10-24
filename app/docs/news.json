@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.9.4",
+    "date": "2026-10-24",
+    "items": [
+      {
+        "type": "security",
+        "de": "Sicherheitsupdates jede Woche: Das Image wird jeden Montag mit allen aktuellen Debian-Sicherheitsupdates neu gebaut, getestet, auf Schwachstellen geprüft und nur bei Erfolg veröffentlicht – auch ohne Änderungen am Programm.",
+        "en": "Security updates every week: every Monday the image is rebuilt with all current Debian security updates, tested, scanned for vulnerabilities and published only on success – even without program changes."
+      }
+    ]
+  },
+  {
     "version": "1.9.3",
     "date": "2026-10-24",
     "items": [
