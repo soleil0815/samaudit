@@ -1,10 +1,11 @@
-# SAMAUDIT – pinned build (versions fixed; not bit-for-bit reproducible)
-# Base image pinned by tag. On the first local build update.sh additionally pins it to its
-# immutable digest (file base-image.lock), so later local builds use the same base.
-ARG PYTHON_IMAGE=python:3.13.16-slim
+# SAMAUDIT – container image
+# Base image: newest Python 3.13 patch release on Debian (slim). The GitHub build pulls the current
+# 3.13.x every time (weekly rebuild) – bug and security fixes of Python itself, no jump to 3.14.
+# Local builds via update.sh pin the base to its digest in base-image.lock (refresh: --refresh-base).
+ARG PYTHON_IMAGE=python:3.13-slim
 FROM ${PYTHON_IMAGE}
 
-ARG APP_VERSION=1.9.4
+ARG APP_VERSION=1.9.5
 LABEL org.opencontainers.image.title="SAMAUDIT" \
       org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.description="Security assessment for Active Directory (Windows AD / Samba AD)" \

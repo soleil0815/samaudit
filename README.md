@@ -1,8 +1,12 @@
-# SAMAUDIT v1.9.4 – Sicherheitsprüfung für Active Directory
+# SAMAUDIT v1.9.5 – Sicherheitsprüfung für Active Directory
 
 *English version: [README.en.md](README.en.md)* · **Handbuch:** [app/docs/handbuch.de.md](app/docs/handbuch.de.md) (auch in der Weboberfläche unter **Hilfe**)
 
 Selbst gehostete Webanwendung, die eine Windows- oder Samba-AD-Domäne ausliest, **110 Sicherheitsprüfungen** durchführt und das Ergebnis als Risikowert (0–100), detaillierten Bericht mit Maßnahmen und PDF ausgibt – auf Deutsch oder Englisch.
+
+## Neu in 1.9.5
+
+- **Python wird mit aktualisiert:** Das Image baut auf `python:3.13-slim` statt fest auf 3.13.16 auf. Der wöchentliche Neubau nimmt damit automatisch die neueste Python-3.13-Version mit (derzeit 3.13.17) – Fehler- und Sicherheitskorrekturen von Python selbst, kein Sprung auf 3.14. Wie bisher wird jeder Neubau getestet und mit Trivy geprüft, bevor er als `latest` erscheint.
 
 ## Neu in 1.9.4
 
@@ -377,7 +381,7 @@ curl -k https://localhost:9400/healthz               # Version und Zustand
 
 ### Update
 
-**Mit dem Image von GitHub:** `sh update.sh --pull` – holt `ghcr.io/soleil0815/samaudit:latest`, sichert vorher, startet die neue Version, prüft sie und fällt bei Problemen auf die bisherige zurück. Eine bestimmte Version: `sh update.sh --pull=1.9.4`. Ist das Image schon aktuell, passiert nichts. Anderes Image (z. B. Fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in der `.env`.
+**Mit dem Image von GitHub:** `sh update.sh --pull` – holt `ghcr.io/soleil0815/samaudit:latest`, sichert vorher, startet die neue Version, prüft sie und fällt bei Problemen auf die bisherige zurück. Eine bestimmte Version: `sh update.sh --pull=1.9.5`. Ist das Image schon aktuell, passiert nichts. Anderes Image (z. B. Fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in der `.env`.
 
 **Mit ZIP oder Quellcode (lokaler Build):**
 
@@ -402,7 +406,7 @@ Mit ZIP zeigt das Skript zuerst installierte und neue Version und fragt nach, si
 
 Fehlt die `.env`, legt das Skript sie aus der Vorlage an und bittet um `DOMAIN_FQDN`. Schlägt der Build fehl, bleibt der laufende Container unverändert.
 
-**Reproduzierbarkeit:** Python-Version (Tag + Digest in `base-image.lock`) und jedes Paket sind exakt festgelegt; das Image wird ohne Nachauflösung gebaut. Lokal gebaut wird damit dieselbe Basis wie beim ersten Build. Das GitHub-Image wird vom fixierten Tag `python:3.13.16-slim` gebaut (ohne `base-image.lock` im Repository); Paketinhalte werden nicht per Prüfsumme kontrolliert. Das Ergebnis ist also versionsgleich, aber nicht bitgleich reproduzierbar – zumal bei jedem Bau bewusst die aktuellen Debian-Sicherheitsupdates eingespielt werden.
+**Reproduzierbarkeit:** Lokal sind das Python-Basisimage (Digest in `base-image.lock`) und jedes Paket exakt festgelegt; das Image wird ohne Nachauflösung gebaut. Lokal gebaut wird damit dieselbe Basis wie beim ersten Build. Das GitHub-Image wird bewusst vom Tag `python:3.13-slim` gebaut – also immer mit der neuesten Python-3.13-Version (ohne `base-image.lock` im Repository); Paketinhalte werden nicht per Prüfsumme kontrolliert. Das Ergebnis ist also versionsgleich, aber nicht bitgleich reproduzierbar – zumal bei jedem Bau bewusst die aktuellen Debian-Sicherheitsupdates eingespielt werden.
 
 **Datenordner und Sicherung:** Alles, was SAMAUDIT speichert, liegt in `./data` im SAMAUDIT-Ordner:
 
@@ -471,7 +475,7 @@ Das Repository enthält einen GitHub-Actions-Workflow (`.github/workflows/docker
 | Ereignis | Image-Tags |
 |---|---|
 | Push auf `main` | `latest`, `<Version aus app/version.py>`, `sha-<commit>` – danach legt der Workflow automatisch das Git-Tag `v<Version>` und ein GitHub-Release an (Text aus `app/docs/news.json`), falls es die Version noch nicht gibt |
-| Git-Tag `v1.9.4` | `1.9.4` (muss zu `app/version.py` passen) |
+| Git-Tag `v1.9.5` | `1.9.5` (muss zu `app/version.py` passen) |
 | Pull Request | wird nur gebaut (Test), nicht veröffentlicht |
 | jeder Lauf | Schwachstellen-Scan des Images mit Trivy – kritische/hohe Schwachstellen, für die es eine Korrektur gibt, stoppen den Lauf, bevor etwas veröffentlicht wird |
 | wöchentlich (Mo. 04:17 UTC) | Neubau von `main` mit aktuellem Basisimage und allen Debian-Sicherheitsupdates, Rauchtest, Trivy-Scan; bei Erfolg als `latest` (und `sha-…`) veröffentlicht, sonst Issue |

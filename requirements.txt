@@ -1,4 +1,4 @@
-# SAMAUDIT – fully pinned dependencies (lock file, Python 3.13.16).
+# SAMAUDIT – fully pinned dependencies (lock file, Python 3.13).
 # Installed in the Docker build with "pip install --no-deps": exactly this list goes into
 # the image, nothing is resolved afterwards. "pip check" verifies consistency during the build.
 # Direct dependencies: requirements.in – regenerate with:  ./update.sh --lock
