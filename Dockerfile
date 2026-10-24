@@ -4,7 +4,7 @@
 ARG PYTHON_IMAGE=python:3.13.16-slim
 FROM ${PYTHON_IMAGE}
 
-ARG APP_VERSION=1.9.3
+ARG APP_VERSION=1.9.4
 LABEL org.opencontainers.image.title="SAMAUDIT" \
       org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.description="Security assessment for Active Directory (Windows AD / Samba AD)" \
@@ -20,6 +20,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=9400
 
 WORKDIR /app
+
+# Install all available Debian security updates of the base image. SECURITY_UPDATES changes every
+# week in the GitHub build (calendar week), so this step really runs again on the weekly rebuild
+# instead of being taken from the build cache.
+ARG SECURITY_UPDATES=local
+RUN echo "Debian updates: $SECURITY_UPDATES" \
+ && apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends upgrade \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
 
 # Install exactly the pinned list (no re-resolution), then verify consistency.
 # Time zone data comes from the pinned tzdata package (instead of apt, whose versions change).
