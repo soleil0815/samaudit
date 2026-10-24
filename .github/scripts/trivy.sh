@@ -42,10 +42,25 @@ ignore=()
 # 2) gate: CRITICAL/HIGH with an available fix
 set +e
 "$trivy" image --quiet --scanners vuln --severity CRITICAL,HIGH --ignore-unfixed --exit-code 3 \
-  --format table "${ignore[@]}" "$image" > "$out/blocking.txt" 2>&1
+  --format json --output "$out/blocking.json" "${ignore[@]}" "$image" > "$out/blocking.txt" 2>&1
 rc=$?
 set -e
 echo "$rc" > "$out/rc"
+# compact list: package, installed → fixed version, CVE, severity (also as annotation, readable via API)
+python3 - "$out/blocking.json" > "$out/blocking-list.txt" <<'PY' || true
+import json, sys
+try:
+    data = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+rows = []
+for res in data.get("Results") or []:
+    for v in res.get("Vulnerabilities") or []:
+        rows.append(f'{v.get("Severity", "?"):8} {v.get("PkgName")} {v.get("InstalledVersion")} -> '
+                    f'{v.get("FixedVersion")}  {v.get("VulnerabilityID")}  [{res.get("Target")}]')
+print("\n".join(sorted(set(rows))))
+PY
+[ -s "$out/blocking-list.txt" ] && cat "$out/blocking-list.txt" >> "$out/blocking.txt"
 
 {
   echo "## Trivy: $image"
@@ -64,6 +79,7 @@ echo "$rc" > "$out/rc"
 
 case "$rc" in
   0) exit 0 ;;
-  3) echo "::error::Trivy found CRITICAL/HIGH vulnerabilities with an available fix in $image"; exit 1 ;;
+  3) msg="$(head -40 "$out/blocking-list.txt" 2>/dev/null | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')"
+     echo "::error title=Trivy: fixable CRITICAL/HIGH vulnerabilities in $image::${msg:-see job summary}"; exit 1 ;;
   *) echo "::error::Trivy scan failed (exit code $rc) – not publishing without a successful scan"; exit 1 ;;
 esac
