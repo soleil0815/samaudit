@@ -7,7 +7,7 @@ Selbst gehostete Webanwendung, die eine Windows- oder Samba-AD-Domäne ausliest,
 ## Neu in 1.9.3
 
 - **Schwachstellen-Scan mit Trivy:** Jedes Image wird vor der Veröffentlichung gescannt. Kritische oder hohe Schwachstellen, für die es bereits eine Korrektur gibt, stoppen die Veröffentlichung – `latest` bleibt dann auf dem letzten sauberen Stand. Alles andere (z. B. Schwachstellen ohne verfügbare Korrektur) steht im Bericht des Laufs (Zusammenfassung und Artefakt `trivy-report`). Bewusst akzeptierte Ausnahmen gehören mit Begründung in `.trivyignore`.
-- **Wöchentlicher Nachscan:** Montags wird das veröffentlichte `latest` erneut geprüft, denn Schwachstellen werden oft erst nach dem Bau bekannt. Bei behebbaren Funden wird **nichts automatisch neu gebaut**: Der Scan legt ein GitHub-Issue „Sicherheitsscan …“ mit der Liste an und erwähnt den Repository-Besitzer (Benachrichtigung). Was dann passiert, entscheidet der Besitzer. Ist das Image wieder sauber, schließt der nächste Scan das Issue selbst.
+- **Wöchentlicher Nachscan:** Montags wird das veröffentlichte `latest` erneut geprüft, denn Schwachstellen werden oft erst nach dem Bau bekannt. Dazu wird `main` jeden Montag automatisch neu gebaut – mit dem aktuellen Basisimage (Debian-Sicherheitsupdates) –, getestet und mit Trivy geprüft; nur wenn alles grün ist, wird das Ergebnis als `latest` veröffentlicht (die Versionsnummer bleibt). Andernfalls bleibt `latest` unverändert, und ein GitHub-Issue „Wöchentlicher Neubau …“ nennt den Grund (z. B. ein Python-Paket, das eine neue Version braucht) und erwähnt den Repository-Besitzer. Der nächste erfolgreiche Neubau schließt das Issue.
 - Trivy wird als feste Version mit geprüfter Prüfsumme geladen, nicht über die Trivy-GitHub-Action, deren Versions-Tags im März 2026 kompromittiert waren (CVE-2026-33634).
 
 ## Neu in 1.9.2 – Code-Audit
@@ -470,7 +470,7 @@ Das Repository enthält einen GitHub-Actions-Workflow (`.github/workflows/docker
 | Git-Tag `v1.9.3` | `1.9.3` (muss zu `app/version.py` passen) |
 | Pull Request | wird nur gebaut (Test), nicht veröffentlicht |
 | jeder Lauf | Schwachstellen-Scan des Images mit Trivy – kritische/hohe Schwachstellen, für die es eine Korrektur gibt, stoppen den Lauf, bevor etwas veröffentlicht wird |
-| wöchentlich (Mo.) und von Hand | Scan des veröffentlichten `latest` (Workflow „Security scan“); Funde werden nur als Issue gemeldet – es wird nichts neu gebaut oder veröffentlicht |
+| wöchentlich (Mo. 04:17 UTC) | Neubau von `main` mit aktuellem Basisimage, Rauchtest, Trivy-Scan; bei Erfolg als `latest` (und `sha-…`) veröffentlicht, sonst Issue |
 | Pull Request aus einem Branch `claude/…` (von Claude vorbereitet) | nach erfolgreichem Testbau automatisch übernommen und veröffentlicht wie ein Push auf `main` |
 
 Gebaut wird für `linux/amd64` und `linux/arm64`, mit dem fixierten Basisimage (aus `base-image.lock`, falls vorhanden) und den fixierten Paketen; das Image enthält SBOM und Provenance-Angaben.

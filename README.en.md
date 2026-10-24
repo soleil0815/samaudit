@@ -7,7 +7,7 @@ Self-hosted web application that reads a Windows or Samba AD domain, runs **110 
 ## New in 1.9.3
 
 - **Vulnerability scan with Trivy:** every image is scanned before it is published. Critical or high vulnerabilities that already have a fix stop the release – `latest` then stays on the last clean build. Everything else (e.g. vulnerabilities without a fix yet) is listed in the run's report (summary and artifact `trivy-report`). Deliberately accepted exceptions go into `.trivyignore`, with a reason.
-- **Weekly re-scan:** on Mondays the published `latest` is checked again, because vulnerabilities often become known after the build. Fixable findings do **not** trigger an automatic rebuild: the scan opens a GitHub issue "Sicherheitsscan …" with the list and mentions the repository owner (notification). The owner decides what happens next. Once the image is clean again, the next scan closes the issue itself.
+- **Weekly re-scan:** on Mondays the published `latest` is checked again, because vulnerabilities often become known after the build. For this, `main` is rebuilt automatically every Monday – with the current base image (Debian security updates) –, tested and checked with Trivy; only if everything is green is the result published as `latest` (the version number stays). Otherwise `latest` is left unchanged and a GitHub issue "Wöchentlicher Neubau …" states the reason (e.g. a Python package that needs a new version) and mentions the repository owner. The next successful rebuild closes the issue.
 - Trivy is downloaded as a fixed version with a verified checksum, not via the Trivy GitHub Action, whose version tags were compromised in March 2026 (CVE-2026-33634).
 
 ## New in 1.9.2 – code audit
@@ -475,7 +475,7 @@ The repository contains a GitHub Actions workflow (`.github/workflows/docker-ima
 | git tag `v1.9.3` | `1.9.3` (must match `app/version.py`) |
 | pull request | built only (test), not published |
 | every run | Trivy vulnerability scan of the image – critical/high vulnerabilities with an available fix stop the run before anything is published |
-| weekly (Mon) and on demand | scan of the published `latest` (workflow "Security scan"); findings are only reported as an issue – nothing is rebuilt or published |
+| weekly (Mon 04:17 UTC) | rebuild of `main` with the current base image, smoke test, Trivy scan; on success published as `latest` (and `sha-…`), otherwise an issue |
 | pull request from a branch `claude/…` (prepared by Claude) | merged automatically after a successful test build and published like a push to `main` |
 
 It builds for `linux/amd64` and `linux/arm64`, using the pinned base image (from `base-image.lock` if present) and the pinned packages; the image carries SBOM and provenance attestations.

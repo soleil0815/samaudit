@@ -5,8 +5,8 @@
     "items": [
       {
         "type": "security",
-        "de": "Jedes Image wird vor der Veröffentlichung mit Trivy auf bekannte Schwachstellen geprüft; kritische oder hohe Schwachstellen mit verfügbarer Korrektur verhindern die Veröffentlichung. Zusätzlich wird das veröffentlichte Image wöchentlich nachgeprüft; Funde werden gemeldet, aber nicht automatisch neu gebaut.",
-        "en": "Every image is checked for known vulnerabilities with Trivy before it is published; critical or high vulnerabilities with an available fix block the release. The published image is also re-checked weekly; findings are reported, not rebuilt automatically."
+        "de": "Jedes Image wird vor der Veröffentlichung mit Trivy auf bekannte Schwachstellen geprüft; kritische oder hohe Schwachstellen mit verfügbarer Korrektur verhindern die Veröffentlichung. Zusätzlich wird das Image jede Woche mit aktuellen Sicherheitsupdates neu gebaut, getestet, geprüft und nur bei Erfolg veröffentlicht.",
+        "en": "Every image is checked for known vulnerabilities with Trivy before it is published; critical or high vulnerabilities with an available fix block the release. The image is also rebuilt weekly with current security updates, tested, scanned and published only on success."
       }
     ]
   },

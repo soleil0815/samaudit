@@ -7,6 +7,10 @@
 #   push tag v1.2.3   -> tag:  1.2.3   (the tag must match app/version.py)
 #   every run         -> Trivy vulnerability scan of the image; fixable CRITICAL/HIGH findings
 #                        stop the run before anything is published (.github/scripts/trivy.sh)
+#   weekly (Mon)      -> rebuild of main with the current base image (Debian security updates),
+#                        smoke test + Trivy scan; on success published as latest (+ sha-…).
+#                        The version tag is not overwritten. Failure: latest stays as it is and
+#                        a GitHub issue "Wöchentlicher Neubau …" is opened (job "weekly-report").
 #   pull request      -> build only (test), nothing is published
 #   pull request from a branch claude/... of this repository (changes prepared by Claude):
 #                        if the test build succeeds, it is merged automatically and the
@@ -21,6 +25,8 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"     # Mondays 04:17 UTC: weekly rebuild (see above)
   workflow_dispatch:
 
 permissions:
@@ -226,3 +232,65 @@ jobs:
           gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --merge --delete-branch --match-head-commit "$HEAD_SHA"
           gh workflow run docker-image.yml --repo "$GITHUB_REPOSITORY" --ref main
           echo "PR #$PR merged - publish run for main started"
+
+  weekly-report:
+    # weekly rebuild: success closes an open report issue, failure opens one (owner is mentioned)
+    needs: [test, build]
+    if: always() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Download scan report
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: trivy-report
+          path: trivy-report
+      - name: Open or close the report issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TEST: ${{ needs.test.result }}
+          BUILD: ${{ needs.build.result }}
+        run: |
+          set -euo pipefail
+          label="security-scan"
+          gh label create "$label" --repo "$GITHUB_REPOSITORY" --color B60205 \
+            --description "Weekly rebuild / vulnerability scan" >/dev/null 2>&1 || true
+          open="$(gh issue list --repo "$GITHUB_REPOSITORY" --label "$label" --state open --json number --jq '.[0].number // empty')"
+          if [ "$TEST" = success ] && [ "$BUILD" = success ]; then
+            if [ -n "$open" ]; then
+              gh issue comment "$open" --repo "$GITHUB_REPOSITORY" \
+                --body "Wöchentlicher Neubau erfolgreich: getestet, ohne behebbare kritische/hohe Schwachstellen und als \`latest\` veröffentlicht. ([Lauf]($RUN_URL))"
+              gh issue close "$open" --repo "$GITHUB_REPOSITORY"
+            fi
+            exit 0
+          fi
+          {
+            echo "Der **wöchentliche Neubau** wurde **nicht veröffentlicht** – \`latest\` bleibt auf dem bisherigen Stand."
+            echo
+            echo "- Rauchtest: **$TEST**"
+            echo "- Bau und Trivy-Scan: **$BUILD**"
+            if [ -s trivy-report/blocking-list.txt ]; then
+              echo
+              echo "Behebbare kritische/hohe Schwachstellen (meist Python-Pakete, die eine neue Version brauchen):"
+              echo
+              echo '```'
+              head -c 50000 trivy-report/blocking-list.txt
+              echo '```'
+            fi
+            echo
+            echo "Details: [Lauf]($RUN_URL)"
+            echo
+            echo "@$OWNER"
+          } > body.md
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body-file body.md
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --label "$label" \
+              --title "Wöchentlicher Neubau nicht veröffentlicht (Test oder Sicherheitsscan)" --body-file body.md
+          fi
