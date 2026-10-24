@@ -1,8 +1,12 @@
-# SAMAUDIT v1.9.0 – Sicherheitsprüfung für Active Directory
+# SAMAUDIT v1.9.1 – Sicherheitsprüfung für Active Directory
 
 *English version: [README.en.md](README.en.md)* · **Handbuch:** [app/docs/handbuch.de.md](app/docs/handbuch.de.md) (auch in der Weboberfläche unter **Hilfe**)
 
 Selbst gehostete Webanwendung, die eine Windows- oder Samba-AD-Domäne ausliest, **110 Sicherheitsprüfungen** durchführt und das Ergebnis als Risikowert (0–100), detaillierten Bericht mit Maßnahmen und PDF ausgibt – auf Deutsch oder Englisch.
+
+## Neu in 1.9.1
+
+- **Neuigkeiten in der App:** Unten links unter **Neuigkeiten** steht, was sich je Version geändert hat – gekennzeichnet als Funktion, Sicherheit, Fehlerbehebung oder Hinweis (z. B. zur RC4-Abschaltung). Neue Einträge zeigt ein kleiner Punkt an (orange bei Sicherheit) sowie einmalig eine schmale Zeile auf der Übersicht, die sich ausblenden lässt. Die Einträge kommen mit dem Update (`app/docs/news.json`), es wird nichts aus dem Internet geladen; nur ein Cookie merkt sich die zuletzt gesehene Version.
 
 ## Neu in 1.9.0
 
@@ -305,7 +309,7 @@ curl -k https://localhost:9400/healthz               # Version und Zustand
 
 ### Update
 
-**Mit dem Image von GitHub:** `sh update.sh --pull` – holt `ghcr.io/soleil0815/samaudit:latest`, sichert vorher, startet die neue Version, prüft sie und fällt bei Problemen auf die bisherige zurück. Eine bestimmte Version: `sh update.sh --pull=1.9.0`. Ist das Image schon aktuell, passiert nichts. Anderes Image (z. B. Fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in der `.env`.
+**Mit dem Image von GitHub:** `sh update.sh --pull` – holt `ghcr.io/soleil0815/samaudit:latest`, sichert vorher, startet die neue Version, prüft sie und fällt bei Problemen auf die bisherige zurück. Eine bestimmte Version: `sh update.sh --pull=1.9.1`. Ist das Image schon aktuell, passiert nichts. Anderes Image (z. B. Fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in der `.env`.
 
 **Mit ZIP oder Quellcode (lokaler Build):**
 
@@ -398,7 +402,7 @@ Das Repository enthält einen GitHub-Actions-Workflow (`.github/workflows/docker
 | Ereignis | Image-Tags |
 |---|---|
 | Push auf `main` | `latest`, `<Version aus app/version.py>`, `sha-<commit>` |
-| Git-Tag `v1.9.0` | `1.9.0` (muss zu `app/version.py` passen) |
+| Git-Tag `v1.9.1` | `1.9.1` (muss zu `app/version.py` passen) |
 | Pull Request | wird nur gebaut (Test), nicht veröffentlicht |
 
 Gebaut wird für `linux/amd64` und `linux/arm64`, mit dem fixierten Basisimage (aus `base-image.lock`, falls vorhanden) und den fixierten Paketen; das Image enthält SBOM und Provenance-Angaben.

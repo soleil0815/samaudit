@@ -435,3 +435,31 @@ td.mono, .mono { font-family: var(--f-mono); font-size: 12.5px; word-break: brea
   .help-layout { grid-template-columns: minmax(0, 1fr); }
   .help-toc { position: static; max-height: none; }
 }
+
+/* ---------- Neuigkeiten (dezent) ---------- */
+.rail .tzinfo .news-link { color: inherit; position: relative; }
+.rail .tzinfo .news-link.has-new { color: var(--ink-2); }
+.news-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 4px; vertical-align: 2px; }
+.news-link.has-sec .news-dot { background: var(--sev-high); }
+.news-strip { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: -10px 0 22px; padding: 9px 14px;
+  border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; background: var(--accent-soft);
+  font-size: 13.5px; color: var(--ink-2); }
+.news-strip.sec { border-left-color: var(--sev-high); }
+.news-strip-tag { font-weight: 600; color: var(--accent-ink); white-space: nowrap; }
+.news-strip.sec .news-strip-tag { color: var(--sev-high); }
+.news-strip-text { flex: 1 1 280px; min-width: 0; }
+.news-strip a { white-space: nowrap; }
+.news-strip .news-strip-x { color: var(--ink-3); text-decoration: none; font-size: 18px; line-height: 1; padding: 0 2px; }
+.news-strip .news-strip-x:hover { color: var(--ink); }
+.news-list { display: grid; gap: 14px; max-width: 900px; }
+.news-entry header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.news-entry h2 { font-size: 18px; margin: 0; }
+.news-entry.is-new { border-color: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.news-entry ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.news-entry li { display: grid; grid-template-columns: 120px 1fr; gap: 12px; color: var(--ink-2); line-height: 1.5; }
+.news-type { font: 600 11px/1 var(--f-body); padding: 5px 8px; border-radius: 6px; justify-self: start; align-self: start; margin-top: 2px;
+  background: var(--accent-soft); color: var(--accent-ink); }
+.news-type.t-security { background: rgba(251, 146, 60, .15); color: var(--sev-high); }
+.news-type.t-fix { background: rgba(52, 211, 153, .13); color: var(--ok); }
+.news-type.t-notice { background: rgba(251, 191, 36, .14); color: var(--sev-medium); }
+@media (max-width: 640px) { .news-entry li { grid-template-columns: 1fr; gap: 4px; } }

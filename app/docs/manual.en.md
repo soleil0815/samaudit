@@ -82,6 +82,10 @@ All 110 checks with ID, area, severity and description. IDs start with `STL-` (s
 
 All sign-ins (including rejected ones), scans, PDF exports, deletions, certificate changes and blocked network connections with time, user and IP address. Entries are deleted automatically after the configured retention period (default 90 days).
 
+### What's new
+
+Bottom left, **What's new** lists what changed with each version: new **features**, **security** improvements, **fixes** and **notices** about new Active Directory risks (e.g. deprecations by Microsoft). If there is something you have not seen yet, a small dot appears next to it (orange for security topics) and the overview shows a slim line once. **×** or visiting the page clears both. The news ships with the update – SAMAUDIT loads nothing from the internet for it. Only a cookie in your browser remembers which version you last saw.
+
 ### Language, appearance, privacy
 
 Bottom left: **DE / EN** switches the language, **Dark / Light** the appearance. **Privacy** shows which data SAMAUDIT processes, how long it is kept and who is responsible – this page is available without signing in.
@@ -152,7 +156,7 @@ The complete list is in the README.
 sh update.sh --pull
 ```
 
-Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.9.0`. If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
+Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.9.1`. If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
 
 **Via ZIP file (local build):**
 

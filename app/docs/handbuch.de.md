@@ -82,6 +82,10 @@ Alle 110 Prüfungen mit Kennung, Bereich, Schweregrad und Beschreibung. Die Kenn
 
 Alle Anmeldungen (auch abgewiesene), Scans, PDF-Exporte, Löschungen, Zertifikatsänderungen und blockierte Netzwerkverbindungen mit Zeit, Benutzer und IP-Adresse. Einträge werden nach der eingestellten Frist automatisch gelöscht (Standard 90 Tage).
 
+### Neuigkeiten
+
+Links unten unter **Neuigkeiten** steht, was sich mit jeder Version geändert hat: neue **Funktionen**, **Sicherheit**sverbesserungen, **Fehlerbehebungen** und **Hinweise** auf neue Risiken im Active Directory (z. B. Abschaltungen durch Microsoft). Gibt es Neues, das Sie noch nicht gesehen haben, zeigt ein kleiner Punkt daneben das an (orange bei Sicherheitsthemen), und auf der Übersicht erscheint einmalig eine schmale Zeile. Mit **×** oder einem Besuch der Seite verschwindet beides. Die Neuigkeiten kommen mit dem Update mit – SAMAUDIT lädt dafür nichts aus dem Internet. Gemerkt wird nur in einem Cookie Ihres Browsers, welche Version Sie zuletzt gesehen haben.
+
 ### Sprache, Darstellung, Datenschutz
 
 Links unten: **DE / EN** wechselt die Sprache, **Dunkel / Hell** die Darstellung. **Datenschutz** zeigt, welche Daten SAMAUDIT verarbeitet, wie lange sie gespeichert werden und wer zuständig ist – diese Seite ist auch ohne Anmeldung erreichbar.
@@ -152,7 +156,7 @@ Die vollständige Liste steht in der README.
 sh update.sh --pull
 ```
 
-Holt die neueste Version von `ghcr.io/soleil0815/samaudit`, sichert vorher Datenbank und Zertifikate, startet die neue Version, prüft sie und startet bei Problemen automatisch wieder die bisherige. `update.sh` selbst wird dabei mit aktualisiert. Eine bestimmte Version: `sh update.sh --pull=1.9.0`. Ist das Repository privat, auf dem Server einmalig `docker login ghcr.io` (Passwort: GitHub-Token mit `read:packages`).
+Holt die neueste Version von `ghcr.io/soleil0815/samaudit`, sichert vorher Datenbank und Zertifikate, startet die neue Version, prüft sie und startet bei Problemen automatisch wieder die bisherige. `update.sh` selbst wird dabei mit aktualisiert. Eine bestimmte Version: `sh update.sh --pull=1.9.1`. Ist das Repository privat, auf dem Server einmalig `docker login ghcr.io` (Passwort: GitHub-Token mit `read:packages`).
 
 **Per ZIP-Datei (lokaler Build):**
 

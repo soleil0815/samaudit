@@ -51,7 +51,7 @@
         <a href="/lang/en?next={{ path }}" class="{{ 'on' if lang == 'en' }}" hreflang="en">EN</a>
         <button type="button" data-theme-btn data-label-dark="{{ 'Dunkel' if lang == 'de' else 'Dark' }}" data-label-light="{{ 'Hell' if lang == 'de' else 'Light' }}" aria-label="{{ t('theme', lang) }}">{{ 'Dunkel' if lang == 'de' else 'Dark' }}</button>
       </div>
-      <span class="tzinfo"><a href="/privacy" style="color:inherit">{{ t('nav_privacy', lang) }}</a> · {{ t('tz', lang) }}: {{ settings.tz }}<br><a href="https://helfi.space" target="_blank" rel="noopener noreferrer" style="color:inherit">helfi.space</a></span>
+      <span class="tzinfo"><a href="/news" class="news-link{{ ' has-new' if news_unseen }}{{ ' has-sec' if news_unseen|selectattr('security')|list }}" {% if path == '/news' %}aria-current="page"{% endif %}>{{ t('nav_news', lang) }}{% if news_unseen %}<span class="news-dot" title="{{ t('news_unread', lang) }}"></span>{% endif %}</a> · <a href="/privacy" style="color:inherit">{{ t('nav_privacy', lang) }}</a> · {{ t('tz', lang) }}: {{ settings.tz }}<br><a href="https://helfi.space" target="_blank" rel="noopener noreferrer" style="color:inherit">helfi.space</a></span>
     </div>
   </aside>
   <main>

@@ -16,6 +16,14 @@
   {% endif %}
 </div>
 
+{% set nh = news_headline(news_unseen) %}{% if nh %}
+<div class="news-strip{{ ' sec' if nh.security }}" role="note">
+  <span class="news-strip-tag">{{ t('news_new_in', lang, v=nh.version) }}</span>
+  <span class="news-strip-text">{{ news_text(nh['item'], lang)|truncate(150, end=' …') }}</span>
+  <a href="/news">{{ t('news_more', lang) }}</a>
+  <a class="news-strip-x" href="/news/seen?next=/" title="{{ t('news_dismiss', lang) }}" aria-label="{{ t('news_dismiss', lang) }}">×</a>
+</div>
+{% endif %}
 {% if not latest %}
   <div class="panel empty">
     {{ logo('lg') }}

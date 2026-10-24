@@ -48,6 +48,10 @@ jobs:
             exit 1
           fi
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          # What's new in the app: every release should have an entry in app/docs/news.json
+          if ! grep -q "\"version\": \"$version\"" app/docs/news.json; then
+            echo "::warning::app/docs/news.json has no entry for $version (shown in the app under \"What's new\")"
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "base=$base"       >> "$GITHUB_OUTPUT"
           echo "image=$image"     >> "$GITHUB_OUTPUT"

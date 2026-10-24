@@ -1,0 +1,70 @@
+[
+  {
+    "version": "1.9.1",
+    "date": "2026-10-24",
+    "items": [
+      {"type": "feature",
+       "de": "Neuigkeiten in der App: Was sich mit einer neuen Version geändert hat, steht jetzt unter „Neuigkeiten“ (unten links). Neue Einträge werden einmalig dezent auf der Übersicht angezeigt.",
+       "en": "What's new in the app: changes in a new version are now listed under \"What's new\" (bottom left). New entries are shown once, unobtrusively, on the overview."}
+    ]
+  },
+  {
+    "version": "1.9.0",
+    "date": "2026-10-23",
+    "items": [
+      {"type": "feature",
+       "de": "5 neue Prüfungen (jetzt 110): Kerberos-RC4-Abhängigkeiten (STL-21), schwache Zertifikatszuordnung (STL-22), ESC17 (PRV-36), delegierte Dienstkonten / BadSuccessor (PRV-37) und manipulierbare UPN/SPN (ANM-44).",
+       "en": "5 new checks (now 110): Kerberos RC4 dependencies (STL-21), weak certificate mapping (STL-22), ESC17 (PRV-36), delegated managed service accounts / BadSuccessor (PRV-37) and manipulable UPN/SPN (ANM-44)."},
+      {"type": "notice",
+       "de": "Microsoft hat Kerberos-RC4 mit den Updates ab April 2026 standardmäßig und ab Juli 2026 endgültig abgeschaltet (CVE-2026-20833). Konten aus STL-21 können dadurch ausfallen – Befund bitte zeitnah prüfen.",
+       "en": "Microsoft disabled Kerberos RC4 by default with the April 2026 updates and permanently from July 2026 (CVE-2026-20833). Accounts listed under STL-21 may stop working – please review promptly."},
+      {"type": "notice",
+       "de": "Neue AD-Angriffe aus 2026 („KerberLoss“, „ResetNightmare“, CVE-2026-25177/-27912): Alle Domänencontroller sollten mindestens die Updates vom April 2026 haben.",
+       "en": "New AD attacks from 2026 (\"KerberLoss\", \"ResetNightmare\", CVE-2026-25177/-27912): all domain controllers should have at least the April 2026 updates."}
+    ]
+  },
+  {
+    "version": "1.8.1",
+    "date": "2026-10-23",
+    "items": [
+      {"type": "fix",
+       "de": "Update-Skript: Dateien mit Windows-Zeilenenden werden automatisch repariert, statt mit „Syntax error“ abzubrechen.",
+       "en": "Update script: files with Windows line endings are repaired automatically instead of failing with \"Syntax error\"."}
+    ]
+  },
+  {
+    "version": "1.8.0",
+    "items": [
+      {"type": "feature",
+       "de": "Updates direkt von GitHub: Der Betrieb kann neue Versionen mit „sh update.sh --pull“ einspielen – mit Sicherung und automatischem Rückfall.",
+       "en": "Updates straight from GitHub: operators can install new versions with \"sh update.sh --pull\" – with backup and automatic rollback."}
+    ]
+  },
+  {
+    "version": "1.7.0",
+    "items": [
+      {"type": "feature",
+       "de": "Handbuch auf Deutsch und Englisch unter „Hilfe“ – für Prüfer und Betrieb, auch ohne Anmeldung erreichbar.",
+       "en": "Manual in German and English under \"Help\" – for auditors and operators, also available without signing in."}
+    ]
+  },
+  {
+    "version": "1.5.2",
+    "items": [
+      {"type": "security",
+       "de": "Sicherheitsprüfung der Anwendung: eindeutige Kontoprüfung bei der Anmeldung, nur noch starke HTTPS-Verschlüsselung, gelöschte Berichte werden sofort physisch entfernt, keine Seiten mehr im Browser-Cache.",
+       "en": "Application security review: unambiguous account check at sign-in, strong HTTPS ciphers only, deleted reports are removed physically at once, no pages in the browser cache."},
+      {"type": "fix",
+       "de": "Mehrere Domänencontroller hinter einem Namen werden jetzt einzeln vertraut – kein falscher Alarm „Zertifikat geändert“ mehr.",
+       "en": "Several domain controllers behind one name are now trusted individually – no more false \"certificate changed\" alarms."}
+    ]
+  },
+  {
+    "version": "1.5.1",
+    "items": [
+      {"type": "feature",
+       "de": "Eigenes HTTPS-Zertifikat direkt in der Weboberfläche hochladen (Verbindung) – sofort aktiv, ohne Neustart.",
+       "en": "Upload your own HTTPS certificate directly in the web interface (Connection) – active immediately, no restart."}
+    ]
+  }
+]
