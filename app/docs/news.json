@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.9.5",
+    "date": "2026-10-24",
+    "items": [
+      {
+        "type": "security",
+        "de": "Python wird jetzt mit aktualisiert: Der wöchentliche Neubau verwendet immer die neueste Python-3.13-Version (derzeit 3.13.17) und erhält so auch die Sicherheitskorrekturen von Python selbst.",
+        "en": "Python is now updated as well: the weekly rebuild always uses the newest Python 3.13 release (currently 3.13.17) and thus also receives the security fixes of Python itself."
+      }
+    ]
+  },
+  {
     "version": "1.9.4",
     "date": "2026-10-24",
     "items": [
