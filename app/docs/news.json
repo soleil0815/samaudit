@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.9.3",
+    "date": "2026-10-24",
+    "items": [
+      {
+        "type": "security",
+        "de": "Jedes Image wird vor der Veröffentlichung mit Trivy auf bekannte Schwachstellen geprüft; kritische oder hohe Schwachstellen mit verfügbarer Korrektur verhindern die Veröffentlichung. Zusätzlich wird das veröffentlichte Image wöchentlich nachgeprüft und bei Bedarf automatisch mit aktuellen Sicherheitsupdates neu gebaut.",
+        "en": "Every image is checked for known vulnerabilities with Trivy before it is published; critical or high vulnerabilities with an available fix block the release. The published image is also re-checked weekly and rebuilt automatically with current security updates when needed."
+      }
+    ]
+  },
+  {
     "version": "1.9.2",
     "date": "2026-10-24",
     "items": [

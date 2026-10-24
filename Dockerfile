@@ -4,7 +4,7 @@
 ARG PYTHON_IMAGE=python:3.13.16-slim
 FROM ${PYTHON_IMAGE}
 
-ARG APP_VERSION=1.9.2
+ARG APP_VERSION=1.9.3
 LABEL org.opencontainers.image.title="SAMAUDIT" \
       org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.description="Security assessment for Active Directory (Windows AD / Samba AD)" \

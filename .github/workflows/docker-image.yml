@@ -5,6 +5,8 @@
 #                        then the git tag v<version> and a GitHub release are created
 #                        automatically (notes from app/docs/news.json), if not there yet
 #   push tag v1.2.3   -> tag:  1.2.3   (the tag must match app/version.py)
+#   every run         -> Trivy vulnerability scan of the image; fixable CRITICAL/HIGH findings
+#                        stop the run before anything is published (.github/scripts/trivy.sh)
 #   pull request      -> build only (test), nothing is published
 #   pull request from a branch claude/... of this repository (changes prepared by Claude):
 #                        if the test build succeeds, it is merged automatically and the
@@ -117,10 +119,38 @@ jobs:
             type=semver,pattern={{version}}
             type=sha,prefix=sha-,format=short
 
+      - name: Build image for the vulnerability scan (amd64, local only)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          pull: true
+          push: false
+          provenance: false
+          tags: samaudit-scan:ci
+          build-args: |
+            PYTHON_IMAGE=${{ steps.info.outputs.base }}
+            APP_VERSION=${{ steps.info.outputs.version }}
+          cache-from: type=gha
+
+      - name: Vulnerability scan (Trivy) – blocks publishing on fixable CRITICAL/HIGH findings
+        run: .github/scripts/trivy.sh samaudit-scan:ci
+
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: ${{ runner.temp }}/trivy-report/
+          retention-days: 30
+          if-no-files-found: ignore
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
+          pull: true
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.tags.outputs.tags }}

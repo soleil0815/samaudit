@@ -156,7 +156,7 @@ The complete list is in the README.
 sh update.sh --pull
 ```
 
-Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.9.2`. If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
+Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.9.3`. If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
 
 **Via ZIP file (local build):**
 

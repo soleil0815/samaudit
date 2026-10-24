@@ -1,0 +1,69 @@
+# Weekly vulnerability scan of the published image ghcr.io/<owner>/<repo>:latest.
+#
+# New vulnerabilities are found in images long after they were built. If the published image has
+# CRITICAL/HIGH findings with an available fix, this workflow starts a rebuild of main: the build pulls
+# the current base image (Debian security updates) and is scanned again before it replaces `latest`.
+# If the rebuild cannot fix it (e.g. a Python package needs a new version), that run fails –
+# GitHub then notifies the repository owner by e-mail.
+name: Security scan
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"     # Mondays 04:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan-latest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      actions: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest image
+        id: img
+        shell: bash
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:latest"
+          docker pull --platform linux/amd64 "$image"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Vulnerability scan (Trivy)
+        id: scan
+        continue-on-error: true
+        run: .github/scripts/trivy.sh "${{ steps.img.outputs.image }}"
+
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report-latest
+          path: ${{ runner.temp }}/trivy-report/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Rebuild with current base image
+        if: steps.scan.outcome == 'failure'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rc="$(cat "$RUNNER_TEMP/trivy-report/rc" 2>/dev/null || echo 1)"
+          if [ "$rc" = 3 ]; then
+            gh workflow run docker-image.yml --repo "$GITHUB_REPOSITORY" --ref main
+            echo "::warning::Fixable vulnerabilities in latest – rebuild of main started (it is scanned again before publishing)."
+          fi
+          exit 1     # mark this run as failed so the owner is notified
