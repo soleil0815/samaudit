@@ -1,8 +1,66 @@
-# SAMAUDIT v1.9.1 – Active Directory security assessment
+# SAMAUDIT v1.9.2 – Active Directory security assessment
 
 *Deutsche Version: [README.md](README.md)* · **Manual:** [app/docs/manual.en.md](app/docs/manual.en.md) (also in the web interface under **Help**)
 
 Self-hosted web application that reads a Windows or Samba AD domain, runs **110 security checks** and presents the result as a risk score (0–100), a detailed report with remediation advice, and a PDF export – in German or English.
+
+## New in 1.9.2 – code audit
+
+Four independent reviews (web interface, LDAP/SYSVOL, check rules, build/update/CI); every confirmed high-impact finding is fixed.
+
+- **Sign-in:**
+  - Enterprise, Schema and Domain Admins of **any** domain in the forest are rejected, also in child domains. SID history is checked as well.
+  - The "Who am I" cross-check now also compares the domain.
+  - LDAP no longer follows referrals. Before, a referral could have sent the password again, possibly unencrypted.
+  - Deny groups that cannot be resolved now reject the sign-in instead of letting it pass.
+- **LDAPS trust:**
+  - The DC certificate must be a server certificate carrying the DNS name seen on first contact. A certificate the enterprise CA issued for any computer or user is rejected.
+  - A new address of an already pinned name (e.g. the second DC when the first one fails) is only accepted if its certificate belongs to a DC of the domain (known from the last scan).
+  - `python -m app.pins reset firma.local` now also removes all "firma.local [IP]" entries.
+  - Resetting pins works only on the server by default (`PIN_RESET_WEB`).
+- **Login lockout:** now holds even against many parallel attempts. Repeated locked-out attempts no longer flood the log.
+- **Robustness:**
+  - A malformed PEM file can no longer hang the app.
+  - Requests are read only up to the size limit.
+  - Long values no longer break the PDF.
+- **Sensitive actions:** uploading/removing certificates and deleting reports re-check in AD first that the auditor is still authorised.
+- **SYSVOL:**
+  - `GptTmpl.inf` is parsed the way Windows does. Before, a single line without "=" discarded the whole file, so the spooler, LDAP signing and user rights results were often wrong.
+  - Case no longer matters.
+  - One broken file no longer stops the scan.
+  - GPOs the auditor cannot read now give "not checkable" instead of a wrong result.
+- **More honest results:** if a data section could not be read (search error), the dependent checks are "not checkable", not "passed".
+- **Check rules – false positives removed:**
+  - trust accounts
+  - sMSAs
+  - built-in Administrator (inactive or in Schema Admins)
+  - AZUREADSSOACC$
+  - Windows 10 LTSC (end of support by build)
+  - old expired CA certificates after a renewal
+  - the Exchange default right on DCs
+  - MIT Kerberos realms
+  - FullSecureChannelProtection (no effect since 2021)
+  - double counting of DCSync/domain ACL and ESC1/9/15/17
+- **Check rules – gaps closed:**
+  - delegation to DC services with three-part SPNs
+  - primary group "Domain Admins" in German domains
+  - missing tombstone lifetime (= 60 days)
+  - NTLMv1 at level 3/4
+  - AD CS in child domains
+- **Other corrections:**
+  - ESC8 reports "not checkable", because `/certsrv` is not recorded in AD.
+  - The STL-21 text now matches KB5073381.
+- **update.sh:**
+  - A new `update.sh` from the image is never run unasked any more (not even with `-y`); it is saved as `update.sh.new`.
+  - Interrupted updates are detected on the next run and the last working version is restored; Ctrl+C during the swap rolls back.
+  - ZIP packages with symlinks or unsafe paths are rejected.
+  - Before a schema change the app backs up its database itself (`data/samaudit.db.vor-*.bak`).
+- **GitHub:**
+  - A smoke test (`tests/smoke.py`) runs before building.
+  - Auto-merge takes exactly the tested commit.
+  - Publish runs are no longer cancelled.
+  - Published version numbers are not overwritten.
+  - Dependabot keeps the GitHub Actions up to date.
 
 ## New in 1.9.1
 
@@ -314,7 +372,7 @@ curl -k https://localhost:9400/healthz               # version and status
 
 ### Update
 
-**With the image from GitHub:** `sh update.sh --pull` – pulls `ghcr.io/soleil0815/samaudit:latest`, backs up first, starts the new version, verifies it and falls back to the previous one on problems. A specific version: `sh update.sh --pull=1.9.1`. If the image is already current, nothing happens. Other image (e.g. a fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in `.env`.
+**With the image from GitHub:** `sh update.sh --pull` – pulls `ghcr.io/soleil0815/samaudit:latest`, backs up first, starts the new version, verifies it and falls back to the previous one on problems. A specific version: `sh update.sh --pull=1.9.2`. If the image is already current, nothing happens. Other image (e.g. a fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in `.env`.
 
 **With a ZIP or the source code (local build):**
 
@@ -339,7 +397,7 @@ With a ZIP, the script first shows the installed and new version and asks for co
 
 If `.env` is missing, the script creates it from the template and asks for `DOMAIN_FQDN`. If the build fails, the running container stays unchanged.
 
-**Reproducibility:** Python version (tag + digest in `base-image.lock`) and every package are pinned exactly; the image is built without re-resolution. Ideally commit `base-image.lock` to your (private) repository – then every machine builds on the bit-identical base.
+**Reproducibility:** Python version (tag + digest in `base-image.lock`) and every package are pinned exactly; the image is built without re-resolution. Local builds therefore use the same base as the first build. The GitHub image is built from the pinned tag `python:3.13.16-slim` (no `base-image.lock` in the repository), and package contents are not hash-checked – the result is version-identical, not bit-for-bit reproducible.
 
 **Data folder and backup:** Everything SAMAUDIT stores is in `./data` inside the SAMAUDIT folder:
 
@@ -374,6 +432,7 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 | `LDAP_SSL` / `LDAP_PORT` | `true` / `636` | LDAPS |
 | `LDAP_STARTTLS` | `false` | StartTLS on 389 instead of LDAPS |
 | `LDAP_CERT_MODE` | `auto` | `auto` (trust automatically and pin), `trust`, `verify` |
+| `PIN_RESET_WEB` | `false` | allow resetting remembered DC certificates in the web interface (otherwise only `docker exec samaudit python -m app.pins reset`) |
 | `LDAP_CA_FILE` | – | CA certificate (PEM) in the `certs` folder, only for `verify` |
 | `LDAP_TIMEOUT` | `10` | seconds |
 | `ALLOWED_GROUPS` | `SAMAUDIT-Benutzer` | auditor group(s): name, DN, SID or `RID:x` |
@@ -407,7 +466,7 @@ The repository contains a GitHub Actions workflow (`.github/workflows/docker-ima
 | Event | Image tags |
 |---|---|
 | push to `main` | `latest`, `<version from app/version.py>`, `sha-<commit>` – afterwards the workflow creates the git tag `v<version>` and a GitHub release automatically (text from `app/docs/news.json`) if the version does not exist yet |
-| git tag `v1.9.1` | `1.9.1` (must match `app/version.py`) |
+| git tag `v1.9.2` | `1.9.2` (must match `app/version.py`) |
 | pull request | built only (test), not published |
 | pull request from a branch `claude/…` (prepared by Claude) | merged automatically after a successful test build and published like a push to `main` |
 

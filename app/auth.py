@@ -111,6 +111,54 @@ def record_failure(username: str, ip: str) -> None:
             _failures.setdefault(k, []).append(time.time())
 
 
+def reserve_attempt(username: str, ip: str) -> float | None:
+    """Prüft die Sperre und zählt den Versuch in einem Schritt – *bevor* das (langsame) LDAP-Bind läuft.
+    So lassen sich mit parallelen Anfragen nicht mehr Passwörter durchprobieren als erlaubt.
+    Liefert eine Marke für release_attempt() oder None, wenn gesperrt."""
+    now = time.time()
+    window = settings.lockout_min * 60
+    with _lock:
+        keys = _keys(username, ip)
+        for k in keys:
+            recent = [t for t in _failures.get(k, []) if now - t < window]
+            limit = settings.max_login_attempts * (3 if k.startswith("ip:") else 1)
+            if len(recent) >= limit:
+                return None
+        for k in keys:
+            _failures.setdefault(k, []).append(now)
+    return now
+
+
+def release_attempt(username: str, ip: str, mark: float | None) -> None:
+    """Versuch nicht als Fehlversuch werten (Erfolg oder technischer Fehler)."""
+    if mark is None:
+        return
+    with _lock:
+        for k in _keys(username, ip):
+            lst = _failures.get(k)
+            if lst and mark in lst:
+                lst.remove(mark)
+                if not lst:
+                    _failures.pop(k, None)
+
+
+_lock_logged: dict[str, float] = {}
+
+
+def should_log_locked(username: str, ip: str) -> bool:
+    """Gesperrte Wiederholungen nur einmal je Sperrfenster protokollieren (kein Fluten des Protokolls)."""
+    now = time.time()
+    key = "|".join(_keys(username, ip))
+    with _lock:
+        if now - _lock_logged.get(key, 0) < settings.lockout_min * 60:
+            return False
+        _lock_logged[key] = now
+        if len(_lock_logged) > 10_000:
+            for k in [k for k, t in _lock_logged.items() if now - t > settings.lockout_min * 60]:
+                _lock_logged.pop(k, None)
+    return True
+
+
 def clear_failures(username: str, ip: str) -> None:
     with _lock:
         _failures.pop(_keys(username, ip)[0], None)

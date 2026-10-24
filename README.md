@@ -1,8 +1,66 @@
-# SAMAUDIT v1.9.1 – Sicherheitsprüfung für Active Directory
+# SAMAUDIT v1.9.2 – Sicherheitsprüfung für Active Directory
 
 *English version: [README.en.md](README.en.md)* · **Handbuch:** [app/docs/handbuch.de.md](app/docs/handbuch.de.md) (auch in der Weboberfläche unter **Hilfe**)
 
 Selbst gehostete Webanwendung, die eine Windows- oder Samba-AD-Domäne ausliest, **110 Sicherheitsprüfungen** durchführt und das Ergebnis als Risikowert (0–100), detaillierten Bericht mit Maßnahmen und PDF ausgibt – auf Deutsch oder Englisch.
+
+## Neu in 1.9.2 – Code-Audit
+
+Vier unabhängige Prüfungen (Weboberfläche, LDAP/SYSVOL, Prüfregeln, Build/Update/CI); alle bestätigten Befunde mit hoher Auswirkung sind behoben.
+
+- **Anmeldung:**
+  - Organisations-, Schema- und Domänen-Admins **jeder** Domäne der Gesamtstruktur werden abgewiesen, auch in untergeordneten Domänen. Geprüft wird zusätzlich der SID-Verlauf.
+  - Die „Who am I“-Gegenprobe vergleicht jetzt auch die Domäne.
+  - LDAP folgt keinen Verweisen mehr. Bisher hätte ein Verweis das Passwort erneut, unter Umständen unverschlüsselt, senden können.
+  - Sperrlisten, die sich nicht auflösen lassen, führen zur Abweisung statt zum Durchlassen.
+- **LDAPS-Vertrauen:**
+  - Das DC-Zertifikat muss ein Serverzertifikat sein und den beim ersten Kontakt gesehenen DNS-Namen tragen. Ein von der Unternehmens-CA für beliebige Rechner oder Benutzer ausgestelltes Zertifikat wird abgewiesen.
+  - Eine neue Adresse eines bereits gemerkten Namens (z. B. der zweite DC, wenn der erste ausfällt) wird nur übernommen, wenn ihr Zertifikat zu einem DC der Domäne gehört (bekannt aus dem letzten Scan).
+  - `python -m app.pins reset firma.local` entfernt jetzt auch alle Einträge „firma.local [IP]“.
+  - Das Zurücksetzen gemerkter Zertifikate geht standardmäßig nur noch auf dem Server (`PIN_RESET_WEB`).
+- **Login-Sperre:** gilt jetzt auch bei vielen gleichzeitigen Versuchen. Wiederholte gesperrte Versuche füllen das Protokoll nicht mehr.
+- **Robustheit:**
+  - Eine fehlerhafte PEM-Datei legt die Anwendung nicht mehr lahm.
+  - Anfragen werden nur bis zur Größengrenze gelesen.
+  - Lange Werte sprengen das PDF nicht mehr.
+- **Folgenreiche Aktionen:** Zertifikat hochladen/entfernen und Berichte löschen prüfen vorher erneut im AD, ob der Prüfer noch berechtigt ist.
+- **SYSVOL:**
+  - `GptTmpl.inf` wird wie von Windows gelesen. Eine einzige Zeile ohne „=“ verwarf vorher die ganze Datei; dadurch waren u. a. Druckwarteschlange, LDAP-Signierung und Benutzerrechte oft falsch.
+  - Groß-/Kleinschreibung spielt keine Rolle mehr.
+  - Eine kaputte Datei stoppt nicht mehr den ganzen Scan.
+  - Für den Prüfer nicht lesbare GPOs ergeben „nicht prüfbar“ statt eines falschen Ergebnisses.
+- **Ehrlichere Ergebnisse:** Konnte ein Datenabschnitt nicht gelesen werden (Suchfehler), gelten die betroffenen Prüfungen als „nicht prüfbar“, nicht als „bestanden“.
+- **Prüfregeln – Fehlalarme beseitigt:**
+  - Vertrauensstellungs-Konten
+  - sMSA
+  - eingebauter Administrator (inaktiv bzw. in Schema-Admins)
+  - AZUREADSSOACC$
+  - Windows 10 LTSC (Supportende je nach Build)
+  - alte, abgelaufene CA-Zertifikate nach einer Erneuerung
+  - Exchange-Standardrecht auf DCs
+  - MIT-Kerberos-Bereiche
+  - FullSecureChannelProtection (wirkt seit 2021 nicht mehr)
+  - doppelte Wertung von DCSync/Domänen-ACL und ESC1/9/15/17
+- **Prüfregeln – Lücken geschlossen:**
+  - Delegierung an DC-Dienste mit dreiteiligem SPN
+  - Primärgruppe „Domänen-Admins“ in deutschen Domänen
+  - fehlende Tombstone-Lebensdauer (= 60 Tage)
+  - NTLMv1 auf Stufe 3/4
+  - untergeordnete Domänen bei AD CS
+- **Weitere Korrekturen:**
+  - ESC8 meldet „nicht prüfbar“, weil `/certsrv` nicht im AD steht.
+  - Der STL-21-Text entspricht jetzt KB5073381.
+- **update.sh:**
+  - Ein neues `update.sh` aus dem Image wird nie mehr ungefragt ausgeführt (auch nicht mit `-y`); es liegt als `update.sh.new` bereit.
+  - Abgebrochene Updates werden beim nächsten Lauf erkannt und die letzte funktionierende Version wiederhergestellt; Strg+C während des Wechsels rollt zurück.
+  - ZIP-Pakete mit symbolischen Links oder unsicheren Pfaden werden abgelehnt.
+  - Vor einer Schemaänderung sichert die Anwendung die Datenbank selbst (`data/samaudit.db.vor-*.bak`).
+- **GitHub:**
+  - Vor dem Bauen läuft ein Rauchtest (`tests/smoke.py`).
+  - Automatisch übernommen wird nur genau der getestete Stand.
+  - Ein Veröffentlichungslauf wird nicht mehr abgebrochen.
+  - Veröffentlichte Versionsnummern werden nicht überschrieben.
+  - Dependabot hält die GitHub Actions aktuell.
 
 ## Neu in 1.9.1
 
@@ -309,7 +367,7 @@ curl -k https://localhost:9400/healthz               # Version und Zustand
 
 ### Update
 
-**Mit dem Image von GitHub:** `sh update.sh --pull` – holt `ghcr.io/soleil0815/samaudit:latest`, sichert vorher, startet die neue Version, prüft sie und fällt bei Problemen auf die bisherige zurück. Eine bestimmte Version: `sh update.sh --pull=1.9.1`. Ist das Image schon aktuell, passiert nichts. Anderes Image (z. B. Fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in der `.env`.
+**Mit dem Image von GitHub:** `sh update.sh --pull` – holt `ghcr.io/soleil0815/samaudit:latest`, sichert vorher, startet die neue Version, prüft sie und fällt bei Problemen auf die bisherige zurück. Eine bestimmte Version: `sh update.sh --pull=1.9.2`. Ist das Image schon aktuell, passiert nichts. Anderes Image (z. B. Fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in der `.env`.
 
 **Mit ZIP oder Quellcode (lokaler Build):**
 
@@ -334,7 +392,7 @@ Mit ZIP zeigt das Skript zuerst installierte und neue Version und fragt nach, si
 
 Fehlt die `.env`, legt das Skript sie aus der Vorlage an und bittet um `DOMAIN_FQDN`. Schlägt der Build fehl, bleibt der laufende Container unverändert.
 
-**Reproduzierbarkeit:** Python-Version (Tag + Digest in `base-image.lock`) und jedes Paket sind exakt festgelegt; das Image wird ohne Nachauflösung gebaut. `base-image.lock` am besten mit ins (private) Repository nehmen – dann bauen alle Rechner bitgleich dieselbe Basis.
+**Reproduzierbarkeit:** Python-Version (Tag + Digest in `base-image.lock`) und jedes Paket sind exakt festgelegt; das Image wird ohne Nachauflösung gebaut. Lokal gebaut wird damit dieselbe Basis wie beim ersten Build. Das GitHub-Image wird vom fixierten Tag `python:3.13.16-slim` gebaut (ohne `base-image.lock` im Repository); Paketinhalte werden nicht per Prüfsumme kontrolliert. Das Ergebnis ist also versionsgleich, aber nicht bitgleich reproduzierbar.
 
 **Datenordner und Sicherung:** Alles, was SAMAUDIT speichert, liegt in `./data` im SAMAUDIT-Ordner:
 
@@ -369,6 +427,7 @@ Alle Werte werden in der `.env` gesetzt (Schreibweise `NAME=wert`, Vorlage mit E
 | `LDAP_SSL` / `LDAP_PORT` | `true` / `636` | LDAPS |
 | `LDAP_STARTTLS` | `false` | StartTLS auf 389 statt LDAPS |
 | `LDAP_CERT_MODE` | `auto` | `auto` (automatisch vertrauen und merken), `trust`, `verify` |
+| `PIN_RESET_WEB` | `false` | gemerkte DC-Zertifikate in der Weboberfläche zurücksetzen erlauben (sonst nur `docker exec samaudit python -m app.pins reset`) |
 | `LDAP_CA_FILE` | – | CA-Zertifikat (PEM) im Ordner `certs`, nur für `verify` |
 | `LDAP_TIMEOUT` | `10` | Sekunden |
 | `ALLOWED_GROUPS` | `SAMAUDIT-Benutzer` | Prüfer-Gruppe(n): Name, DN, SID oder `RID:x` |
@@ -402,7 +461,7 @@ Das Repository enthält einen GitHub-Actions-Workflow (`.github/workflows/docker
 | Ereignis | Image-Tags |
 |---|---|
 | Push auf `main` | `latest`, `<Version aus app/version.py>`, `sha-<commit>` – danach legt der Workflow automatisch das Git-Tag `v<Version>` und ein GitHub-Release an (Text aus `app/docs/news.json`), falls es die Version noch nicht gibt |
-| Git-Tag `v1.9.1` | `1.9.1` (muss zu `app/version.py` passen) |
+| Git-Tag `v1.9.2` | `1.9.2` (muss zu `app/version.py` passen) |
 | Pull Request | wird nur gebaut (Test), nicht veröffentlicht |
 | Pull Request aus einem Branch `claude/…` (von Claude vorbereitet) | nach erfolgreichem Testbau automatisch übernommen und veröffentlicht wie ein Push auf `main` |
 

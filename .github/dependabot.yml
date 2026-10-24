@@ -1,0 +1,8 @@
+# Keeps the GitHub Actions used by the workflow up to date (security fixes of actions).
+# Dependabot pull requests are NOT merged automatically (only branches claude/... are).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

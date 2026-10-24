@@ -76,7 +76,7 @@ Alle 110 Prüfungen mit Kennung, Bereich, Schweregrad und Beschreibung. Die Kenn
 - **HTTPS-Zertifikat der Weboberfläche:** zeigt das aktive Zertifikat (Quelle, Aussteller, Ablaufdatum, Fingerabdruck) und Warnungen (abgelaufen, läuft bald ab, Servername fehlt im Zertifikat).
   - **Eigenes Zertifikat hochladen:** PFX-Datei (z. B. Export aus der Windows-Zertifizierungsstelle) mit Passwort **oder** Zertifikat + privaten Schlüssel auswählen → **Hochladen und aktivieren**. Es wird sofort aktiv, ohne Neustart; danach die Seite neu laden. Vorher wird geprüft, ob Zertifikat und Schlüssel zusammenpassen, ob es gültig ist und ob der Schlüssel stark genug ist (RSA mindestens 2048 Bit).
   - **Hochgeladenes Zertifikat entfernen** stellt das vorherige wieder her.
-- **Vertrauenswürdige DC-Zertifikate:** SAMAUDIT merkt sich beim ersten Kontakt das Zertifikat jedes DCs und lehnt später ein fremdes Zertifikat ab (Schutz vor Man-in-the-Middle). Nach einem **gewollten** Zertifikats- oder CA-Wechsel hier **Zurücksetzen** – beim nächsten Kontakt wird neu gemerkt.
+- **Vertrauenswürdige DC-Zertifikate:** SAMAUDIT merkt sich beim ersten Kontakt das Zertifikat jedes DCs samt seinem DNS-Namen und lehnt später ein fremdes Zertifikat ab (Schutz vor Man-in-the-Middle) – auch eines, das dieselbe Unternehmens-CA für einen anderen Rechner oder Benutzer ausgestellt hat. Normale Erneuerungen bleiben gültig. Nach einem **gewollten** Zertifikats- oder CA-Wechsel (oder einem neuen DC) zurücksetzen – aus Sicherheitsgründen auf dem Server: `docker exec samaudit python -m app.pins reset <DC>`. Mit `PIN_RESET_WEB=true` in der `.env` geht das auch hier über **Zurücksetzen**.
 
 ### Protokoll
 
@@ -100,7 +100,7 @@ Links unten: **DE / EN** wechselt die Sprache, **Dunkel / Hell** die Darstellung
 | Die Prüfer-Gruppe existiert nicht | Gruppe in der Domäne anlegen (Betrieb, Teil B). |
 | Das Konto ist in der Domäne gesperrt / deaktiviert / Passwort muss geändert werden | In der Domäne klären (z. B. Passwort am PC ändern). |
 | Kein Domänencontroller erreichbar | Netzwerk und `DC_HOSTS` prüfen (Teil B). |
-| Das Zertifikat des Domänencontrollers hat sich geändert | Möglicher Angriff **oder** gewollter Zertifikatswechsel. Wenn gewollt: unter **Verbindung** zurücksetzen. |
+| Das Zertifikat des Domänencontrollers hat sich geändert | Möglicher Angriff **oder** gewollter Zertifikatswechsel bzw. neuer DC. Wenn gewollt: auf dem Server `docker exec samaudit python -m app.pins reset <DC>`. |
 | Sitzung abgelaufen | Erneut anmelden. |
 
 ## Teil B – Betrieb
@@ -156,7 +156,7 @@ Die vollständige Liste steht in der README.
 sh update.sh --pull
 ```
 
-Holt die neueste Version von `ghcr.io/soleil0815/samaudit`, sichert vorher Datenbank und Zertifikate, startet die neue Version, prüft sie und startet bei Problemen automatisch wieder die bisherige. `update.sh` selbst wird dabei mit aktualisiert. Eine bestimmte Version: `sh update.sh --pull=1.9.1`. Ist das Repository privat, auf dem Server einmalig `docker login ghcr.io` (Passwort: GitHub-Token mit `read:packages`).
+Holt die neueste Version von `ghcr.io/soleil0815/samaudit`, sichert vorher Datenbank und Zertifikate, startet die neue Version, prüft sie und startet bei Problemen automatisch wieder die bisherige. `update.sh` selbst wird dabei mit aktualisiert. Eine bestimmte Version: `sh update.sh --pull=1.9.2`. Ist das Repository privat, auf dem Server einmalig `docker login ghcr.io` (Passwort: GitHub-Token mit `read:packages`).
 
 **Per ZIP-Datei (lokaler Build):**
 

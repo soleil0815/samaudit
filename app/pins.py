@@ -96,41 +96,139 @@ def _describe(cert) -> tuple[str, str, bool]:
     return cert.subject.rfc4514_string(), not_after, is_ca
 
 
-def check(host: str, chain: list[bytes]) -> dict:
-    """Prüft bzw. merkt das Zertifikat. Wirft PinMismatch bei Abweichung."""
-    if not chain:
-        raise PinMismatch(host, "?", "kein Zertifikat")
-    path = verified_prefix(chain)
-    anchor = path[-1]
-    fp = fingerprint(anchor)
-    pin = db.get_pin(host)
-    if pin is None and " [" in host:
-        # Übergang: früher gab es einen Eintrag nur für den Namen – passt das Zertifikat, wird er übernommen
-        legacy = db.get_pin(host.split(" [", 1)[0])
-        if legacy and (legacy["fingerprint"] == fp or any(fingerprint(c) == legacy["fingerprint"] for c in path)):
-            db.save_pin(host, legacy["fingerprint"], legacy["subject"], legacy["not_after"], bool(legacy["is_ca"]),
-                        legacy["der"])
-            pin = db.get_pin(host)
-    if pin is None:
-        from cryptography.hazmat.primitives.serialization import Encoding
-        subject, not_after, is_ca = _describe(anchor)
-        db.save_pin(host, fp, subject, not_after, is_ca, anchor.public_bytes(Encoding.DER))
-        db.audit("act_cert_pinned", detail=f"{host}: {subject} SHA256 {fp[:23]}…")
-        log.warning("LDAPS: Zertifikat von %s automatisch vertraut und gemerkt (%s, SHA256 %s)", host, subject, fp)
-        return {"first_use": True, "fingerprint": fp, "subject": subject}
-    if pin["fingerprint"] == fp or any(fingerprint(c) == pin["fingerprint"] for c in path):
-        db.touch_pin(host)
-        return {"first_use": False, "fingerprint": pin["fingerprint"]}
-    # Server sendet die Kette diesmal ohne das gemerkte Zertifikat → Signatur prüfen
+SERVER_AUTH_OID = "1.3.6.1.5.5.7.3.1"
+
+
+def leaf_names(cert) -> set[str]:
+    """DNS-Namen des Serverzertifikats (SAN, ersatzweise CN), klein geschrieben."""
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+    names: set[str] = set()
     try:
-        pinned = _load(pin["der"])
-        if _issued_by(anchor, pinned):
-            db.touch_pin(host)
-            return {"first_use": False, "fingerprint": pin["fingerprint"]}
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+        names |= {n.lower().rstrip(".") for n in san.get_values_for_type(x509.DNSName)}
     except Exception:  # noqa: BLE001
         pass
-    db.audit("act_cert_mismatch", detail=f"{host}: erwartet {pin['fingerprint'][:23]}…, erhalten {fp[:23]}…")
-    raise PinMismatch(host, pin["fingerprint"], fp)
+    if not names:
+        names |= {str(a.value).lower().rstrip(".") for a in cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)}
+    return names
+
+
+def _server_cert_ok(cert) -> bool:
+    """Ein Serverzertifikat: entweder ohne EKU (= alle Zwecke) oder mit „Serverauthentifizierung“."""
+    from cryptography import x509
+    try:
+        eku = cert.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value
+    except x509.ExtensionNotFound:
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+    return any(o.dotted_string in (SERVER_AUTH_OID, "2.5.29.37.0") for o in eku)
+
+
+def _anchor_matches(pin: dict, fp: str, path: list, anchor) -> bool:
+    if pin["fingerprint"] == fp or any(fingerprint(c) == pin["fingerprint"] for c in path):
+        return True
+    try:                                   # Kette diesmal ohne das gemerkte Zertifikat → Signatur prüfen
+        return _issued_by(anchor, _load(pin["der"]))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _names_of(pin: dict) -> set[str]:
+    return {n for n in (pin.get("names") or "").split(",") if n}
+
+
+def _host_matches(host: str, names: set[str]) -> bool:
+    h = host.lower().rstrip(".")
+    return any(n == h or (n.startswith("*.") and h.endswith(n[1:]) and h.count(".") == n.count(".")) for n in names)
+
+
+def check(host: str, chain: list[bytes]) -> dict:
+    """Prüft bzw. merkt das Zertifikat. Wirft PinMismatch bei Abweichung.
+
+    Regeln (gegen Man-in-the-Middle):
+    - Das Zertifikat muss ein Serverzertifikat sein (sonst könnte jedes von der Unternehmens-CA ausgestellte
+      Benutzer-/Computerzertifikat einen DC vortäuschen).
+    - Bekannte Verbindung: Kette muss zum gemerkten Zertifikat führen UND das Serverzertifikat muss einen der
+      beim ersten Kontakt gesehenen DNS-Namen tragen (Erneuerungen behalten den Namen).
+    - Neue Adresse eines bereits gemerkten Namens: kein erneutes „erstes Vertrauen“ – nur, wenn die Kette zu
+      einem gemerkten Zertifikat dieses Namens führt und das Serverzertifikat den konfigurierten Namen trägt.
+    """
+    if not chain:
+        raise PinMismatch(host, "?", "kein Zertifikat")
+    try:
+        path = verified_prefix(chain)
+    except Exception as e:  # noqa: BLE001 – unlesbares Zertifikat
+        raise PinMismatch(host, "?", f"unlesbares Zertifikat ({e.__class__.__name__})") from e
+    leaf, anchor = path[0], path[-1]
+    fp = fingerprint(anchor)
+    names = leaf_names(leaf)
+    if not _server_cert_ok(leaf):
+        db.audit("act_cert_mismatch", detail=f"{host}: kein Serverzertifikat ({leaf.subject.rfc4514_string()})")
+        raise PinMismatch(host, "Serverzertifikat", "Zertifikat ohne Serverauthentifizierung")
+    base = host.split(" [", 1)[0]
+    pin = db.get_pin(host)
+
+    if pin is not None:
+        if not _anchor_matches(pin, fp, path, anchor):
+            db.audit("act_cert_mismatch", detail=f"{host}: erwartet {pin['fingerprint'][:23]}…, erhalten {fp[:23]}…")
+            raise PinMismatch(host, pin["fingerprint"], fp)
+        known = _names_of(pin)
+        if known and not (known & names):
+            db.audit("act_cert_mismatch", detail=f"{host}: Zertifikat für {', '.join(sorted(names))[:120]} "
+                                                 f"statt {', '.join(sorted(known))[:120]}")
+            raise PinMismatch(host, ", ".join(sorted(known)), ", ".join(sorted(names)) or "?")
+        if not known:                      # Einträge aus Versionen vor 1.9.2: Namen jetzt ergänzen
+            db.set_pin_names(host, ",".join(sorted(names)))
+        db.touch_pin(host)
+        return {"first_use": False, "fingerprint": pin["fingerprint"]}
+
+    family = [p for p in db.family_pins(base) if p["host"] != host.lower()]
+    if family:
+        # Weitere Adresse eines bereits gemerkten Namens (z. B. zweiter DC hinter dem Domänennamen):
+        # nur übernehmen, wenn das Zertifikat erkennbar zu einem DC dieser Domäne gehört.
+        dcs = known_dc_names()
+
+        def plausible_dc() -> bool:
+            if dcs:
+                return bool(names & dcs) or _host_matches(base, names)
+            b = base.lower()
+            return any(n == b or n.endswith("." + b) for n in names)
+
+        for p in family:
+            if not _anchor_matches(p, fp, path, anchor):
+                continue
+            if not _names_of(p) or _names_of(p) & names or plausible_dc():
+                db.save_pin(host, p["fingerprint"], p["subject"], p["not_after"], bool(p["is_ca"]), p["der"],
+                            ",".join(sorted(names)))
+                db.touch_pin(host)
+                return {"first_use": False, "fingerprint": p["fingerprint"]}
+        if not any(p["is_ca"] for p in family) and plausible_dc():
+            # selbstsignierte DC-Zertifikate (z. B. Samba): jeder DC hat sein eigenes – erster Kontakt wie bisher
+            return _first_use(host, anchor, fp, names, note="weiterer DC")
+        db.audit("act_cert_mismatch", detail=f"{host}: neue Adresse mit unbekanntem Zertifikat "
+                                             f"({', '.join(sorted(names))[:120]}, SHA256 {fp[:23]}…)")
+        raise PinMismatch(host, family[0]["fingerprint"], fp)
+
+    return _first_use(host, anchor, fp, names)
+
+
+def known_dc_names() -> set[str]:
+    """DNS-Namen der DCs aus dem letzten Scan (leer, solange noch kein Scan lief)."""
+    try:
+        return {n for n in (db.get_kv("dc_names") or "").split(",") if n}
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def _first_use(host: str, anchor, fp: str, names: set[str], note: str = "") -> dict:
+    from cryptography.hazmat.primitives.serialization import Encoding
+    subject, not_after, is_ca = _describe(anchor)
+    db.save_pin(host, fp, subject, not_after, is_ca, anchor.public_bytes(Encoding.DER), ",".join(sorted(names)))
+    db.audit("act_cert_pinned", detail=f"{host}: {subject} SHA256 {fp[:23]}…" + (f" ({note})" if note else ""))
+    log.warning("LDAPS: Zertifikat von %s automatisch vertraut und gemerkt (%s, SHA256 %s)", host, subject, fp)
+    return {"first_use": True, "fingerprint": fp, "subject": subject}
 
 
 def _cli(argv: list[str]) -> int:

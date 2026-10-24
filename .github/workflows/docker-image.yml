@@ -23,15 +23,36 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 concurrency:
   group: image-${{ github.ref }}
-  cancel-in-progress: true
+  # only test builds of pull requests may be cancelled – a publish run must never stop half-way
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
+  test:
+    # smoke test without Docker and without a domain: rules on demo data, PDF, pages, parsers, pinning
     runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install pinned packages
+        run: |
+          python -m pip install --no-deps --only-binary=:all: -r requirements.txt
+          python -m pip check
+      - name: Smoke test
+        run: python tests/smoke.py
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -39,6 +60,8 @@ jobs:
       - name: Read version and base image
         id: info
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           version="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' app/version.py)"
@@ -53,6 +76,13 @@ jobs:
             exit 1
           fi
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          # never overwrite a published version: if release v<version> exists, only latest/sha are pushed
+          fresh=true
+          if [[ "$GITHUB_REF" != refs/tags/v* ]] && gh release view "v$version" >/dev/null 2>&1; then
+            fresh=false
+            echo "::warning::v$version is already released – the image tag $version is not overwritten (raise app/version.py)"
+          fi
+          echo "fresh=$fresh" >> "$GITHUB_OUTPUT"
           # What's new in the app: every release should have an entry in app/docs/news.json
           if ! grep -q "\"version\": \"$version\"" app/docs/news.json; then
             echo "::warning::app/docs/news.json has no entry for $version (shown in the app under \"What's new\")"
@@ -83,7 +113,7 @@ jobs:
           images: ${{ steps.info.outputs.image }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ steps.info.outputs.version }},enable={{is_default_branch}}
+            type=raw,value=${{ steps.info.outputs.version }},enable=${{ steps.info.outputs.fresh == 'true' && github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
             type=sha,prefix=sha-,format=short
 
@@ -108,7 +138,7 @@ jobs:
 
   release:
     # after a successful publish from main: tag v<version> + GitHub release (once per version)
-    needs: build
+    needs: [test, build]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
@@ -143,7 +173,7 @@ jobs:
     # PRs from claude/... branches of this repository: merge after a green test build and publish.
     # A merge made with GITHUB_TOKEN does not trigger "push" workflows, so the publish run is
     # started explicitly via workflow_dispatch (which GITHUB_TOKEN is allowed to trigger).
-    needs: build
+    needs: [test, build]
     if: >-
       github.event_name == 'pull_request' &&
       startsWith(github.head_ref, 'claude/') &&
@@ -159,8 +189,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --merge --delete-branch
+          # merge exactly the commit that was tested and built – a later push is not merged blindly
+          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --merge --delete-branch --match-head-commit "$HEAD_SHA"
           gh workflow run docker-image.yml --repo "$GITHUB_REPOSITORY" --ref main
           echo "PR #$PR merged - publish run for main started"

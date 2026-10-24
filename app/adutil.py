@@ -4,6 +4,7 @@
 userAccountControl, Security Descriptors)."""
 from __future__ import annotations
 
+import re
 import struct
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -371,6 +372,15 @@ def classify_os(os_name: str | None, os_version: str | None = None) -> str:
     if any(o in s for o in obsolete):
         return "obsolete"
     if "windows 10" in s:
+        if "ltsc" in s or "ltsb" in s:
+            # Langzeitversionen: Support je nach Build (2015/2016 beendet, 2019 bis 01/2029, 2021 bis 01/2027)
+            m = re.search(r"\((\d{5})\)", os_version or "")
+            build = int(m.group(1)) if m else 0
+            if build and build <= 14393:
+                return "obsolete"
+            if build >= 19044:
+                return "expiring"
+            return "supported"
         return "win10"
     if "server 2016" in s:
         return "expiring"

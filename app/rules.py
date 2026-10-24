@@ -95,9 +95,19 @@ def need_sysvol(ctx: Ctx) -> dict:
     return sv
 
 
+def check_gpos_readable(ctx: Ctx, guids) -> None:
+    """Ist eine wirksame GPO für den Prüfer nicht lesbar (z. B. Sicherheitsfilterung), lässt sich die Einstellung
+    nicht beurteilen – dann „nicht prüfbar“ statt eines falschen Ergebnisses."""
+    sv = need_sysvol(ctx)
+    bad = {g.upper() for g in (sv.get("unreadable_gpos") or [])} & {g.upper() for g in guids}
+    if bad:
+        raise NotApplicable("na_gpo_unreadable")
+
+
 def effective_dc_registry(ctx: Ctx, key_suffix: str) -> str | None:
     """Wert aus GptTmpl.inf der GPOs auf Domäne → DC-OU (spätere überschreiben frühere)."""
     sv = need_sysvol(ctx)
+    check_gpos_readable(ctx, ctx.gpo_guids("dc"))   # wirft „nicht prüfbar“ bei unlesbaren Verknüpfungen/GPOs
     secedit = sv.get("secedit", {})
     value = None
     links = (ctx.m.get("gpo_links") or {})
@@ -141,7 +151,8 @@ ATT = "https://attack.mitre.org/techniques"
       refs=[("MITRE ATT&CK T1078.002", f"{ATT}/T1078/002/")])
 def _inactive_users(ctx: Ctx):
     days = ctx.cfg.inactive_days
-    eu = [u for u in enabled_users(ctx) if not u.get("is_gmsa")]
+    # ohne gMSA und ohne das eingebaute Administrator-Konto (soll als Notfallkonto gerade NICHT genutzt werden)
+    eu = [u for u in enabled_users(ctx) if not u.get("is_gmsa") and u.get("rid") != 500]
     hits = [u for u in eu if ctx.inactive(u, days)]
     if not hits:
         return None
@@ -166,7 +177,7 @@ def _inactive_users(ctx: Ctx):
       code="Search-ADAccount -AccountInactive -ComputersOnly -TimeSpan 180.00:00:00 |\n  Where-Object Enabled | Disable-ADAccount -WhatIf",
       columns=["account", "os", "last_logon", "dn"])
 def _inactive_computers(ctx: Ctx):
-    ec = enabled_computers(ctx, include_dc=False)
+    ec = [c for c in enabled_computers(ctx, include_dc=False) if (c.get("sam") or "").upper() != "AZUREADSSOACC$"]
     hits = [c for c in ec if ctx.inactive(c, ctx.cfg.inactive_days)]
     if not hits:
         return None
@@ -287,7 +298,8 @@ def _kerberoast(ctx: Ctx):
       columns=["account", "os", "last_logon"],
       refs=[("Microsoft Lifecycle", f"{MS}/lifecycle/products/")])
 def _os_obsolete(ctx: Ctx):
-    hits = [c for c in enabled_computers(ctx, include_dc=False) if classify_os(c.get("os")) == "obsolete"]
+    hits = [c for c in enabled_computers(ctx, include_dc=False)
+            if classify_os(c.get("os"), c.get("os_version")) == "obsolete"]
     if not hits:
         return None
     active = [c for c in hits if not ctx.inactive(c, 45)]
@@ -305,7 +317,7 @@ def _os_obsolete(ctx: Ctx):
       columns=["account", "os", "last_logon"])
 def _os_win10(ctx: Ctx):
     hits = [c for c in enabled_computers(ctx, include_dc=False)
-            if classify_os(c.get("os")) == "win10" and not ctx.inactive(c, ctx.cfg.inactive_days)]
+            if classify_os(c.get("os"), c.get("os_version")) == "win10" and not ctx.inactive(c, ctx.cfg.inactive_days)]
     return Hit([acc(c, os=c.get("os")) for c in hits]) if hits else None
 
 
@@ -317,7 +329,7 @@ def _os_win10(ctx: Ctx):
       fix={"de": "Ablösung bzw. In-Place-Upgrade zeitnah einplanen.", "en": "Plan replacement or in-place upgrade."},
       columns=["account", "os", "last_logon"])
 def _os_expiring(ctx: Ctx):
-    hits = [c for c in enabled_computers(ctx) if classify_os(c.get("os")) == "expiring"]
+    hits = [c for c in enabled_computers(ctx) if classify_os(c.get("os"), c.get("os_version")) == "expiring"]
     return Hit([acc(c, os=c.get("os")) for c in hits]) if hits else None
 
 
@@ -366,7 +378,7 @@ def _primary_group(ctx: Ctx):
             items.append({"account": c["sam"], "group": ctx.name(ctx.group_sid(c["primary_gid"])), "type": "@computer"})
     if not items:
         return None
-    crit = any(it["group"] in ("Domain Admins", "Enterprise Admins", "Schema Admins") for it in items)
+    crit = any(a.get("primary_gid") in (512, 518, 519) for a in ctx.users + ctx.computers)
     return Hit(items, points=20 if crit else 10, severity="high" if crit else "medium")
 
 
@@ -400,11 +412,13 @@ def _userpassword(ctx: Ctx):
 def _laps(ctx: Ctx):
     cfg = ctx.m.get("config", {})
     targets = [c for c in enabled_computers(ctx, include_dc=False)
-               if classify_os(c.get("os")) not in ("samba", "other") and not ctx.inactive(c, ctx.cfg.inactive_days)]
+               if classify_os(c.get("os")) not in ("samba", "other", "unknown")
+               and not ctx.inactive(c, ctx.cfg.inactive_days)]
     if not targets:
         return None
     if not (cfg.get("laps_legacy_schema") or cfg.get("laps_windows_schema")):
-        return Hit([acc(c, os=c.get("os")) for c in targets], points=20, severity="high", note="@n_no_laps_schema")
+        # Windows LAPS kann auch nach Entra ID sichern (ohne AD-Schema) – aus AD heraus nicht feststellbar
+        return Hit([acc(c, os=c.get("os")) for c in targets], points=10, severity="medium", note="@n_no_laps_schema")
     missing = [c for c in targets if not c.get("laps")]
     if not missing:
         return None
@@ -469,8 +483,8 @@ def _schema_ea(ctx: Ctx):
     for rid, allow_builtin in ((518, False), (519, True)):
         g = ctx.group(rid)
         for a in ctx.members(g):
-            if allow_builtin and a.get("rid") == 500 and rid == 519:
-                continue
+            if a.get("rid") == 500:
+                continue                  # das eingebaute Administrator-Konto ist hier standardmäßig Mitglied
             items.append(acc(a, group=g.get("sam")))
     return Hit(items) if items else None
 
@@ -649,7 +663,10 @@ def _domain_root_acl(ctx: Ctx):
     res = _acl_findings(ctx, (ctx.m.get("acl") or {}).get("domain_root"), False)
     if res is None:
         raise NotApplicable("na_acl")
-    items = [{"principal": ctx.name(s), "rights": ", ".join(sorted(r))} for s, r in res.items()]
+    # wer bereits unter DCSync (PRV-10) gemeldet ist, wird hier nicht ein zweites Mal gewertet
+    sync = {s for s, r in (_acl_findings(ctx, (ctx.m.get("acl") or {}).get("domain_root"), True) or {}).items()
+            if "DCSync" in r}
+    items = [{"principal": ctx.name(s), "rights": ", ".join(sorted(r))} for s, r in res.items() if s not in sync]
     return Hit(items) if items else None
 
 
@@ -715,7 +732,8 @@ def _constrained(ctx: Ctx):
         if not a.get("enabled") or a.get("is_dc"):
             continue
         targets = a.get("delegate_to") or []
-        to_dc = [t for t in targets if t.split("/", 1)[-1].split(":", 1)[0].lower() in ctx.dc_names]
+        # Dienst/Host[:Port][/Dienstname] – z. B. ldap/dc01.firma.local/firma.local
+        to_dc = [t for t in targets if len(t.split("/")) > 1 and t.split("/")[1].split(":", 1)[0].lower() in ctx.dc_names]
         pt = bool(a["uac"] & UAC_TRUSTED_TO_AUTH_FOR_DELEGATION)
         if to_dc:
             crit = True
@@ -906,6 +924,8 @@ def _sid_filtering(ctx: Ctx):
         a = t.get("attributes", 0)
         if not (t.get("direction", 0) & 2) or a & 0x20:  # nur wo wir vertrauen; nicht innerhalb der Gesamtstruktur
             continue
+        if t.get("type") == 3:            # Kerberos-Bereich (MIT): keine SIDs, SID-Filterung ohne Bedeutung
+            continue
         if a & 0x8:
             if a & 0x40:
                 items.append(trust_item(t, detail="@v_forest_sidhistory"))
@@ -938,7 +958,8 @@ def _tgt_deleg(ctx: Ctx):
       columns=["trust", "direction", "changed"])
 def _trust_inactive(ctx: Ctx):
     items = [trust_item(t) for t in ctx.m.get("trusts", [])
-             if not (t.get("attributes", 0) & 0x20) and (ctx.age(t.get("changed")) or 0) > 45]
+             if not (t.get("attributes", 0) & 0x20) and t.get("type") != 3   # MIT-Bereiche wechseln kein Passwort
+             and (ctx.age(t.get("changed")) or 0) > 45]
     return Hit(items) if items else None
 
 
@@ -1254,8 +1275,9 @@ def _ldap_signing(ctx: Ctx):
       columns=["value", "recommended"], platforms=("windows",))
 def _ntlmv1(ctx: Ctx):
     v = effective_dc_registry(ctx, r"Control\Lsa\LmCompatibilityLevel")
+    # Ein DC weist NTLMv1 erst ab Stufe 5 ab; darunter (auch Standard 3) nimmt er NTLMv1 an, unter 3 sogar LM
     if v is None:
-        return Hit([{"value": "@v_not_configured_3", "recommended": "5"}], points=2, severity="low")
+        return Hit([{"value": "@v_not_configured_3", "recommended": "5"}], points=8, severity="medium")
     try:
         n = int(v)
     except ValueError:
@@ -1264,7 +1286,7 @@ def _ntlmv1(ctx: Ctx):
         return None
     if n < 3:
         return Hit([{"value": v, "recommended": "5"}])
-    return Hit([{"value": v, "recommended": "5"}], points=2, severity="low")
+    return Hit([{"value": v, "recommended": "5"}], points=8, severity="medium")
 
 
 @rule(id="A-SMBSigning", category="anomalies", severity="high", points=10,

@@ -205,6 +205,9 @@ T: dict[str, dict[str, str]] = {
     "na_unknown": {"de": "Information nicht verfügbar.", "en": "Information not available."},
     "na_platform": {"de": "Nicht relevant für diesen Domänentyp.", "en": "Not relevant for this domain type."},
     "na_error": {"de": "Fehler bei der Auswertung.", "en": "Evaluation error."},
+    "na_gpo_unreadable": {"de": "Mindestens eine wirksame Gruppenrichtlinie ist für das Prüferkonto nicht lesbar (Sicherheitsfilterung).", "en": "At least one applied group policy is not readable by the auditor account (security filtering)."},
+    "na_esc8_certsrv": {"de": "Die Web-Registrierung (/certsrv) ist im AD nicht hinterlegt – bitte auf dem CA-Server prüfen, ob sie per HTTP mit NTLM erreichbar ist.", "en": "Web enrollment (/certsrv) is not recorded in AD – check on the CA server whether it is reachable over HTTP with NTLM."},
+    "na_section": {"de": "Die nötigen Daten konnten beim Scan nicht vollständig gelesen werden.", "en": "The required data could not be read completely during the scan."},
     # Spalten
     "col_account": {"de": "Konto", "en": "Account"},
     "col_last_logon": {"de": "Letzte Anmeldung", "en": "Last logon"},
@@ -276,6 +279,7 @@ T: dict[str, dict[str, str]] = {
     "act_cert_pinned": {"de": "DC-Zertifikat gemerkt", "en": "DC certificate pinned"},
     "act_cert_mismatch": {"de": "DC-Zertifikat geändert!", "en": "DC certificate changed!"},
     "act_pin_reset": {"de": "Gemerktes Zertifikat zurückgesetzt", "en": "Pinned certificate reset"},
+    "act_session_revoked": {"de": "Sitzung beendet – Berechtigung im AD entzogen", "en": "Session ended – authorisation revoked in AD"},
     "err_cert_changed": {"de": "Das Zertifikat des Domänencontrollers hat sich geändert und passt nicht mehr zum gemerkten. "
                                 "Aus Sicherheitsgründen wurde die Anmeldung abgebrochen. Wenn die Änderung gewollt ist (z. B. neue CA): "
                                 "docker exec samaudit python -m app.pins reset",
@@ -316,6 +320,8 @@ T: dict[str, dict[str, str]] = {
                    "en": "SAMAUDIT automatically trusts a DC's LDAPS certificate on first contact and remembers the issuing CA. A later certificate from a different CA is rejected (man-in-the-middle protection)."},
     "pins_none": {"de": "Noch kein Zertifikat gemerkt – das passiert bei der nächsten Anmeldung.", "en": "No certificate pinned yet – this happens at the next sign-in."},
     "pin_reset": {"de": "Zurücksetzen", "en": "Reset"},
+    "pin_reset_cli": {"de": "Zurücksetzen nach einem gewollten Zertifikatswechsel (aus Sicherheitsgründen nur auf dem Server):",
+                      "en": "Reset after an intended certificate change (for security reasons on the server only):"},
     "pin_confirm": {"de": "Gemerktes Zertifikat entfernen? Beim nächsten Kontakt wird neu vertraut.", "en": "Remove pinned certificate? It will be trusted again on next contact."},
     "cert_mode": {"de": "Zertifikatsmodus", "en": "Certificate mode"},
     "mode_auto": {"de": "Automatisch vertrauen und merken", "en": "Trust automatically and pin"},

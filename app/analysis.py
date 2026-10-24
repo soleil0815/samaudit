@@ -174,11 +174,14 @@ class Ctx:
             "S-1-5-18", "S-1-5-32-544", "S-1-5-9", "S-1-5-10", "S-1-3-0",
             self.group_sid(512), self.group_sid(519), self.group_sid(518), self.group_sid(516),
             self.group_sid(521), self.group_sid(498),
+            # untergeordnete Domäne: Objekte der Konfigurationspartition berechtigen die Admins der Stammdomäne
+            f"{self.root_sid}-512", f"{self.root_sid}-516",
         }
 
     def low_priv_sids(self) -> set[str]:
         return {"S-1-1-0", "S-1-5-11", "S-1-5-7", "S-1-5-32-545", "S-1-5-32-546",
-                self.group_sid(513), self.group_sid(514), self.group_sid(515)}
+                self.group_sid(513), self.group_sid(514), self.group_sid(515),
+                f"{self.root_sid}-513", f"{self.root_sid}-514", f"{self.root_sid}-515"}
 
     @staticmethod
     def age(dt) -> int | None:
@@ -211,6 +214,10 @@ class Ctx:
 
     def gpo_guids(self, scope: str = "dc") -> list[str]:
         """Aktiv verknüpfte GPOs: 'dc' = Domäne + OU Domain Controllers (in Anwendungsreihenfolge), 'all' = alle."""
+        failed = set((self.m.get("meta") or {}).get("failed_sections") or [])
+        if failed & {"all_links", "site_links", "dc_ou", "gpos"}:
+            from .rules import NotApplicable
+            raise NotApplicable("na_section")
         links = self.m.get("gpo_links") or {}
         if scope == "dc":
             seq = list(links.get("domain", [])) + list(links.get("dc_ou", []))

@@ -58,6 +58,9 @@ class Settings:
             mode = "verify" if (os.environ.get("LDAP_VERIFY_CERT", "").lower() in ("1", "true", "yes", "ja", "on")
                                 and os.environ.get("LDAP_CA_FILE")) else "auto"
         self.ldap_cert_mode = mode if mode in ("auto", "trust", "verify") else "auto"
+        # Gemerkte DC-Zertifikate in der Weboberfläche zurücksetzen? Standard: nein – sonst könnte jeder Prüfer
+        # das erneute „erste Vertrauen“ auslösen. Zurücksetzen dann per: docker exec samaudit python -m app.pins reset
+        self.pin_reset_web = _bool("PIN_RESET_WEB", False)
         self.ldap_timeout = _int("LDAP_TIMEOUT", 10)
         # Klartext-Bind ohne TLS ist absichtlich nur mit expliziter Freigabe möglich
         self.ldap_allow_plain = _bool("LDAP_ALLOW_PLAIN", False)

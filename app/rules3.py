@@ -5,6 +5,7 @@ Zertifikatszuordnungen, ESC17, delegierte MSAs (BadSuccessor) und UPN/SPN-Missbr
 from __future__ import annotations
 
 import unicodedata
+from datetime import timedelta
 
 from .adutil import ADS_RIGHT_GENERIC_ALL
 from .analysis import Ctx
@@ -24,14 +25,15 @@ ENC_AES = 0x18
 
 @rule(id="S-KerberosRC4", category="stale", severity="medium", points=8,
       title={"de": "Konten, die noch Kerberos-RC4 brauchen", "en": "Accounts still depending on Kerberos RC4"},
-      desc={"de": "Seit den Updates vom April 2026 stellen Domänencontroller Tickets standardmäßig nur noch mit AES aus, "
-                  "ab Juli 2026 ohne Rückweg (CVE-2026-20833). Betroffen sind Dienstkonten, deren Passwort so alt ist, "
-                  "dass sie gar keine AES-Schlüssel besitzen (Passwort älter als die erste Windows-Server-2008-Härtung "
-                  "der Domäne), sowie Konten, die per msDS-SupportedEncryptionTypes auf RC4 festgelegt sind. Solche "
-                  "Dienste fallen aus – und RC4-Tickets lassen sich beim Kerberoasting besonders schnell knacken.",
-            "en": "Since the April 2026 updates DCs issue AES-only tickets by default, without rollback from July 2026 "
-                  "(CVE-2026-20833). Service accounts whose password predates AES keys, and accounts pinned to RC4 via "
-                  "msDS-SupportedEncryptionTypes, will break – and RC4 tickets are easy to crack (Kerberoasting)."},
+      desc={"de": "Seit den Updates vom April 2026 stellen Domänencontroller Tickets für Konten ohne eigene Einstellung "
+                  "nur noch mit AES aus, ab Juli 2026 ohne Rückweg (CVE-2026-20833). Dienstkonten, deren Passwort so alt "
+                  "ist, dass sie gar keine AES-Schlüssel besitzen (älter als die erste Windows-Server-2008-Erweiterung "
+                  "der Domäne), fallen dadurch aus. Konten, die per msDS-SupportedEncryptionTypes ausdrücklich auf RC4 "
+                  "festgelegt sind, funktionieren weiter – ihre RC4-Tickets lassen sich beim Kerberoasting aber "
+                  "besonders schnell knacken.",
+            "en": "Since the April 2026 updates DCs issue AES-only tickets for accounts without an explicit setting, "
+                  "without rollback from July 2026 (CVE-2026-20833). Service accounts whose password predates AES keys "
+                  "break. Accounts explicitly pinned to RC4 keep working, but their RC4 tickets are easy to crack."},
       fix={"de": "Passwort der Konten ohne AES-Schlüssel neu setzen (erzeugt AES-Schlüssel) und AES erlauben; auf RC4 "
                  "festgelegte Konten auf AES umstellen. Vorher im Systemprotokoll der DCs auf KDCSVC-Ereignisse 201–209 "
                  "achten. Wo RC4 vorübergehend unvermeidbar ist: gezielt 0x24 am Konto setzen, nicht domänenweit.",
@@ -56,7 +58,8 @@ def _rc4(ctx: Ctx):
             continue
         service = a.get("_kind") == "user" and not a.get("is_gmsa") and (a.get("spns") or a.get("rid") == 502)
         pls = a.get("pwd_last_set")
-        if service and aes_since and pls and pls < aes_since:
+        # nur ohne eigene Einstellung betroffen; 1 Tag Spielraum für Konten aus der Einrichtung der Domäne
+        if service and not enc and aes_since and pls and pls < aes_since - timedelta(days=1):
             items.append(acc(a, detail="@v_no_aes_keys"))
     try:
         vals = gpo_values(ctx, ctx.gpo_guids("dc"), r"Services\Kdc\DefaultDomainSupportedEncTypes")

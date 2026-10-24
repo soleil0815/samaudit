@@ -90,9 +90,24 @@ def session_of(request: Request) -> auth.Session | None:
     return auth.get(request.cookies.get(SID_COOKIE))
 
 
+async def read_body(request: Request, limit: int) -> bytes | None:
+    """Liest den Anfrage-Inhalt höchstens bis `limit` Bytes (auch bei chunked); sonst None."""
+    try:
+        if int(request.headers.get("content-length") or 0) > limit:
+            return None
+    except ValueError:
+        return None
+    buf = bytearray()
+    async for chunk in request.stream():
+        buf += chunk
+        if len(buf) > limit:
+            return None
+    return bytes(buf)
+
+
 async def form_of(request: Request) -> dict[str, str]:
-    body = await request.body()
-    if len(body) > 16_384:
+    body = await read_body(request, 16_384)
+    if body is None:
         return {}
     data = parse_qs(body.decode("utf-8", "replace"), keep_blank_values=True)
     return {k: v[0] for k, v in data.items()}
@@ -115,6 +130,27 @@ def to_login(request: Request, reason: str | None = None) -> Response:
     return RedirectResponse(url, status_code=303)
 
 
+ACCOUNT_GONE = ("bad_credentials", "not_allowed", "privileged_denied", "user_not_found", "account_unusable")
+
+
+async def recheck(request: Request) -> Response | None:
+    """Vor folgenreichen Aktionen (Zertifikat, Löschen) erneut gegen das AD prüfen, ob der Prüfer noch
+    berechtigt ist – Entzug der Gruppe oder Sperre des Kontos wirkt so sofort, nicht erst nach Sitzungsende.
+    Technische Fehler (DC nicht erreichbar) blockieren die Aktion nicht."""
+    if settings.demo_mode:
+        return None
+    s = request.state.sess
+    from .ldapsrc import AuthError, authenticate
+    try:
+        await run_in_threadpool(authenticate, s.bind_name, s.password())
+    except AuthError as e:
+        if e.code in ACCOUNT_GONE:
+            db.audit("act_session_revoked", s.user, client_ip(request), e.code)
+            auth.destroy(s.sid)
+            return to_login(request, e.code)
+    return None
+
+
 def require(fn):
     async def wrapper(request: Request):
         s = session_of(request)
@@ -133,13 +169,8 @@ async def multipart_of(request: Request, limit: int = 1_000_000) -> tuple[dict[s
     ctype = request.headers.get("content-type", "")
     if not ctype.startswith("multipart/form-data"):
         return {}, []
-    try:
-        if int(request.headers.get("content-length", "0")) > limit:
-            return {}, []
-    except ValueError:
-        return {}, []
-    body = await request.body()
-    if len(body) > limit:
+    body = await read_body(request, limit)
+    if body is None:
         return {}, []
     msg = BytesParser(policy=policy.HTTP).parsebytes(b"Content-Type: " + ctype.encode("latin-1") + b"\r\n\r\n" + body)
     fields: dict[str, str] = {}
@@ -187,8 +218,10 @@ async def login_submit(request: Request):
     password = form.get("password") or ""
     if not auth.check_token(request.cookies.get(LOGIN_COOKIE), form.get("token")):
         return RedirectResponse("/login?e=csrf", status_code=303)
-    if auth.is_locked(username, ip):
-        db.audit("act_login_failed", username[:80], ip, "locked")
+    mark = auth.reserve_attempt(username, ip)   # zählt sofort – auch bei parallelen Anfragen
+    if mark is None:
+        if auth.should_log_locked(username, ip):
+            db.audit("act_login_failed", username[:80], ip, "locked")
         return RedirectResponse("/login?e=locked", status_code=303)
 
     if settings.demo_mode:
@@ -197,9 +230,9 @@ async def login_submit(request: Request):
             return RedirectResponse("/login?e=privileged_denied", status_code=303)
         ok = username.lower() == "demo" and password == "demo"
         if not ok:
-            auth.record_failure(username, ip)
             db.audit("act_login_failed", username[:80], ip, "demo")
             return RedirectResponse("/login?e=bad_credentials", status_code=303)
+        auth.release_attempt(username, ip, mark)
         sess = auth.create("demo", "Demo-Prüfer", "demo@firma.local", "demo", ["SAMAUDIT-Benutzer"], password, ip)
         db.set_kv("domain_type", "windows")
     else:
@@ -207,12 +240,18 @@ async def login_submit(request: Request):
         try:
             res = await run_in_threadpool(authenticate, username, password)
         except AuthError as e:
-            if e.code in ("bad_credentials", "not_allowed", "privileged_denied", "user_not_found", "account_unusable"):
-                auth.record_failure(username, ip)
-            log.warning("Login fehlgeschlagen für %s von %s: %s %s", username[:80], ip, e.code, e.detail)
+            if e.code not in ("bad_credentials", "not_allowed", "privileged_denied", "user_not_found", "account_unusable"):
+                auth.release_attempt(username, ip, mark)   # technischer Fehler, kein Fehlversuch
+            log.warning("Login fehlgeschlagen für %r von %s: %s %s", username[:80], ip, e.code, e.detail)
             db.audit("act_login_failed", username[:80], ip, e.code)
             code = "bad_credentials" if e.code == "user_not_found" else e.code
             return RedirectResponse(f"/login?e={code}", status_code=303)
+        except Exception as e:  # noqa: BLE001 – technischer Fehler (DC, Netzwerk): kein Fehlversuch
+            auth.release_attempt(username, ip, mark)
+            log.warning("Login fehlgeschlagen für %r von %s: %s", username[:80], ip, e)
+            db.audit("act_login_failed", username[:80], ip, "bind_failed")
+            return RedirectResponse("/login?e=bind_failed", status_code=303)
+        auth.release_attempt(username, ip, mark)
         auth.clear_failures(username, ip)
         sess = auth.create(res.sam, res.display_name, res.upn, res.bind_name, res.matched_groups, password, ip)
     db.audit("act_login", sess.user, ip, ", ".join(sess.groups))
@@ -228,7 +267,7 @@ async def logout(request: Request):
     form = await form_of(request)
     if await check_csrf(request, form):
         db.audit("act_logout", request.state.sess.user, client_ip(request))
-        auth.destroy(request.state.sess.sid)
+    auth.destroy(request.state.sess.sid)        # Abmelden ist immer erlaubt
     resp = RedirectResponse("/login", status_code=303)
     resp.delete_cookie(SID_COOKIE, path="/")
     return resp
@@ -315,6 +354,8 @@ async def scans_page(request: Request):
 async def scan_delete(request: Request):
     form = await form_of(request)
     if await check_csrf(request, form):
+        if (deny := await recheck(request)) is not None:
+            return deny
         sid = int(request.path_params["id"])
         if await run_in_threadpool(db.delete_scan, sid):
             db.audit("act_delete", request.state.sess.user, client_ip(request), f"#{sid}")
@@ -448,6 +489,8 @@ async def cert_upload(request: Request):
     fields, files = await multipart_of(request)
     if not await check_csrf(request, fields):
         return _connection(request, cert_err=t("err_csrf", lang_of(request)), status=400)
+    if (deny := await recheck(request)) is not None:
+        return deny
     if not settings.tls_enabled:
         return _connection(request, cert_err="TLS_ENABLED=false")
     user = request.state.sess.user
@@ -465,6 +508,8 @@ async def cert_remove(request: Request):
     from . import webcert
     form = await form_of(request)
     if await check_csrf(request, form):
+        if (deny := await recheck(request)) is not None:
+            return deny
         await run_in_threadpool(webcert.remove_upload)
         db.audit("act_cert_removed", request.state.sess.user, client_ip(request), "")
         return RedirectResponse("/connection?c=cert_removed#webcert", status_code=303)
@@ -474,6 +519,8 @@ async def cert_remove(request: Request):
 @require
 async def pin_reset(request: Request):
     form = await form_of(request)
+    if not settings.pin_reset_web:
+        return RedirectResponse("/connection", status_code=303)
     if await check_csrf(request, form):
         host = (form.get("host") or "").strip()
         if host:

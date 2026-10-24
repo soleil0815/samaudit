@@ -334,6 +334,9 @@ def build_pdf(data: dict, lang: str = "de") -> bytes:
                     cells.append(v)
                     continue
                 style = st["th"] if header and ri == 0 else (st["cellmono"] if ci in mono_cols else st["cell"])
+                v = "" if v is None else str(v)
+                if len(v) > MAX_CELL:
+                    v = v[:MAX_CELL] + " …"    # eine Zelle darf nie höher als eine Seite werden
                 cells.append(Paragraph(X(v), style))
             out.append(cells)
         tb = Table(out, colWidths=widths, repeatRows=1 if header else 0, hAlign="LEFT")
@@ -459,6 +462,7 @@ def build_pdf(data: dict, lang: str = "de") -> bytes:
 
 
 MAX_PDF_ROWS = 40
+MAX_CELL = 400   # Zeichen je Tabellenzelle im PDF
 
 
 def finding_block(f: dict, lang: str, st: dict, content_w: float, tbl) -> list:
