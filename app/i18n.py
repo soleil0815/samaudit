@@ -276,6 +276,7 @@ T: dict[str, dict[str, str]] = {
     "act_cert_pinned": {"de": "DC-Zertifikat gemerkt", "en": "DC certificate pinned"},
     "act_cert_mismatch": {"de": "DC-Zertifikat geändert!", "en": "DC certificate changed!"},
     "act_pin_reset": {"de": "Gemerktes Zertifikat zurückgesetzt", "en": "Pinned certificate reset"},
+    "act_session_revoked": {"de": "Sitzung beendet – Berechtigung im AD entzogen", "en": "Session ended – authorisation revoked in AD"},
     "err_cert_changed": {"de": "Das Zertifikat des Domänencontrollers hat sich geändert und passt nicht mehr zum gemerkten. "
                                 "Aus Sicherheitsgründen wurde die Anmeldung abgebrochen. Wenn die Änderung gewollt ist (z. B. neue CA): "
                                 "docker exec samaudit python -m app.pins reset",

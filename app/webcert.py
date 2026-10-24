@@ -111,6 +111,8 @@ def _pem_key(data: bytes, password: str | None, name: str):
     start = data.find(b"-----BEGIN ")
     while start != -1:
         line_end = data.find(b"-----", start + 11)
+        if line_end == -1:
+            break                         # unvollständige Kopfzeile
         label = data[start + 11:line_end]
         if label.endswith(b"PRIVATE KEY"):
             end_marker = b"-----END " + label + b"-----"
@@ -124,7 +126,7 @@ def _pem_key(data: bytes, password: str | None, name: str):
                 raise CertError(f"{name}: Der private Schlüssel ist verschlüsselt – bitte Passwort angeben.") from e
             except ValueError as e:
                 raise CertError(f"{name}: Passwort für den privaten Schlüssel ist falsch.") from e
-        start = data.find(b"-----BEGIN ", line_end + 5)
+        start = data.find(b"-----BEGIN ", max(line_end + 5, start + 1))
     return None
 
 
