@@ -2,14 +2,18 @@
 
 *English below.*
 
+## Status des Projekts
+
+SAMAUDIT ist ein **Hobbyprojekt** und wird ohne Gewähr und ohne zugesagte Reaktionszeiten gepflegt (siehe Lizenz, Abschnitte 15 und 16). Sicherheitsmeldungen werden trotzdem ernst genommen und so bald wie möglich bearbeitet.
+
 ## Unterstützte Versionen
 
-Sicherheitskorrekturen gibt es für die jeweils aktuelle Version von SAMAUDIT.
+Korrekturen gibt es nur für die **jeweils aktuelle Version** (Container-Image `latest` bzw. die neueste Versionsnummer). Das Image wird zusätzlich jede Woche mit aktuellen Debian-, Python- und Paketupdates neu gebaut, getestet und auf Schwachstellen geprüft – bitte immer die aktuelle Version verwenden.
 
 | Version | Unterstützt |
 |---|---|
-| 1.3.x | ja |
-| < 1.3 | nein – bitte aktualisieren |
+| aktuelle Version (`latest`) | ja |
+| ältere Versionen | nein – bitte aktualisieren |
 
 ## Sicherheitslücke melden
 
@@ -18,22 +22,27 @@ Bitte **kein öffentliches Issue** anlegen. Nutzen Sie stattdessen die private M
 
 Hilfreich sind: betroffene Version, Beschreibung, Schritte zum Nachvollziehen und mögliche Auswirkungen. Bitte keine echten Domänendaten, Passwörter oder Berichte mitschicken.
 
-Wir bestätigen den Eingang in der Regel innerhalb von 7 Tagen und stimmen eine Veröffentlichung nach Bereitstellung einer Korrektur mit Ihnen ab.
+Nach einer Korrektur wird die Veröffentlichung der Details mit Ihnen abgestimmt.
 
 ## Was als Sicherheitslücke gilt
 
-- Umgehung der Anmeldung oder der Admin-Sperre
+- Umgehung der Anmeldung oder der Sperre für Admin-Konten
 - Zugriff auf Berichte ohne Berechtigung, CSRF, XSS, Injection
 - Preisgabe von Passwörtern oder Sitzungsdaten
 - Umgehung der LDAPS-Zertifikatsprüfung (Pinning)
+- Schwachstellen im veröffentlichten Container-Image oder in der Update-Kette (`update.sh`, GitHub-Workflow)
 
 Befunde **in Ihrer Domäne**, die SAMAUDIT anzeigt, sind keine Sicherheitslücken der Software.
 
 ---
 
+## Project status
+
+SAMAUDIT is a **hobby project**, maintained without warranty and without guaranteed response times (see the licence, sections 15 and 16). Security reports are nevertheless taken seriously and handled as soon as possible.
+
 ## Supported versions
 
-Security fixes are provided for the current version of SAMAUDIT only (see table above).
+Fixes are provided for the **current version only** (container image `latest` or the newest version number). The image is additionally rebuilt every week with current Debian, Python and package updates, tested and scanned for vulnerabilities – please always run the current version.
 
 ## Reporting a vulnerability
 
@@ -42,6 +51,6 @@ Please **do not open a public issue**. Use GitHub's private reporting instead:
 
 Include the affected version, a description, steps to reproduce and the potential impact. Please do not send real domain data, passwords or reports.
 
-We usually acknowledge reports within 7 days and coordinate disclosure with you once a fix is available.
+Disclosure of the details is coordinated with you once a fix is available.
 
-In scope: bypassing sign-in or the admin block, unauthorised access to reports, CSRF, XSS, injection, disclosure of passwords or session data, bypassing LDAPS certificate pinning. Findings that SAMAUDIT reports **about your domain** are not vulnerabilities in the software.
+In scope: bypassing sign-in or the admin block, unauthorised access to reports, CSRF, XSS, injection, disclosure of passwords or session data, bypassing LDAPS certificate pinning, vulnerabilities in the published container image or in the update chain (`update.sh`, GitHub workflow). Findings that SAMAUDIT reports **about your domain** are not vulnerabilities in the software.
