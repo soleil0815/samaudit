@@ -4,6 +4,8 @@
 
 Selbst gehostete Webanwendung, die eine Windows- oder Samba-AD-Domäne ausliest, **110 Sicherheitsprüfungen** durchführt und das Ergebnis als Risikowert (0–100), detaillierten Bericht mit Maßnahmen und PDF ausgibt – auf Deutsch oder Englisch.
 
+> **Status: Beta – Hobbyprojekt, ohne Gewähr.** SAMAUDIT wurde für den eigenen Einsatz entwickelt und vor allem mit Testdaten geprüft; Ergebnisse können unvollständig oder falsch sein und ersetzen keine fachliche Prüfung. Rückmeldungen sind willkommen, Support oder Reaktionszeiten werden nicht zugesagt. Sicherheitslücken bitte vertraulich melden (siehe [SECURITY.md](SECURITY.md)).
+
 ## Neu in 1.9.6
 
 - **Alles im Image bleibt aktuell:** Neben Debian und Python werden jetzt auch alle Python-Pakete (inkl. Unterabhängigkeiten) bei jedem Bau in der neuesten Version installiert – auch beim wöchentlichen Neubau. `requirements.txt` enthält nur noch Mindestversionen. Der Rauchtest läuft jetzt im fertigen Image, also mit genau den Paketversionen, die veröffentlicht würden; zusammen mit dem Trivy-Scan entscheidet er, ob `latest` erneuert wird. Die Versionen jedes Images stehen in `/app/package-versions.txt` und in der Zusammenfassung des GitHub-Laufs.
@@ -529,6 +531,7 @@ app/
 .env.example                      Vorlage für Ihre Einstellungen (.env)
 update.sh                         Neubau/Update mit Sicherung und Prüfung
 requirements.txt     Python-Abhängigkeiten (Mindestversionen, installiert wird jeweils die neueste)
+tools/clean-history.sh  Git-Historie ohne persönliche Namen/E-Mail-Adressen neu schreiben (vor einer Veröffentlichung)
 DATENSCHUTZ.md                    Datenschutz-Unterlagen
 ```
 

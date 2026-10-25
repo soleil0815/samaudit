@@ -4,6 +4,8 @@
 
 Self-hosted web application that reads a Windows or Samba AD domain, runs **110 security checks** and presents the result as a risk score (0–100), a detailed report with remediation advice, and a PDF export – in German or English.
 
+> **Status: beta – hobby project, no warranty.** SAMAUDIT was built for the author's own use and has mainly been tested with test data; results may be incomplete or wrong and do not replace expert review. Feedback is welcome, but no support or response times are promised. Please report security vulnerabilities privately (see [SECURITY.md](SECURITY.md)).
+
 ## New in 1.9.6
 
 - **Everything in the image stays current:** besides Debian and Python, every Python package (including sub-dependencies) is now installed in its newest version on every build – including the weekly rebuild. `requirements.txt` only holds minimum versions. The smoke test now runs inside the finished image, i.e. with exactly the package versions that would be published; together with the Trivy scan it decides whether `latest` is renewed. The versions of each image are listed in `/app/package-versions.txt` and in the summary of the GitHub run.
@@ -534,6 +536,7 @@ app/
 .env.example                      template for your settings (.env)
 update.sh                         rebuild/update with backup and checks
 requirements.txt     Python dependencies (minimum versions, the newest is installed)
+tools/clean-history.sh  rewrite the Git history without personal names/e-mail addresses (before going public)
 DATENSCHUTZ.md                    privacy documentation (German)
 ```
 
