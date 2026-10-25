@@ -1,10 +1,19 @@
-# SAMAUDIT v1.9.6 – Active Directory security assessment
+# SAMAUDIT v1.9.7 – Active Directory security assessment
 
 *Deutsche Version: [README.md](README.md)* · **Manual:** [app/docs/manual.en.md](app/docs/manual.en.md) (also in the web interface under **Help**)
 
 Self-hosted web application that reads a Windows or Samba AD domain, runs **110 security checks** and presents the result as a risk score (0–100), a detailed report with remediation advice, and a PDF export – in German or English.
 
 > **Status: beta – hobby project, no warranty.** SAMAUDIT was built for the author's own use and has mainly been tested with test data; results may be incomplete or wrong and do not replace expert review. Feedback is welcome, but no support or response times are promised. Please report security vulnerabilities privately (see [SECURITY.md](SECURITY.md)).
+
+## New in 1.9.7 – pinned versions and weekly security updates
+
+- **Reproducible build:** instead of "always the newest version", everything is now pinned: the base image by version **and** digest (`python:3.13.17-slim-trixie@sha256:…`), the Debian packages via a fixed snapshot.debian.org state, and every Python package including sub-dependencies with exact version and hashes (`requirements.txt`, generated from `requirements.in`). The same source gives the same image. The Debian package list is kept in `locks/os-packages.txt` and compared on every build. `tools/update-locks.sh` recomputes the versions.
+- **Weekly security update on GitHub** (early Monday, can also be started manually): updates only within the base, builds without cache, tests inside the image, scans with Trivy and publishes only on success – as `latest` and `<version>-s<n>` (e.g. `1.9.7-s1`). The changed packages are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md). See [Security updates and versions](#security-updates-and-versions).
+- **Less in the image:** pip and apt are removed after the build – they are not needed at runtime.
+- **Daily scan** of the published image and a **base warning** (end of support of Python and Debian according to endoflife.date).
+- **Hardened GitHub workflows:** actions pinned to commit hashes, each job only with the permissions it needs, no stored git credentials, publishing only from `main`, never two at once, published versions are never overwritten, `latest` only for the highest version. Self-tests in `tests/test_pipeline.py`.
+- The web UI, the PDF and `/healthz` (field `image`) show the image version, e.g. `1.9.7-s2`. The issues of the old Monday run are gone; GitHub reports a failed run by email.
 
 ## New in 1.9.6
 
@@ -394,7 +403,7 @@ curl -k https://localhost:9400/healthz               # version and status
 
 ### Update
 
-**With the image from GitHub:** `sh update.sh --pull` – pulls `ghcr.io/soleil0815/samaudit:latest`, backs up first, starts the new version, verifies it and falls back to the previous one on problems. A specific version: `sh update.sh --pull=1.9.6`. If the image is already current, nothing happens. Other image (e.g. a fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in `.env`.
+**With the image from GitHub:** `sh update.sh --pull` – pulls `ghcr.io/soleil0815/samaudit:latest`, backs up first, starts the new version, verifies it and falls back to the previous one on problems. A specific version: `sh update.sh --pull=1.9.7` or one of its security updates, e.g. `--pull=1.9.7-s1`. If the image is already current, nothing happens. Other image (e.g. a fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in `.env`.
 
 **With a ZIP or the source code (local build):**
 
@@ -406,7 +415,7 @@ sh update.sh samaudit-*.zip
 
 With a ZIP, the script first shows the installed and new version and asks for confirmation, backs up the current program files to `backups/program-*.tgz`, installs the new ones and removes obsolete files (`.env`, `data/`, `certs/`, `backups/` and `base-image.lock` stay untouched). At the end it asks whether to delete the ZIP file. Without a ZIP (`./update.sh`) it only rebuilds and restarts. Then it
 1. creates a **backup** in `backups/` (consistent copy of the database + certificates; the last 5 are kept),
-2. **builds** the image with the current base image, all Debian security updates and the newest package versions,
+2. **builds** the image from the pinned versions of the source (the same as on GitHub; newer security updates come with the image from GitHub or a new ZIP),
 3. **restarts** the container and waits until it reports "healthy" (otherwise aborts with a log excerpt),
 4. removes **old images** (the previous version is kept for a rollback).
 
@@ -417,7 +426,7 @@ With a ZIP, the script first shows the installed and new version and asks for co
 
 If `.env` is missing, the script creates it from the template and asks for `DOMAIN_FQDN`. If the build fails, the running container stays unchanged.
 
-**Always current:** every build – locally with `update.sh` and weekly on GitHub – pulls the current base image `python:3.13-slim` (newest Python 3.13 release on the current Debian), installs all Debian security updates and the newest version of every Python package (`requirements.txt` only holds minimum versions). The exact versions of an image are listed inside it in `/app/package-versions.txt` and in the summary of the GitHub run. Only moving to the next Python minor version ("lifting the base") is a planned step, at the latest before Python 3.13 reaches end of life (2029-10-31) – the weekly run reminds you with an issue from May 2029.
+**Versions:** base image, Debian and Python packages are pinned; every week GitHub renews them within the base – see [Security updates and versions](#security-updates-and-versions).
 
 **Data folder and backup:** Everything SAMAUDIT stores is in `./data` inside the SAMAUDIT folder:
 
@@ -479,24 +488,53 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 | `PRIVACY_CONTACT` | – | contact shown on the privacy page |
 | `LOG_LEVEL` | `INFO` | |
 
+## Security updates and versions
+
+**Pinned versions.** Everything that goes into the image is recorded in the repository: base image with version and digest (`Dockerfile`, `ARG PYTHON_IMAGE`), the Debian package state as a snapshot.debian.org date (`ARG DEBIAN_SNAPSHOT`) with the expected package list (`locks/os-packages.txt`), every Python package with version and hashes (`requirements.txt`, test tools in `requirements-dev.txt`). The wanted packages are listed in `requirements.in`; `tools/update-locks.sh` recomputes everything from it.
+
+**The base** is defined in `tools/lock-policy.env`: Debian 13 "trixie" (part of the base image name, never a tag that changes silently) and Python 3.13. It is never changed automatically.
+
+**Weekly security update** (`.github/workflows/security-update.yml`, Mondays 03:17 UTC, manually via *Actions → Security update → Run workflow*):
+
+1. determine new versions, **only within the base**: newest Python 3.13 release on Debian 13, all Debian packages as of that day (including those of the base image), every Python package within its major version – before 1.0 within its minor version. Calendar versions (tzdata, certifi) have no limit.
+2. Nothing changed: stop, nothing is published.
+3. build without cache, remove pip and apt, tests inside the finished image, Trivy scan.
+4. Only if everything passed: build the image, check exactly that image and publish it as `<version>-s<n>` and `latest`, add an entry with the changed packages to [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md), git tag and GitHub release. The counter `n` starts at 1 again with every new program version (`1.9.7-s1`, `1.9.7-s2`, … `1.9.8-s1`).
+
+**Trivy** is downloaded as a fixed version with a verified SHA-256 checksum (no Trivy GitHub Action – its tags were compromised in March 2026, CVE-2026-33634). Only **CRITICAL/HIGH findings with an available fix** stop a release; everything else is listed in the report (summary and artifact `trivy-report`). Deliberately accepted findings are listed in `.trivyignore`, each with a reason and an expiry date (`CVE-… exp:YYYY-MM-DD  # reason`); after that date Trivy reports them again.
+
+**Daily scan** (`scan-published.yml`, 05:43 UTC): checks the published `latest` again, because vulnerabilities often become known after the build.
+
+**Base warning** (every Monday, part of the security update): asks endoflife.date until when Python 3.13 and Debian 13 receive security updates. Less than 12 months: a notice at the run. Less than 6 months: the run turns red.
+
+**When a run is red** – GitHub then sends an email (to the account that last changed the schedule). Nothing was published, `latest` stays on the last checked state; the reason is shown at the top of the run (annotation and summary).
+
+| Message | What to do |
+|---|---|
+| *Trivy found CRITICAL/HIGH vulnerabilities* | Debian or the package often ships the fix within days – wait for next Monday or start the run manually later. If it stays red: raise the affected package specifically (new program version) or, after assessing it, add the finding to `.trivyignore` with a reason and an expiry date. |
+| *Sicherheitsupdate: Versionen nicht ermittelbar* / build failed | Usually a source was briefly unreachable – rerun. If it stays red, a new package version does not fit; check it specifically. |
+| Tests inside the image failed | A new package version behaves differently. Nothing published; check the package and limit it in `requirements.in` if needed. |
+| *Unterbau bald anheben* (notice) | Plan the move to the next Python or Debian release. |
+| *Unterbau anheben* (red) | Lift the base deliberately: change `tools/lock-policy.env`, run `tools/update-locks.sh --major`, test and publish as a new program version. |
+| Daily scan red | A new vulnerability became known in the published image. If a fix exists, start the security update manually; otherwise as for Trivy above. |
+
 ## GitHub: repository and container image
 
-The repository contains a GitHub Actions workflow (`.github/workflows/docker-image.yml`) that builds the container image on GitHub and publishes it to the GitHub Container Registry:
+The container image is built on GitHub and published to the GitHub Container Registry (`.github/workflows/docker-image.yml` for program versions, `security-update.yml` and `scan-published.yml` see above):
 
-| Event | Image tags |
+| Event | Result |
 |---|---|
-| push to `main` | `latest`, `<version from app/version.py>`, `sha-<commit>` – afterwards the workflow creates the git tag `v<version>` and a GitHub release automatically (text from `app/docs/news.json`) if the version does not exist yet |
-| git tag `v1.9.6` | `1.9.6` (must match `app/version.py`) |
-| pull request | built only (test), not published |
-| every run | Trivy vulnerability scan of the image – critical/high vulnerabilities with an available fix stop the run before anything is published |
-| weekly (Mon 04:17 UTC) | rebuild of `main` with the current base image and all Debian security updates, smoke test, Trivy scan; on success published as `latest` (and `sha-…`), otherwise an issue |
-| pull request from a branch `claude/…` (prepared by Claude) | merged automatically after a successful test build and published like a push to `main` |
+| push to `main` with a new version in `app/version.py` | image `<version>` and `latest` (if it is the highest version), git tag `v<version>`, GitHub release (text from `app/docs/news.json`). A version that is already published is never rebuilt or overwritten. |
+| pull request | self-tests, build from the pinned versions, tests inside the image, Trivy – nothing is published |
+| pull request from a branch `claude/…` (prepared by Claude) | merged automatically after all checks pass and published like a push to `main` |
+| Mondays 03:17 UTC | security update `<version>-s<n>` (see above) |
+| daily 05:43 UTC | scan of the published `latest` |
 
-It builds for `linux/amd64` and `linux/arm64`, using the current base image `python:3.13-slim`, all Debian security updates and the newest package versions; before publishing, the smoke test (inside the finished image) and the Trivy scan run; the image carries SBOM and provenance attestations.
+It builds for `linux/amd64` and `linux/arm64` without cache; the built image is first uploaded without a tag, exactly that image is checked (package list, tests, Trivy) and only then tagged. It carries SBOM and provenance attestations.
 
 **Private repository:** the image (package `samaudit` under *Packages*) is private as well. On the server, log in once: `docker login ghcr.io -u <github-user>` – password: a *personal access token (classic)* with the `read:packages` scope. Alternatively make the package public under *Package settings*.
 
-**Publishing a new version:** raise the version in `app/version.py`, add an entry to `app/docs/news.json`, push to `main` or merge the pull request – after a few minutes the image is available as `latest` and `<version>`, tag and release are created automatically. Servers fetch it with `sh update.sh --pull`; tools watching `latest` such as Dockhand or Watchtower pull it by themselves.
+**Publishing a new version:** raise the version in `app/version.py`, add an entry to `app/docs/news.json`, push to `main` or merge the pull request – after a few minutes the image is available as `latest` and `<version>`, tag and release are created automatically. Security updates appear every Monday without any action. Servers fetch it with `sh update.sh --pull`; tools watching `latest` such as Dockhand or Watchtower pull it by themselves.
 
 ## Licence and use
 

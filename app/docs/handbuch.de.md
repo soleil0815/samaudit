@@ -156,7 +156,7 @@ Die vollständige Liste steht in der README.
 sh update.sh --pull
 ```
 
-Holt die neueste Version von `ghcr.io/soleil0815/samaudit`, sichert vorher Datenbank und Zertifikate, startet die neue Version, prüft sie und startet bei Problemen automatisch wieder die bisherige. `update.sh` selbst wird dabei mit aktualisiert. Eine bestimmte Version: `sh update.sh --pull=1.9.6`. Ist das Repository privat, auf dem Server einmalig `docker login ghcr.io` (Passwort: GitHub-Token mit `read:packages`).
+Holt die neueste Version von `ghcr.io/soleil0815/samaudit`, sichert vorher Datenbank und Zertifikate, startet die neue Version, prüft sie und startet bei Problemen automatisch wieder die bisherige. `update.sh` selbst wird dabei mit aktualisiert. Eine bestimmte Version: `sh update.sh --pull=1.9.7` (oder ein Sicherheitsupdate davon, z. B. `1.9.7-s1`). Ist das Repository privat, auf dem Server einmalig `docker login ghcr.io` (Passwort: GitHub-Token mit `read:packages`).
 
 **Per ZIP-Datei (lokaler Build):**
 
@@ -168,7 +168,25 @@ sh update.sh samaudit-*.zip
 
 Das Skript zeigt die installierte und die neue Version und fragt nach. Dann sichert es die bisherigen Programmdateien (`backups/program-*.tgz`), spielt die neuen ein und entfernt Dateien, die es in der neuen Version nicht mehr gibt. Ihre `.env`, `data/`, `certs/` und `backups/` werden nie verändert. Zum Schluss fragt es, ob die ZIP-Datei gelöscht werden soll. Ohne ZIP (`./update.sh`) wird nur neu gebaut und gestartet, mit `--restart` nur neu gestartet.
 
-Bei jedem Lauf sichert das Skript außerdem Datenbank und Zertifikate nach `backups/` (die letzten 5 bleiben), baut neu, startet, prüft die Funktion und räumt alte Images auf. Läuft die neue Version nicht, startet automatisch wieder die bisherige. Ihre `.env`, `data/`, `certs/` und `backups/` bleiben erhalten. Optionen: `--no-backup`, `--no-cache`, `--help`. Jeder Bau holt das aktuelle Basisimage, alle Sicherheitsupdates und die neuesten Paketversionen.
+Bei jedem Lauf sichert das Skript außerdem Datenbank und Zertifikate nach `backups/` (die letzten 5 bleiben), baut neu, startet, prüft die Funktion und räumt alte Images auf. Läuft die neue Version nicht, startet automatisch wieder die bisherige. Ihre `.env`, `data/`, `certs/` und `backups/` bleiben erhalten. Optionen: `--no-backup`, `--no-cache`, `--help`. Gebaut wird aus den festen Versionen des Programmstands – dieselben wie auf GitHub.
+
+### Sicherheitsupdates und Versionen
+
+Alle Bestandteile des Images haben feste Versionen: Basisimage (Debian 13 „trixie“, Python 3.13) mit Prüfsumme, Debian-Pakete und Python-Pakete. Jeden Montag früh prüft GitHub, ob es innerhalb dieses Unterbaus neuere Pakete gibt. Wenn ja, wird ohne Cache neu gebaut, im Image getestet und mit Trivy auf Schwachstellen geprüft. Nur wenn alles bestanden ist, erscheint ein Sicherheitsupdate mit der Versionsnummer `<Version>-s<n>`, z. B. `1.9.7-s1`, und als `latest`. Die geänderten Pakete stehen in `CHANGELOG-SECURITY.md`. Gibt es nichts Neues, passiert nichts. Die laufende Version steht unten links und unter `/healthz` (Feld `image`).
+
+Wer `latest` beobachtet (z. B. Dockhand, Watchtower) oder `sh update.sh --pull` ausführt, bekommt das Update. Wer bei einer Version bleiben will, gibt sie fest an.
+
+Zusätzlich wird das veröffentlichte Image täglich gescannt, und jede Woche wird geprüft, wie lange Python 3.13 und Debian 13 noch Sicherheitsupdates bekommen: weniger als 12 Monate ergibt einen Hinweis, weniger als 6 Monate einen roten Lauf. Python und Debian werden nie automatisch auf eine neue Hauptversion gehoben.
+
+**Wenn ein Lauf rot ist:** GitHub schickt eine E-Mail. Es wurde nichts veröffentlicht; die laufenden Installationen bleiben auf dem letzten geprüften Stand. Oben am Lauf steht kurz der Grund:
+
+| Grund | Was tun |
+|---|---|
+| Trivy meldet CRITICAL/HIGH | Meist kommt die Korrektur in den nächsten Tagen – nächsten Montag abwarten oder den Lauf später unter *Actions → Security update → Run workflow* neu starten. Bleibt er rot: Paket gezielt anheben lassen oder den Fund bewerten und mit Begründung und Ablaufdatum in `.trivyignore` eintragen. |
+| Versionen nicht ermittelbar / Bau fehlgeschlagen | Meist kurzzeitig eine Quelle nicht erreichbar – Lauf neu starten. Bleibt er rot, prüfen lassen. |
+| Tests im Image fehlgeschlagen | Eine neue Paketversion passt nicht – prüfen lassen. |
+| Unterbau bald / jetzt anheben | Wechsel auf die nächste Python- bzw. Debian-Version planen und bewusst durchführen (`tools/lock-policy.env`, `tools/update-locks.sh --major`, neue Programmversion). |
+| Täglicher Scan rot | Neue Schwachstelle im veröffentlichten Image – Sicherheitsupdate von Hand starten, sonst wie bei Trivy. |
 
 ### Ausgehende Verbindungen
 

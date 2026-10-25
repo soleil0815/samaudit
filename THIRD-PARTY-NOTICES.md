@@ -3,7 +3,7 @@
 SAMAUDIT selbst steht unter AGPL-3.0-or-later. Es nutzt folgende Komponenten mit eigenen Lizenzen:
 SAMAUDIT itself is licensed under AGPL-3.0-or-later. It uses the following components under their own licences:
 
-## Python-Bibliotheken (werden beim Docker-Build aus PyPI installiert / installed from PyPI at build time)
+## Python-Bibliotheken (feste Versionen aus `requirements.txt`, beim Docker-Build aus PyPI installiert / pinned in `requirements.txt`, installed from PyPI at build time)
 
 | Komponente | Lizenz | Zweck |
 |---|---|---|
@@ -30,7 +30,7 @@ Die jeweiligen Lizenztexte liegen den installierten Paketen bei. / Licence texts
 
 ## Docker-Basisimage
 
-`python:3.13-slim` (Debian; jeweils neueste Python-3.13-Version; genaue Paketversionen im Image unter `/app/package-versions.txt`) – enthält Software unter verschiedenen freien Lizenzen; Details im Image unter `/usr/share/doc/*/copyright`.
+`python:3.13-slim-trixie` (Debian 13; genaue Version und Digest im `Dockerfile`, Debian-Pakete in `locks/os-packages.txt`, Python-Pakete in `requirements.txt`) – enthält Software unter verschiedenen freien Lizenzen; Details im Image unter `/usr/share/doc/*/copyright`.
 
 ## Marken / Trademarks
 

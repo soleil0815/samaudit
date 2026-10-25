@@ -1,5 +1,26 @@
 [
   {
+    "version": "1.9.7",
+    "date": "2026-10-25",
+    "items": [
+      {
+        "type": "security",
+        "de": "Feste Versionen und wöchentliche Sicherheitsupdates: Alle Pakete im Image haben jetzt feste, geprüfte Versionen. Jeden Montag werden sie innerhalb von Debian 13 und Python 3.13 aktualisiert, getestet und auf Schwachstellen geprüft – bei Erfolg erscheint ein Sicherheitsupdate wie 1.9.7-s1.",
+        "en": "Pinned versions and weekly security updates: every package in the image now has a fixed, verified version. Every Monday they are updated within Debian 13 and Python 3.13, tested and scanned for vulnerabilities – on success a security update such as 1.9.7-s1 is published."
+      },
+      {
+        "type": "security",
+        "de": "Weniger Angriffsfläche: Paketverwaltungen (pip, apt) sind im fertigen Image nicht mehr enthalten. Das veröffentlichte Image wird täglich auf neue Schwachstellen geprüft.",
+        "en": "Smaller attack surface: package managers (pip, apt) are no longer included in the finished image. The published image is scanned for new vulnerabilities daily."
+      },
+      {
+        "type": "feature",
+        "de": "Die Versionsanzeige nennt jetzt auch das Sicherheitsupdate (z. B. 1.9.7-s2).",
+        "en": "The version display now also shows the security update (e.g. 1.9.7-s2)."
+      }
+    ]
+  },
+  {
     "version": "1.9.6",
     "date": "2026-10-24",
     "items": [
