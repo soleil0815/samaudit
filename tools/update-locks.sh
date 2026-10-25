@@ -27,7 +27,7 @@ for a in "$@"; do
   esac
 done
 # shellcheck disable=SC1091
-. tools/lock-policy.env
+set -a; . tools/lock-policy.env; set +a
 
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 
