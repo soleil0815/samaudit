@@ -20,20 +20,83 @@ jobs:
             python3 -c "import sys; t=open(sys.argv[1]).read()[-12000:]; print('::error title=LOG::' + t.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))" "$RUNNER_TEMP/log"
             exit 1
           fi
-      - name: Emit
+      - name: Emit 0
         shell: bash
         run: |
-          python3 - <<'PY'
-          import pathlib
-          files = ["requirements.txt", "requirements-dev.txt", "locks/os-packages.txt"]
-          df = pathlib.Path("Dockerfile").read_text()
-          head = "\n".join(l for l in df.splitlines() if l.startswith(("ARG PYTHON_IMAGE=", "ARG DEBIAN_SNAPSHOT=")))
-          parts = [("Dockerfile", head)]
-          for f in files:
-              t = pathlib.Path(f).read_text()
-              for i in range(0, len(t), 30000):
-                  parts.append((f"{f}#{i // 30000}", t[i:i + 30000]))
-          for name, body in parts:
-              enc = body.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-              print(f"::notice title=LOCK {name}::{enc}")
-          PY
+          python3 - <<'PY2'
+          import base64, gzip, io, pathlib, tarfile
+          buf = io.BytesIO()
+          with tarfile.open(fileobj=buf, mode="w") as tf:
+              for f in ["Dockerfile", "requirements.txt", "requirements-dev.txt", "locks/os-packages.txt"]:
+                  tf.add(f)
+          data = base64.b64encode(gzip.compress(buf.getvalue(), 9, mtime=0)).decode()
+          chunks = [data[i:i + 3800] for i in range(0, len(data), 3800)]
+          if 0 == 0:
+              print(f"::notice title=COUNT::{len(chunks)}")
+          for i in range(0 * 9, min(len(chunks), (0 + 1) * 9)):
+              print(f"::notice title=B64 {i}::{chunks[i]}")
+          PY2
+      - name: Emit 1
+        shell: bash
+        run: |
+          python3 - <<'PY2'
+          import base64, gzip, io, pathlib, tarfile
+          buf = io.BytesIO()
+          with tarfile.open(fileobj=buf, mode="w") as tf:
+              for f in ["Dockerfile", "requirements.txt", "requirements-dev.txt", "locks/os-packages.txt"]:
+                  tf.add(f)
+          data = base64.b64encode(gzip.compress(buf.getvalue(), 9, mtime=0)).decode()
+          chunks = [data[i:i + 3800] for i in range(0, len(data), 3800)]
+          if 1 == 0:
+              print(f"::notice title=COUNT::{len(chunks)}")
+          for i in range(1 * 9, min(len(chunks), (1 + 1) * 9)):
+              print(f"::notice title=B64 {i}::{chunks[i]}")
+          PY2
+      - name: Emit 2
+        shell: bash
+        run: |
+          python3 - <<'PY2'
+          import base64, gzip, io, pathlib, tarfile
+          buf = io.BytesIO()
+          with tarfile.open(fileobj=buf, mode="w") as tf:
+              for f in ["Dockerfile", "requirements.txt", "requirements-dev.txt", "locks/os-packages.txt"]:
+                  tf.add(f)
+          data = base64.b64encode(gzip.compress(buf.getvalue(), 9, mtime=0)).decode()
+          chunks = [data[i:i + 3800] for i in range(0, len(data), 3800)]
+          if 2 == 0:
+              print(f"::notice title=COUNT::{len(chunks)}")
+          for i in range(2 * 9, min(len(chunks), (2 + 1) * 9)):
+              print(f"::notice title=B64 {i}::{chunks[i]}")
+          PY2
+      - name: Emit 3
+        shell: bash
+        run: |
+          python3 - <<'PY2'
+          import base64, gzip, io, pathlib, tarfile
+          buf = io.BytesIO()
+          with tarfile.open(fileobj=buf, mode="w") as tf:
+              for f in ["Dockerfile", "requirements.txt", "requirements-dev.txt", "locks/os-packages.txt"]:
+                  tf.add(f)
+          data = base64.b64encode(gzip.compress(buf.getvalue(), 9, mtime=0)).decode()
+          chunks = [data[i:i + 3800] for i in range(0, len(data), 3800)]
+          if 3 == 0:
+              print(f"::notice title=COUNT::{len(chunks)}")
+          for i in range(3 * 9, min(len(chunks), (3 + 1) * 9)):
+              print(f"::notice title=B64 {i}::{chunks[i]}")
+          PY2
+      - name: Emit 4
+        shell: bash
+        run: |
+          python3 - <<'PY2'
+          import base64, gzip, io, pathlib, tarfile
+          buf = io.BytesIO()
+          with tarfile.open(fileobj=buf, mode="w") as tf:
+              for f in ["Dockerfile", "requirements.txt", "requirements-dev.txt", "locks/os-packages.txt"]:
+                  tf.add(f)
+          data = base64.b64encode(gzip.compress(buf.getvalue(), 9, mtime=0)).decode()
+          chunks = [data[i:i + 3800] for i in range(0, len(data), 3800)]
+          if 4 == 0:
+              print(f"::notice title=COUNT::{len(chunks)}")
+          for i in range(4 * 9, min(len(chunks), (4 + 1) * 9)):
+              print(f"::notice title=B64 {i}::{chunks[i]}")
+          PY2
