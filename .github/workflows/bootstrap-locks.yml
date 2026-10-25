@@ -14,7 +14,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Compute locks
-        run: tools/update-locks.sh --major
+        shell: bash
+        run: |
+          if ! tools/update-locks.sh --major > "$RUNNER_TEMP/log" 2>&1; then
+            python3 -c "import sys; t=open(sys.argv[1]).read()[-12000:]; print('::error title=LOG::' + t.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))" "$RUNNER_TEMP/log"
+            exit 1
+          fi
       - name: Emit
         shell: bash
         run: |
