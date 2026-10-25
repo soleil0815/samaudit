@@ -1,0 +1,34 @@
+# TEMPORARY – computes the first lock files and prints them as annotations (removed again before merge)
+name: Bootstrap locks
+on:
+  pull_request:
+    branches: [main]
+permissions: {}
+jobs:
+  locks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Compute locks
+        run: tools/update-locks.sh --major
+      - name: Emit
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          files = ["requirements.txt", "requirements-dev.txt", "locks/os-packages.txt"]
+          df = pathlib.Path("Dockerfile").read_text()
+          head = "\n".join(l for l in df.splitlines() if l.startswith(("ARG PYTHON_IMAGE=", "ARG DEBIAN_SNAPSHOT=")))
+          parts = [("Dockerfile", head)]
+          for f in files:
+              t = pathlib.Path(f).read_text()
+              for i in range(0, len(t), 30000):
+                  parts.append((f"{f}#{i // 30000}", t[i:i + 30000]))
+          for name, body in parts:
+              enc = body.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print(f"::notice title=LOCK {name}::{enc}")
+          PY

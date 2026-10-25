@@ -1,0 +1,47 @@
+# Daily vulnerability scan of the published image ghcr.io/<owner>/<repo>:latest.
+# Reports vulnerabilities that became known only after the release (fixable HIGH/CRITICAL ->
+# red run with the list at the run). Nothing is built or published here – the next weekly
+# security update (or a manual start of "Security update") brings the fix if one is available.
+name: Daily scan
+
+on:
+  schedule:
+    - cron: "43 5 * * *"     # every day 05:43 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  scan-latest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: pull
+        name: Pull the published image
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:latest"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker pull --platform linux/amd64 "$image"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "Geprüft: $image ($(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$image"))" >> "$GITHUB_STEP_SUMMARY"
+      - id: trivy
+        name: Vulnerability scan (Trivy)
+        run: .github/scripts/trivy.sh "${{ steps.pull.outputs.image }}"
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-report-latest
+          path: ${{ runner.temp }}/trivy-report/
+          retention-days: 30
+          if-no-files-found: ignore

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}{{ t('login_title', lang) }} – {{ APP_NAME }} v{{ VERSION }}{% endblock %}
+{% block title %}{{ t('login_title', lang) }} – {{ APP_NAME }} v{{ IMAGE_VERSION }}{% endblock %}
 {% block body %}
 {% set fqdn_ = settings.domain_fqdn or ('firma.local' if settings.demo_mode else '') %}
 <div class="login-page">
   <section class="login-intro">
-    <div class="brandline">{{ logo('lg') }}<span class="wordmark">{{ APP_NAME }}</span><span class="ver">v{{ VERSION }}</span></div>
+    <div class="brandline">{{ logo('lg') }}<span class="wordmark">{{ APP_NAME }}</span><span class="ver">v{{ IMAGE_VERSION }}</span></div>
     <div class="label">{{ t('domain', lang) }}</div>
     <h1 class="domain">{{ fqdn_ or '–' }}</h1>
     <p class="lead">{{ 'Sicherheit der Domäne prüfen, bewerten und gezielt verbessern – mit normalen Benutzerrechten, ganz ohne Admin-Konto.' if lang == 'de' else 'Check, score and improve the security of your domain – with normal user rights, no admin account needed.' }}</p>

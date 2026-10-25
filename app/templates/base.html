@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <title>{% block title %}{{ APP_NAME }} v{{ VERSION }}{% endblock %}</title>
+  <title>{% block title %}{{ APP_NAME }} v{{ IMAGE_VERSION }}{% endblock %}</title>
   <link rel="icon" href="/static/img/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/app.css?v={{ VERSION }}">
   <script src="/static/theme-init.js?v={{ VERSION }}"></script>
@@ -32,7 +32,7 @@
 {% block body %}
 <div class="shell">
   <aside class="rail">
-    <a class="brand" href="/">{{ logo() }}<span class="brand-text"><span><span class="wordmark">{{ APP_NAME }}</span><span class="ver">v{{ VERSION }}</span></span><small>{{ settings.domain_fqdn or 'firma.local' }}</small></span></a>
+    <a class="brand" href="/">{{ logo() }}<span class="brand-text"><span><span class="wordmark">{{ APP_NAME }}</span><span class="ver">v{{ IMAGE_VERSION }}</span></span><small>{{ settings.domain_fqdn or 'firma.local' }}</small></span></a>
     <nav class="nav" aria-label="Navigation">
       <a href="/" {% if path == '/' %}aria-current="page"{% endif %}>{{ icon('home') }}{{ t('nav_dashboard', lang) }}</a>
       <a href="/scans" {% if path.startswith('/scans') or path.startswith('/report') %}aria-current="page"{% endif %}>{{ icon('reports') }}{{ t('nav_scans', lang) }}</a>

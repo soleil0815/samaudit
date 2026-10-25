@@ -10,8 +10,10 @@
 # To update: new version + checksum from trivy_<version>_checksums.txt of that release
 # (use a release that is at least two weeks old).
 #
-# Blocking (exit code 1): CRITICAL/HIGH vulnerabilities for which a fixed version exists.
-# Everything else is only reported (job summary + artifact). Accepted exceptions: .trivyignore
+# Blocking (exit code 1): CRITICAL/HIGH vulnerabilities for which a fixed version exists, and any
+# failure of the scan itself. Everything else is only reported (job summary + artifact).
+# Accepted exceptions: .trivyignore – one ID per line with a reason and an expiry date
+# ("CVE-2026-1234 exp:2027-01-31  # reason"); expired entries no longer apply.
 set -euo pipefail
 
 TRIVY_VERSION=0.75.0
@@ -22,14 +24,16 @@ bin="${RUNNER_TEMP:-/tmp}/trivy-$TRIVY_VERSION"
 out="${RUNNER_TEMP:-/tmp}/trivy-report"
 mkdir -p "$bin" "$out"
 
-if [ ! -x "$bin/trivy" ]; then
+if [ -n "${TRIVY_BIN:-}" ]; then
+  trivy="$TRIVY_BIN"                      # self-tests: a stand-in for trivy
+elif [ ! -x "$bin/trivy" ]; then
   tgz="$bin/trivy.tgz"
   curl -sSfL --retry 3 -o "$tgz" \
     "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
   echo "${TRIVY_SHA256}  $tgz" | sha256sum -c - || { echo "::error::Trivy download does not match the pinned checksum"; exit 1; }
   tar xzf "$tgz" -C "$bin" trivy
 fi
-trivy="$bin/trivy"
+trivy="${trivy:-$bin/trivy}"
 "$trivy" --version
 
 ignore=()

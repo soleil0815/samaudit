@@ -22,7 +22,7 @@ from reportlab.platypus import (
 )
 
 from .adutil import LOCAL_TZ
-from .version import APP_NAME, VERSION
+from .version import APP_NAME, IMAGE_VERSION as VERSION
 from .i18n import level_key, t, tv
 from .rules import CATEGORIES, SEVERITIES
 

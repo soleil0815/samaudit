@@ -1,224 +1,155 @@
-# Builds the SAMAUDIT container image on GitHub and publishes it to the
-# GitHub Container Registry: ghcr.io/<owner>/<repo>  (here: ghcr.io/soleil0815/samaudit)
+# Program releases: builds, checks and publishes the container image ghcr.io/<owner>/<repo>.
 #
-#   push to main      -> tags: latest, <version from app/version.py>, sha-<commit>
-#                        then the git tag v<version> and a GitHub release are created
-#                        automatically (notes from app/docs/news.json), if not there yet
-#   push tag v1.2.3   -> tag:  1.2.3   (the tag must match app/version.py)
-#   every run         -> Trivy vulnerability scan of the image; fixable CRITICAL/HIGH findings
-#                        stop the run before anything is published (.github/scripts/trivy.sh)
-#   weekly (Mon)      -> rebuild of main with the current base image and all Debian security updates,
-#                        smoke test + Trivy scan; on success published as latest (+ sha-…).
-#                        The version tag is not overwritten. Failure: latest stays as it is and
-#                        a GitHub issue "Wöchentlicher Neubau …" is opened (job "weekly-report").
-#   pull request      -> build only (test), nothing is published
-#   pull request from a branch claude/... of this repository (changes prepared by Claude):
-#                        if the test build succeeds, it is merged automatically and the
-#                        publish run above is started for main (latest, version, tag, release)
+#   pull request      -> self-tests, reproducible build, tests inside the image, Trivy – nothing published
+#   pull request from a branch claude/... of this repository: after all checks pass it is merged
+#                        automatically and this workflow is started for main
+#   main (push / manual start) -> if app/version.py contains a NEW version: publish <version>
+#                        (and latest if it is the highest version), then git tag + GitHub release.
+#                        An existing version is never published again.
 #
-# Servers update with:  sh update.sh --pull
+# Weekly security updates ("<version>-s<n>"): security-update.yml. Daily scan: scan-published.yml.
+# All actions are pinned to commit hashes; every job has only the permissions it needs.
 name: Container image
 
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
     branches: [main]
-  schedule:
-    - cron: "17 4 * * 1"     # Mondays 04:17 UTC: weekly rebuild (see above)
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: image-${{ github.ref }}
-  # only test builds of pull requests may be cancelled – a publish run must never stop half-way
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
-    # smoke test without Docker and without a domain: rules on demo data, PDF, pages, parsers, pinning
+    # self-tests of the build/release machinery + smoke test of the program (no Docker, no domain)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Check out
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
-      - name: Install newest packages
+      - name: Install locked packages
         run: |
-          python -m pip install --upgrade --upgrade-strategy eager --only-binary=:all: -r requirements.txt
+          python -m pip install --no-deps --require-hashes --only-binary=:all: -r requirements.txt -r requirements-dev.txt
           python -m pip check
+      - name: Self-tests (schedule, step order, version bounds, Trivy flow)
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Smoke test
         run: python tests/smoke.py
 
   build:
+    # reproducible build from the lock files, checks inside the image, Trivy – nothing is published
     needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
     steps:
       - name: Check out
-        uses: actions/checkout@v7
-
-      - name: Read version and base image
-        id: info
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          version="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' app/version.py)"
-          base="$(sed -n 's/^ARG PYTHON_IMAGE=//p' Dockerfile | head -1)"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]] && [ "${GITHUB_REF#refs/tags/v}" != "$version" ]; then
-            echo "::error::Git tag ${GITHUB_REF#refs/tags/} does not match app/version.py ($version)"
-            exit 1
-          fi
-          image="ghcr.io/${GITHUB_REPOSITORY,,}"
-          # never overwrite a published version: if release v<version> exists, only latest/sha are pushed
-          fresh=true
-          if [[ "$GITHUB_REF" != refs/tags/v* ]] && gh release view "v$version" >/dev/null 2>&1; then
-            fresh=false
-            echo "::warning::v$version is already released – the image tag $version is not overwritten (raise app/version.py)"
-          fi
-          echo "fresh=$fresh" >> "$GITHUB_OUTPUT"
-          # What's new in the app: every release should have an entry in app/docs/news.json
-          if ! grep -q "\"version\": \"$version\"" app/docs/news.json; then
-            echo "::warning::app/docs/news.json has no entry for $version (shown in the app under \"What's new\")"
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"   # forces a fresh "apt-get upgrade" every week
-          echo "base=$base"       >> "$GITHUB_OUTPUT"
-          echo "image=$image"     >> "$GITHUB_OUTPUT"
-          echo "SAMAUDIT $version, base image $base -> $image"
-
-      - name: Set up QEMU (for arm64)
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Image tags
-        id: tags
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ steps.info.outputs.image }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ steps.info.outputs.version }},enable=${{ steps.info.outputs.fresh == 'true' && github.ref == 'refs/heads/main' }}
-            type=semver,pattern={{version}}
-            type=sha,prefix=sha-,format=short
-
-      - name: Build image for the vulnerability scan (amd64, local only)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64
-          load: true
-          pull: true
-          push: false
-          provenance: false
-          tags: samaudit-scan:ci
-          build-args: |
-            PYTHON_IMAGE=${{ steps.info.outputs.base }}
-            APP_VERSION=${{ steps.info.outputs.version }}
-            SECURITY_UPDATES=${{ steps.info.outputs.week }}
-          cache-from: type=gha
-
-      - name: Smoke test inside the built image (exact package versions of this build)
-        shell: bash
-        run: |
-          docker run --rm --entrypoint python -v "$PWD/tests:/app/tests:ro" samaudit-scan:ci tests/smoke.py
-          {
-            echo "## Package versions in this image"
-            echo '```'
-            docker run --rm --entrypoint python samaudit-scan:ci -c "import platform; print('Python', platform.python_version())"
-            docker run --rm --entrypoint sh samaudit-scan:ci -c '. /etc/os-release; echo "$PRETTY_NAME"; cat /app/package-versions.txt'
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Vulnerability scan (Trivy) – blocks publishing on fixable CRITICAL/HIGH findings
-        run: .github/scripts/trivy.sh samaudit-scan:ci
-
+          persist-credentials: false
+      - id: build
+        name: Build image (amd64, from the lock files)
+        run: docker build --pull -t samaudit-check:ci .
+      - id: verify
+        name: Check locks and run the tests inside the image
+        run: .github/scripts/verify-image.sh samaudit-check:ci
+      - id: trivy
+        name: Vulnerability scan (Trivy)
+        run: .github/scripts/trivy.sh samaudit-check:ci
       - name: Upload scan report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: trivy-report
           path: ${{ runner.temp }}/trivy-report/
           retention-days: 30
           if-no-files-found: ignore
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          pull: true
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.tags.outputs.tags }}
-          # only these labels – the image's own OCI labels (title, version) stay as set in the Dockerfile
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-          build-args: |
-            PYTHON_IMAGE=${{ steps.info.outputs.base }}
-            APP_VERSION=${{ steps.info.outputs.version }}
-            SECURITY_UPDATES=${{ steps.info.outputs.week }}
-          provenance: true
-          sbom: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  release:
-    # after a successful publish from main: tag v<version> + GitHub release (once per version)
+  publish:
+    # new program version on main: publish exactly once
     needs: [test, build]
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write      # git tag + GitHub release
+      packages: write      # ghcr.io
+    concurrency:
+      group: release       # shared with security-update.yml: never two publications at once
+      cancel-in-progress: false
     steps:
       - name: Check out
-        uses: actions/checkout@v7
-
-      - name: Create tag and release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+      - id: version
+        name: Version to publish
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           version="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' app/version.py)"
-          if gh release view "v$version" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
-            echo "v$version already exists - nothing to do"
-            exit 0
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Nichts veröffentlicht::Version $version ist bereits veröffentlicht. Für ein neues Release app/version.py anheben."
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
           fi
-          python3 - "$version" "${GITHUB_REPOSITORY,,}" > notes.md <<'PY'
+      - name: Set up QEMU (arm64)
+        if: steps.version.outputs.new == 'true'
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - name: Set up Docker Buildx
+        if: steps.version.outputs.new == 'true'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - id: publish
+        name: Build without cache, check, publish
+        if: steps.version.outputs.new == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          export IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          .github/scripts/publish-image.sh "$VERSION"
+      - id: release
+        name: Git tag and GitHub release
+        if: steps.version.outputs.new == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 - "$VERSION" "${GITHUB_REPOSITORY,,}" > notes.md <<'PY'
           import json, sys
           v, repo = sys.argv[1], sys.argv[2]
           label = {"feature": "Funktion", "security": "Sicherheit", "fix": "Fehlerbehebung", "notice": "Hinweis"}
           entry = next((e for e in json.load(open("app/docs/news.json", encoding="utf-8")) if e.get("version") == v), None)
           for i in (entry or {}).get("items", []):
               print(f"- **{label.get(i.get('type'), 'Info')}:** {i.get('de') or i.get('en')}")
-          print(f"\nImage: `ghcr.io/{repo}:{v}` (auch `latest`) – Update: `sh update.sh --pull`")
+          print(f"\nImage: `ghcr.io/{repo}:{v}` – Update: `sh update.sh --pull`")
           PY
-          gh release create "v$version" --target "$GITHUB_SHA" --title "SAMAUDIT $version" --notes-file notes.md
+          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "SAMAUDIT $VERSION" --notes-file notes.md
 
   automerge:
-    # PRs from claude/... branches of this repository: merge after a green test build and publish.
-    # A merge made with GITHUB_TOKEN does not trigger "push" workflows, so the publish run is
-    # started explicitly via workflow_dispatch (which GITHUB_TOKEN is allowed to trigger).
+    # PRs from claude/... branches of this repository: merge exactly the tested commit, then start
+    # this workflow for main (a merge made with GITHUB_TOKEN does not trigger "push" workflows)
     needs: [test, build]
     if: >-
       github.event_name == 'pull_request' &&
@@ -230,7 +161,7 @@ jobs:
       pull-requests: write
       actions: write
     steps:
-      - name: Merge and publish
+      - name: Merge and start the release run
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -238,78 +169,6 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          # merge exactly the commit that was tested and built – a later push is not merged blindly
           gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --merge --delete-branch --match-head-commit "$HEAD_SHA"
           gh workflow run docker-image.yml --repo "$GITHUB_REPOSITORY" --ref main
-          echo "PR #$PR merged - publish run for main started"
-
-  weekly-report:
-    # weekly rebuild: success closes an open report issue, failure opens one (owner is mentioned)
-    needs: [test, build]
-    if: always() && github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-    steps:
-      - name: Download scan report
-        uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: trivy-report
-          path: trivy-report
-      - name: Open or close the report issue
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OWNER: ${{ github.repository_owner }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          TEST: ${{ needs.test.result }}
-          BUILD: ${{ needs.build.result }}
-        run: |
-          set -euo pipefail
-          label="security-scan"
-          gh label create "$label" --repo "$GITHUB_REPOSITORY" --color B60205 \
-            --description "Weekly rebuild / vulnerability scan" >/dev/null 2>&1 || true
-          # Python 3.13 reaches end of life on 2029-10-31 – from six months before, remind to lift the base
-          if [ "$(date -u +%Y%m%d)" -ge 20290430 ]; then
-            gh label create base-upgrade --repo "$GITHUB_REPOSITORY" --color FBCA04 >/dev/null 2>&1 || true
-            if [ -z "$(gh issue list --repo "$GITHUB_REPOSITORY" --label base-upgrade --state open --json number --jq '.[0].number // empty')" ]; then
-              gh issue create --repo "$GITHUB_REPOSITORY" --label base-upgrade \
-                --title "Unterbau anheben: Python 3.13 erhält ab 31.10.2029 keine Updates mehr" \
-                --body "Das Image baut auf Python 3.13. Dessen Unterstützung endet am 31.10.2029 – danach gibt es keine Sicherheitskorrekturen mehr. Bitte rechtzeitig auf die nächste Python-Version umstellen (Basisimage im Dockerfile, Tests). @$OWNER"
-            fi
-          fi
-          open="$(gh issue list --repo "$GITHUB_REPOSITORY" --label "$label" --state open --json number --jq '.[0].number // empty')"
-          if [ "$TEST" = success ] && [ "$BUILD" = success ]; then
-            if [ -n "$open" ]; then
-              gh issue comment "$open" --repo "$GITHUB_REPOSITORY" \
-                --body "Wöchentlicher Neubau erfolgreich: getestet, ohne behebbare kritische/hohe Schwachstellen und als \`latest\` veröffentlicht. ([Lauf]($RUN_URL))"
-              gh issue close "$open" --repo "$GITHUB_REPOSITORY"
-            fi
-            exit 0
-          fi
-          {
-            echo "Der **wöchentliche Neubau** wurde **nicht veröffentlicht** – \`latest\` bleibt auf dem bisherigen Stand."
-            echo
-            echo "- Rauchtest: **$TEST**"
-            echo "- Bau und Trivy-Scan: **$BUILD**"
-            if [ -s trivy-report/blocking-list.txt ]; then
-              echo
-              echo "Behebbare kritische/hohe Schwachstellen (meist Python-Pakete, die eine neue Version brauchen):"
-              echo
-              echo '```'
-              head -c 50000 trivy-report/blocking-list.txt
-              echo '```'
-            fi
-            echo
-            echo "Details: [Lauf]($RUN_URL)"
-            echo
-            echo "@$OWNER"
-          } > body.md
-          if [ -n "$open" ]; then
-            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body-file body.md
-          else
-            gh issue create --repo "$GITHUB_REPOSITORY" --label "$label" \
-              --title "Wöchentlicher Neubau nicht veröffentlicht (Test oder Sicherheitsscan)" --body-file body.md
-          fi
+          echo "PR #$PR merged - release run for main started"

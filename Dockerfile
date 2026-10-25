@@ -1,13 +1,22 @@
-# SAMAUDIT – container image
-# Base image: newest Python 3.13 patch release on the current Debian (slim). Every build pulls the
-# current 3.13.x (weekly rebuild on GitHub) – bug and security fixes of Python itself. Moving to the
-# next Python minor version ("lifting the base") is a deliberate step before 3.13 reaches end of life.
-ARG PYTHON_IMAGE=python:3.13-slim
+# SAMAUDIT – container image, reproducible build
+#
+# Everything that ends up in the image is pinned (computed by tools/update-locks.sh):
+#   PYTHON_IMAGE     base image: Python series 3.13 on Debian 13 "trixie" – tag AND digest
+#   DEBIAN_SNAPSHOT  point in time on snapshot.debian.org: every Debian package of the image
+#                    (including those of the base image) is upgraded to exactly this state
+#   requirements.txt every Python package incl. sub-dependencies, exact version + SHA-256 hashes
+# The resulting package lists are written to /app/os-packages.txt and /app/package-versions.txt
+# and checked against locks/os-packages.txt in CI. Package managers (pip, apt) are removed.
+ARG PYTHON_IMAGE=python:3.13.17-slim-trixie@sha256:0000000000000000000000000000000000000000000000000000000000000000
 FROM ${PYTHON_IMAGE}
 
-ARG APP_VERSION=1.9.6
+ARG DEBIAN_SNAPSHOT=20261025T000000Z
+ARG DEBIAN_CODENAME=trixie
+ARG APP_VERSION=1.9.7
+# version of this image: program version, or "<program version>-s<n>" for a security update
+ARG IMAGE_VERSION=
 LABEL org.opencontainers.image.title="SAMAUDIT" \
-      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.version="${IMAGE_VERSION:-$APP_VERSION}" \
       org.opencontainers.image.description="Security assessment for Active Directory (Windows AD / Samba AD)" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
       org.opencontainers.image.source="https://github.com/soleil0815/samaudit"
@@ -18,33 +27,42 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     DATA_DIR=/app/data \
     TZ=Europe/Berlin \
-    PORT=9400
+    PORT=9400 \
+    SAMAUDIT_IMAGE_VERSION=${IMAGE_VERSION:-$APP_VERSION}
 
 WORKDIR /app
 
-# Install all available Debian security updates of the base image. SECURITY_UPDATES changes every
-# week in the GitHub build (calendar week), so this step really runs again on the weekly rebuild
-# instead of being taken from the build cache.
-ARG SECURITY_UPDATES=local
-RUN echo "Debian updates: $SECURITY_UPDATES" \
- && apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends upgrade \
- && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
+# 1) Debian: stay on the pinned release and upgrade ALL packages to the pinned snapshot.
+RUN set -eu; \
+    . /etc/os-release; \
+    [ "$VERSION_CODENAME" = "$DEBIAN_CODENAME" ] || { echo "Base image is Debian $VERSION_CODENAME, expected $DEBIAN_CODENAME" >&2; exit 1; }; \
+    sed -i -e "s#http://deb.debian.org/debian-security#https://snapshot.debian.org/archive/debian-security/$DEBIAN_SNAPSHOT#g" \
+           -e "s#http://deb.debian.org/debian#https://snapshot.debian.org/archive/debian/$DEBIAN_SNAPSHOT#g" \
+           /etc/apt/sources.list.d/debian.sources; \
+    grep -q "snapshot.debian.org" /etc/apt/sources.list.d/debian.sources; \
+    apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Retries=5 update; \
+    DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Retries=5 \
+      -y --no-install-recommends upgrade; \
+    apt-get clean; rm -rf /var/lib/apt/lists/*
 
-# Install the NEWEST version of every Python package (policy: nothing outdated in the image) and
-# verify consistency. The resulting versions are recorded in /app/package-versions.txt.
-# Time zone data comes from the tzdata package.
-# pip itself is removed afterwards: it is not needed at runtime and carries its own bundled
-# libraries (urllib3, certifi, msgpack, pkg_resources …) that show up in vulnerability scans.
+# 2) Python packages: exactly the lock file (hashes required, nothing resolved), then consistency
+#    check and the list of installed versions. Time zone data comes from the tzdata package.
 COPY requirements.txt .
-RUN pip install --upgrade --upgrade-strategy eager --only-binary=:all: --no-cache-dir -r requirements.txt \
- && pip check \
- && pip freeze --all --exclude pip > /app/package-versions.txt \
- && python -c "import os, shutil, tzdata; shutil.copytree(os.path.join(os.path.dirname(tzdata.__file__), 'zoneinfo'), '/usr/share/zoneinfo', dirs_exist_ok=True)" \
- && ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime && echo "$TZ" > /etc/timezone \
- && python -m pip uninstall -y pip \
- && rm -rf /usr/local/lib/python3*/ensurepip /root/.cache
+RUN set -eu; \
+    pip install --no-deps --require-hashes --only-binary=:all: --no-cache-dir -r requirements.txt; \
+    pip check; \
+    pip freeze --all --exclude pip > /app/package-versions.txt; \
+    python -c "import os, shutil, tzdata; shutil.copytree(os.path.join(os.path.dirname(tzdata.__file__), 'zoneinfo'), '/usr/share/zoneinfo', dirs_exist_ok=True)"; \
+    ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime; echo "$TZ" > /etc/timezone
+
+# 3) Remove what is not needed at runtime: pip (and its bundled libraries) and apt.
+#    The dpkg database stays so that vulnerability scanners can see the installed packages.
+RUN set -eu; \
+    python -m pip uninstall -y pip; \
+    rm -rf /usr/local/lib/python3*/ensurepip /root/.cache; \
+    dpkg --purge --force-remove-essential --force-remove-protected --force-depends apt; \
+    rm -rf /etc/apt /var/lib/apt /var/cache/apt /var/log/apt; \
+    dpkg-query -W -f '${Package} ${Version}\n' | sort > /app/os-packages.txt
 
 COPY app ./app
 COPY run.py entrypoint.sh ./

@@ -1,0 +1,17 @@
+# SAMAUDIT – direct Python dependencies (input for the lock file requirements.txt).
+#
+# The image is built ONLY from requirements.txt: every package – including all sub-dependencies –
+# with an exact version and SHA-256 hashes. tools/update-locks.sh computes it from this file.
+# The weekly security update keeps every package within its major version (0.x: minor version);
+# calendar versions (tzdata) have no limit. Minimum versions below exclude known-vulnerable releases.
+starlette>=1.6.0
+uvicorn>=0.53.0
+jinja2>=3.1.6
+ldap3>=2.9.1
+reportlab>=5.0.1
+cryptography>=50.0.1
+smbprotocol>=1.14.0
+tzdata>=2025.2
+# security floors for sub-dependencies (CVE fixes, see 1.9.3)
+pillow>=13.0.0
+pyasn1>=0.6.4
