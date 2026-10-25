@@ -158,6 +158,17 @@ class Workflows(unittest.TestCase):
         self.assertEqual(order, sorted(order), "exists? -> build -> check -> trivy -> latest? -> tag")
 
 
+    def test_called_scripts_are_executable(self):
+        # workflows call these scripts directly – without the executable bit the release fails (exit 126)
+        out = subprocess.run(["git", "ls-files", "-s", ".github/scripts", "tools"], cwd=ROOT,
+                             capture_output=True, text=True, check=True).stdout
+        modes = {line.split("\t")[1]: line.split()[0] for line in out.splitlines()}
+        called = [f for f in modes if f.endswith((".sh", ".py"))]
+        self.assertIn(".github/scripts/publish-image.sh", called)
+        for f in called:
+            self.assertEqual(modes[f], "100755", f"{f} is not executable in git")
+
+
 class VersionBounds(unittest.TestCase):
     def test_upper_bounds(self):
         self.assertEqual(lockutil.upper_bound("starlette", "1.6.2"), "2")
