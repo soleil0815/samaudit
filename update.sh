@@ -12,8 +12,8 @@
 #   ./update.sh --no-cache      full rebuild (without Docker build cache)
 #   ./update.sh --help
 #
-# Up to date: every build pulls the current Python 3.13 base image, installs all Debian security
-# updates and the newest version of every Python package.
+# Reproducible: local builds use exactly the pinned versions of the source (base image with digest,
+# Debian snapshot, Python packages with hashes). Security updates come as new versions (-s<n>).
 # Requires Docker only – no Docker Compose.
 # Windows line endings (CRLF, e.g. after copying/editing on Windows) are repaired automatically.
 # The trailing "#" on the next two lines keeps them working even while the file still has CRLF.
@@ -49,7 +49,7 @@ for a in "$@"; do
     -y|--yes) YES=1; PASS+=("$a") ;;
     --no-backup) DO_BACKUP=0; PASS+=("$a") ;;
     --no-cache) NO_CACHE="--no-cache"; PASS+=("$a") ;;
-    --refresh-base) REFRESH_BASE=1; PASS+=("$a") ;;   # obsolete: the base image is always fetched fresh
+    --refresh-base) REFRESH_BASE=1; PASS+=("$a") ;;   # obsolete: versions come from the lock files
     --lock) DO_LOCK=1 ;;
     --restart) RESTART_ONLY=1; DO_BACKUP=0 ;;
     --pull) PULL=1 ;;
@@ -217,26 +217,12 @@ if [ "$PULL" = 0 ] && [ "$RESTART_ONLY" = 0 ]; then
     || die "Cannot determine version or base image (app/version.py, Dockerfile). Without the source code use: sh update.sh --pull"
 fi
 
-# ---------------------------------------------------------------------------
-# Pin the base image to its digest
-# ---------------------------------------------------------------------------
-resolve_base() {
-  # policy: always the current base image (no pinning) – base-image.lock of older versions is removed
-  rm -f base-image.lock
-  step "Fetching current base image $BASE_TAG"
-  docker pull "$BASE_TAG" >/dev/null || die "Could not pull base image $BASE_TAG (check internet access / tag)."
-  local digest
-  digest="$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$BASE_TAG" | grep -m1 '@sha256:' | sed 's/.*@//')"
-  [ -n "$digest" ] || die "Cannot determine the digest of $BASE_TAG."
-  BASE_IMAGE="$BASE_TAG@$digest"
-  echo "   using: $BASE_IMAGE"
-}
 
 # ---------------------------------------------------------------------------
 # --lock: obsolete (kept so old calls do not fail)
 # ---------------------------------------------------------------------------
 if [ "$DO_LOCK" = 1 ]; then
-  echo "--lock is no longer needed: every build installs the newest package versions."
+  echo "--lock is no longer used here: pinned versions are computed with tools/update-locks.sh (maintainers)."
   exit 0
 fi
 
@@ -452,11 +438,11 @@ if [ "$RESTART_ONLY" = 1 ] || [ "$PULL" = 1 ]; then
   docker image inspect "$IMAGE" >/dev/null 2>&1 \
     || die "Image $IMAGE is missing – run sh update.sh (or sh update.sh --pull) first."
 else
-  resolve_base
-  step "Building image samaudit:$APP_VERSION"
-  docker build $NO_CACHE --build-arg "PYTHON_IMAGE=$BASE_IMAGE" --build-arg "APP_VERSION=$APP_VERSION" \
-    --build-arg "SECURITY_UPDATES=$(date +%Y%m%d)" \
-    -t "samaudit:$APP_VERSION" . \
+  # reproducible: base image (tag + digest), Debian snapshot and Python packages come from the
+  # lock files in the source (Dockerfile, requirements.txt) – the same as the published image
+  rm -f base-image.lock      # file of older versions, no longer used
+  step "Building image samaudit:$APP_VERSION (pinned versions)"
+  docker build $NO_CACHE --build-arg "APP_VERSION=$APP_VERSION" -t "samaudit:$APP_VERSION" . \
     || die "Build failed (see above). The running container is unchanged."
 fi
 

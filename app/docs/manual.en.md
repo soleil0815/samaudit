@@ -156,7 +156,7 @@ The complete list is in the README.
 sh update.sh --pull
 ```
 
-Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.9.6`. If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
+Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.9.7` (or one of its security updates, e.g. `1.9.7-s1`). If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
 
 **Via ZIP file (local build):**
 
@@ -168,7 +168,25 @@ sh update.sh samaudit-*.zip
 
 The script shows the installed and the new version and asks for confirmation. It then backs up the current program files (`backups/program-*.tgz`), installs the new ones and removes files that no longer exist in the new version. Your `.env`, `data/`, `certs/` and `backups/` are never changed. Finally it asks whether to delete the ZIP file. Without a ZIP (`./update.sh`) it only rebuilds and restarts, with `--restart` it only restarts.
 
-On every run the script also backs up the database and certificates to `backups/` (the last 5 are kept), rebuilds, starts, checks that it works and removes old images. If the new version does not run, the previous one is started again automatically. Your `.env`, `data/`, `certs/` and `backups/` are kept. Options: `--no-backup`, `--no-cache`, `--help`. Every build fetches the current base image, all security updates and the newest package versions.
+On every run the script also backs up the database and certificates to `backups/` (the last 5 are kept), rebuilds, starts, checks that it works and removes old images. If the new version does not run, the previous one is started again automatically. Your `.env`, `data/`, `certs/` and `backups/` are kept. Options: `--no-backup`, `--no-cache`, `--help`. It builds from the pinned versions of the program source – the same as on GitHub.
+
+### Security updates and versions
+
+Every component of the image has a pinned version: the base image (Debian 13 "trixie", Python 3.13) with its checksum, the Debian packages and the Python packages. Early every Monday GitHub checks whether there are newer packages within this base. If so, it rebuilds without cache, tests inside the image and scans with Trivy. Only if everything passes is a security update published with the version `<version>-s<n>`, e.g. `1.9.7-s1`, and as `latest`. The changed packages are listed in `CHANGELOG-SECURITY.md`. If there is nothing new, nothing happens. The running version is shown bottom left and at `/healthz` (field `image`).
+
+Anyone watching `latest` (e.g. Dockhand, Watchtower) or running `sh update.sh --pull` gets the update. To stay on a version, specify it explicitly.
+
+In addition, the published image is scanned daily, and every week it is checked how long Python 3.13 and Debian 13 still receive security updates: less than 12 months gives a notice, less than 6 months a red run. Python and Debian are never moved to a new major release automatically.
+
+**When a run is red:** GitHub sends an email. Nothing was published; running installations stay on the last checked state. The reason is shown briefly at the top of the run:
+
+| Reason | What to do |
+|---|---|
+| Trivy reports CRITICAL/HIGH | The fix usually arrives within days – wait for next Monday or rerun later via *Actions → Security update → Run workflow*. If it stays red: have the package raised specifically, or assess the finding and add it to `.trivyignore` with a reason and an expiry date. |
+| Versions could not be determined / build failed | Usually a source was briefly unreachable – rerun. If it stays red, have it checked. |
+| Tests inside the image failed | A new package version does not fit – have it checked. |
+| Lift the base soon / now | Plan and deliberately carry out the move to the next Python or Debian release (`tools/lock-policy.env`, `tools/update-locks.sh --major`, new program version). |
+| Daily scan red | New vulnerability in the published image – start the security update manually, otherwise as for Trivy. |
 
 ### Outbound connections
 

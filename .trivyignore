@@ -1,3 +1,4 @@
-# Accepted vulnerabilities (Trivy). One CVE ID per line, ALWAYS with a reason and a review date, e.g.:
-#   CVE-2026-12345   # only affects feature X, which SAMAUDIT does not use – review 2027-01-31
-# Keep this list short: every entry here is a known hole that ships in the image.
+# Accepted vulnerabilities (Trivy) – only after checking that they cannot be exploited in SAMAUDIT.
+# Format, one per line:   <ID> exp:<YYYY-MM-DD>  # <reason (at least 10 characters)>
+#   e.g. CVE-2026-12345 exp:2027-01-31  # affects only the XYZ parser, which SAMAUDIT never calls
+# After the expiry date the entry no longer applies (Trivy) and the self-tests fail – check again.

@@ -28,7 +28,7 @@ from .config import settings
 from .adutil import LOCAL_TZ
 from .i18n import T, level_key, t, tv
 from .rules import CATEGORIES, RULE_ALIASES, RULES, SEVERITIES, canonical_id
-from .version import APP_NAME, VERSION
+from .version import APP_NAME, IMAGE_VERSION, VERSION
 
 log = logging.getLogger("samaudit")
 BASE = os.path.dirname(__file__)
@@ -41,7 +41,8 @@ RULE_BY_ID.update({old: RULE_BY_ID[new] for old, new in RULE_ALIASES.items()})
 templates = Jinja2Templates(directory=os.path.join(BASE, "templates"))
 templates.env.globals.update(t=t, tv=tv, settings=settings, CATEGORIES=CATEGORIES, SEVERITIES=SEVERITIES,
                              level_class=level_class, level_key=level_key, seal=seal,
-                             login_dial=login_dial, APP_NAME=APP_NAME, VERSION=VERSION)
+                             login_dial=login_dial, APP_NAME=APP_NAME, VERSION=VERSION,
+                             IMAGE_VERSION=IMAGE_VERSION)
 
 
 def effective_domain_type() -> str | None:
@@ -438,7 +439,7 @@ async def audit_page(request: Request):
 
 
 async def health(request: Request):
-    return JSONResponse({"ok": True, "version": VERSION})
+    return JSONResponse({"ok": True, "version": VERSION, "image": IMAGE_VERSION})
 
 
 async def privacy_page(request: Request):
