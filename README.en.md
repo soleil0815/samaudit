@@ -1,10 +1,14 @@
-# SAMAUDIT v1.9.7 – Active Directory security assessment
+# SAMAUDIT v1.9.8 – Active Directory security assessment
 
 *Deutsche Version: [README.md](README.md)* · **Manual:** [app/docs/manual.en.md](app/docs/manual.en.md) (also in the web interface under **Help**)
 
 Self-hosted web application that reads a Windows or Samba AD domain, runs **110 security checks** and presents the result as a risk score (0–100), a detailed report with remediation advice, and a PDF export – in German or English.
 
 > **Status: beta – hobby project, no warranty.** SAMAUDIT was built for the author's own use and has mainly been tested with test data; results may be incomplete or wrong and do not replace expert review. Feedback is welcome, but no support or response times are promised. Please report security vulnerabilities privately (see [SECURITY.md](SECURITY.md)).
+
+## New in 1.9.8
+
+- **Docker Compose template:** `docker-compose.example.yml` starts SAMAUDIT with the same security settings as `update.sh` – e.g. as a stack in Dockhand or Portainer or with `docker compose up -d`. See [With Docker Compose or Dockhand](#with-docker-compose-or-dockhand). The template also ships inside the image (`/app/dist/`) and is kept current by `update.sh --pull`.
 
 ## New in 1.9.7 – pinned versions and weekly security updates
 
@@ -257,9 +261,29 @@ nano .env
 https://<docker-host>:9400
 ```
 
+**Option C – with Docker Compose or Dockhand:** see [With Docker Compose or Dockhand](#with-docker-compose-or-dockhand).
+
 On first start a self-signed HTTPS certificate is generated for the web interface (one-time browser warning). Your own certificate: see [Your own HTTPS certificate](#your-own-https-certificate).
 
 **Try it without a domain:** set `DEMO_MODE=true` in `.env` and sign in with `demo` / `demo` (sign-in with `administrator` / `demo` shows how admin accounts are rejected). Set it back to `false` for production.
+
+### With Docker Compose or Dockhand
+
+`docker-compose.example.yml` contains the same settings `update.sh` uses to start the container (read-only file system, no extra privileges, own network `samaudit-net`, log limits).
+
+```bash
+cd /opt/samaudit                      # folder with .env, data/ and certs/
+docker run --rm --entrypoint cat ghcr.io/soleil0815/samaudit:latest /app/dist/docker-compose.example.yml > docker-compose.yml
+docker compose up -d                  # update: docker compose pull && docker compose up -d
+```
+
+**Dockhand/Portainer:** paste the file's content as a new stack and replace the paths `./data`, `./certs` and `.env` with the SAMAUDIT folder (e.g. `/opt/samaudit/data`). With `latest`, new versions and the weekly security updates arrive automatically whenever the tool pulls the image again.
+
+Notes:
+- **One way per container:** either `update.sh` or Compose. When switching from `update.sh`, run `docker rm -f samaudit && docker network rm samaudit-net` once. The data in `data/` is kept.
+- `DOCKER_DNS` and `DOCKER_EXTRA_HOSTS` from `.env` only apply with `update.sh`. With Compose use the `dns:` / `extra_hosts:` entries in the file (an example is included).
+- If you change `PORT` in `.env`, Compose also uses it for the port mapping as long as `.env` sits next to the compose file; otherwise adjust the `ports:` line.
+- `update.sh` creates backups; with Compose back up the `data/` folder yourself (see [Data folder and backup](#operations)).
 
 **What lives where?**
 
@@ -403,7 +427,7 @@ curl -k https://localhost:9400/healthz               # version and status
 
 ### Update
 
-**With the image from GitHub:** `sh update.sh --pull` – pulls `ghcr.io/soleil0815/samaudit:latest`, backs up first, starts the new version, verifies it and falls back to the previous one on problems. A specific version: `sh update.sh --pull=1.9.7` or one of its security updates, e.g. `--pull=1.9.7-s1`. If the image is already current, nothing happens. Other image (e.g. a fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in `.env`.
+**With the image from GitHub:** `sh update.sh --pull` – pulls `ghcr.io/soleil0815/samaudit:latest`, backs up first, starts the new version, verifies it and falls back to the previous one on problems. A specific version: `sh update.sh --pull=1.9.8` or one of its security updates, e.g. `--pull=1.9.8-s1`. If the image is already current, nothing happens. Other image (e.g. a fork): `SAMAUDIT_IMAGE=ghcr.io/<name>/<repo>` in `.env`.
 
 **With a ZIP or the source code (local build):**
 
