@@ -1,0 +1,85 @@
+# SAMAUDIT – Docker Compose (z. B. als Stack in Dockhand, Portainer oder mit "docker compose up -d")
+# SAMAUDIT – Docker Compose (e.g. as a stack in Dockhand, Portainer or with "docker compose up -d")
+#
+# Optional: update.sh startet den Container auch ohne Compose. Bitte nur EINEN Weg verwenden –
+# entweder update.sh oder Compose, nicht beides für denselben Container.
+# Optional: update.sh also starts the container without Compose. Use only ONE way – either
+# update.sh or Compose, not both for the same container.
+#
+# Umstieg von update.sh auf Compose / switching from update.sh to Compose (once):
+#   docker rm -f samaudit && docker network rm samaudit-net
+#
+# Pfade: "./data", "./certs" und ".env" beziehen sich auf den Ordner dieser Datei. Liegt der Stack
+# woanders (z. B. bei Dockhand), die Pfade durch den SAMAUDIT-Ordner ersetzen, z. B. /opt/samaudit/data.
+# Paths: "./data", "./certs" and ".env" are relative to this file. If the stack lives elsewhere
+# (e.g. in Dockhand), replace them with the SAMAUDIT folder, e.g. /opt/samaudit/data.
+#
+# Die Sicherheitseinstellungen entsprechen denen von update.sh – bitte nicht entfernen.
+# The security settings match those of update.sh – please do not remove them.
+
+name: samaudit
+
+services:
+  samaudit:
+    # "latest" = immer die neueste geprüfte Version (auch die wöchentlichen Sicherheitsupdates).
+    # Bei einer Version bleiben: z. B. ghcr.io/soleil0815/samaudit:1.9.8
+    # "latest" = always the newest checked version (including the weekly security updates).
+    # To stay on a version: e.g. ghcr.io/soleil0815/samaudit:1.9.8
+    image: ghcr.io/soleil0815/samaudit:latest
+    container_name: samaudit
+    hostname: samaudit
+    restart: unless-stopped
+
+    # Alle Einstellungen (Vorlage: .env.example). Datei mit Unix-Zeilenenden (LF) speichern.
+    # All settings (template: .env.example). Save the file with Unix line endings (LF).
+    env_file: .env
+
+    ports:
+      # links und rechts gleich PORT aus der .env (Standard 9400)
+      # both sides equal to PORT from .env (default 9400)
+      - "${PORT:-9400}:${PORT:-9400}"
+
+    volumes:
+      - ./data:/app/data            # Datenbank, Zertifikate der Oberfläche / database, UI certificates
+      - ./certs:/app/certs:ro       # eigenes HTTPS-Zertifikat (optional) / own HTTPS certificate
+
+    # DCs per DNS nicht auflösbar? DOCKER_DNS / DOCKER_EXTRA_HOSTS aus der .env gelten hier NICHT –
+    # stattdessen hier eintragen:
+    # DCs not resolvable via DNS? DOCKER_DNS / DOCKER_EXTRA_HOSTS from .env do NOT apply here –
+    # enter them here instead:
+    # dns:
+    #   - 10.0.0.10
+    # extra_hosts:
+    #   - "dc01.firma.local:10.0.0.10"
+
+    networks:
+      - samaudit-net
+
+    # Sicherheit / security
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:            # nur für den Start: Rechte an ./data setzen, dann Wechsel auf den Programmbenutzer
+      - CHOWN           # only for start-up: fix ownership of ./data, then switch to the program user
+      - FOWNER
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+networks:
+  samaudit-net:
+    name: samaudit-net
+    driver: bridge
+    enable_ipv6: false
+    driver_opts:
+      com.docker.network.bridge.name: br-samaudit

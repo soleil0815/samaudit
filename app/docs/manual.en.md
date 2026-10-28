@@ -126,6 +126,8 @@ nano .env            # enter at least DOMAIN_FQDN and PUBLIC_HOSTNAME
 
 **Try it without a domain:** set `DEMO_MODE=true` in `.env` and sign in with `demo` / `demo`.
 
+**With Docker Compose or Dockhand:** the file `docker-compose.example.yml` (also inside the image under `/app/dist/`) starts SAMAUDIT with the same security settings as `update.sh`. Paste it as a stack in Dockhand or Portainer and replace the paths `./data`, `./certs` and `.env` with the SAMAUDIT folder. Use only one way per container – when switching from `update.sh`, run `docker rm -f samaudit && docker network rm samaudit-net` once. `DOCKER_DNS`/`DOCKER_EXTRA_HOSTS` then do not apply; use `dns:`/`extra_hosts:` in the file instead. Backups of `data/` are then not made by `update.sh` but by you.
+
 ### Settings (`.env`)
 
 All settings live in the `.env` file (annotated template: `.env.example`). After a change, `sh update.sh --restart` is enough. The most important ones:
@@ -156,7 +158,7 @@ The complete list is in the README.
 sh update.sh --pull
 ```
 
-Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.9.7` (or one of its security updates, e.g. `1.9.7-s1`). If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
+Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.9.8` (or one of its security updates, e.g. `1.9.8-s1`). If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
 
 **Via ZIP file (local build):**
 

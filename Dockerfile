@@ -12,7 +12,7 @@ FROM ${PYTHON_IMAGE}
 
 ARG DEBIAN_SNAPSHOT=20261025T000000Z
 ARG DEBIAN_CODENAME=trixie
-ARG APP_VERSION=1.9.7
+ARG APP_VERSION=1.9.8
 # version of this image: program version, or "<program version>-s<n>" for a security update
 ARG IMAGE_VERSION=
 LABEL org.opencontainers.image.title="SAMAUDIT" \
@@ -69,7 +69,7 @@ COPY run.py entrypoint.sh ./
 # Licence (AGPL-3.0-or-later) and third-party notices travel with the image
 COPY LICENSE NOTICE THIRD-PARTY-NOTICES.md /app/
 # Shipped with the image so "update.sh --pull" can keep the local copies up to date
-COPY update.sh .env.example /app/dist/
+COPY update.sh .env.example docker-compose.example.yml /app/dist/
 COPY certs/README.txt /app/dist/certs-README.txt
 
 # Unprivileged program user. The container starts briefly as root so entrypoint.sh can take

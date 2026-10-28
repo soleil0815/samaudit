@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.9.8",
+    "date": "2026-10-28",
+    "items": [
+      {
+        "type": "feature",
+        "de": "Vorlage für Docker Compose: docker-compose.example.yml startet SAMAUDIT mit denselben Sicherheitseinstellungen wie update.sh – z. B. als Stack in Dockhand oder Portainer.",
+        "en": "Docker Compose template: docker-compose.example.yml starts SAMAUDIT with the same security settings as update.sh – e.g. as a stack in Dockhand or Portainer."
+      }
+    ]
+  },
+  {
     "version": "1.9.7",
     "date": "2026-10-25",
     "items": [

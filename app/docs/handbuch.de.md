@@ -126,6 +126,8 @@ nano .env            # mindestens DOMAIN_FQDN und PUBLIC_HOSTNAME eintragen
 
 **Ausprobieren ohne Domäne:** In der `.env` `DEMO_MODE=true` setzen, Anmeldung mit `demo` / `demo`.
 
+**Mit Docker Compose oder Dockhand:** Die Datei `docker-compose.example.yml` (auch im Image unter `/app/dist/`) startet SAMAUDIT mit denselben Sicherheitseinstellungen wie `update.sh`. In Dockhand oder Portainer als Stack einfügen und die Pfade `./data`, `./certs` und `.env` durch den SAMAUDIT-Ordner ersetzen. Nur einen Weg je Container verwenden – beim Umstieg von `update.sh` einmalig `docker rm -f samaudit && docker network rm samaudit-net`. `DOCKER_DNS`/`DOCKER_EXTRA_HOSTS` gelten dann nicht; stattdessen `dns:`/`extra_hosts:` in der Datei. Sicherungen von `data/` macht dann nicht `update.sh`, sondern man selbst.
+
 ### Einstellungen (`.env`)
 
 Alle Einstellungen stehen in der Datei `.env` (Vorlage mit Erklärungen: `.env.example`). Nach einer Änderung genügt `sh update.sh --restart`. Die wichtigsten:
@@ -156,7 +158,7 @@ Die vollständige Liste steht in der README.
 sh update.sh --pull
 ```
 
-Holt die neueste Version von `ghcr.io/soleil0815/samaudit`, sichert vorher Datenbank und Zertifikate, startet die neue Version, prüft sie und startet bei Problemen automatisch wieder die bisherige. `update.sh` selbst wird dabei mit aktualisiert. Eine bestimmte Version: `sh update.sh --pull=1.9.7` (oder ein Sicherheitsupdate davon, z. B. `1.9.7-s1`). Ist das Repository privat, auf dem Server einmalig `docker login ghcr.io` (Passwort: GitHub-Token mit `read:packages`).
+Holt die neueste Version von `ghcr.io/soleil0815/samaudit`, sichert vorher Datenbank und Zertifikate, startet die neue Version, prüft sie und startet bei Problemen automatisch wieder die bisherige. `update.sh` selbst wird dabei mit aktualisiert. Eine bestimmte Version: `sh update.sh --pull=1.9.8` (oder ein Sicherheitsupdate davon, z. B. `1.9.8-s1`). Ist das Repository privat, auf dem Server einmalig `docker login ghcr.io` (Passwort: GitHub-Token mit `read:packages`).
 
 **Per ZIP-Datei (lokaler Build):**
 

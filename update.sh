@@ -352,7 +352,7 @@ if [ "$PULL" = 1 ]; then
   docker pull "$IMAGE" || die "Could not pull $IMAGE.
        Private repository/package? Log in once:  docker login ghcr.io -u <github-user>
        (password: a personal access token with the scope read:packages)"
-  # update.sh and .env.example ship inside the image – keep the local copies in sync
+  # update.sh, .env.example and docker-compose.example.yml ship inside the image – keep the local copies in sync
   self_update_from_image() {
     [ "$SELF_UPDATED" = 1 ] && return 0
     local cid tmpd; tmpd="$(mktemp -d)"
@@ -360,6 +360,7 @@ if [ "$PULL" = 1 ]; then
     docker cp "$cid:/app/dist/." "$tmpd/" >/dev/null 2>&1 || true
     docker rm -f "$cid" >/dev/null 2>&1 || true
     [ -f "$tmpd/.env.example" ] && cp "$tmpd/.env.example" ".env.example.new.$$" && mv -f ".env.example.new.$$" .env.example
+    [ -f "$tmpd/docker-compose.example.yml" ] && cp "$tmpd/docker-compose.example.yml" docker-compose.example.yml
     [ -f "$tmpd/certs-README.txt" ] && mkdir -p certs && cp "$tmpd/certs-README.txt" certs/README.txt
     if [ -f "$tmpd/update.sh" ] && ! cmp -s "$tmpd/update.sh" update.sh; then
       # update.sh runs with your rights on the host – never replace it unasked (not even with -y)

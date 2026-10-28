@@ -169,6 +169,41 @@ class Workflows(unittest.TestCase):
             self.assertEqual(modes[f], "100755", f"{f} is not executable in git")
 
 
+class ComposeTemplate(unittest.TestCase):
+    """docker-compose.example.yml must start the container exactly as hardened as update.sh."""
+
+    def setUp(self):
+        self.svc = yaml.safe_load((ROOT / "docker-compose.example.yml").read_text())["services"]["samaudit"]
+        self.compose = yaml.safe_load((ROOT / "docker-compose.example.yml").read_text())
+        self.script = (ROOT / "update.sh").read_text()
+
+    def test_same_hardening_as_update_sh(self):
+        s = self.svc
+        self.assertIn("--read-only", self.script)
+        self.assertIs(s["read_only"], True)
+        self.assertEqual(s["tmpfs"], ["/tmp"])
+        self.assertIn("no-new-privileges:true", s["security_opt"])
+        self.assertEqual(s["cap_drop"], ["ALL"])
+        script_caps = re.findall(r"--cap-add (\w+)", self.script)
+        self.assertEqual(sorted(s["cap_add"]), sorted(script_caps))
+        self.assertEqual(s["restart"], "unless-stopped")
+        self.assertEqual(s["logging"]["options"], {"max-size": "5m", "max-file": "3"})
+
+    def test_mounts_network_and_image(self):
+        s = self.svc
+        self.assertIn("./data:/app/data", [v.split("  ")[0].strip() for v in s["volumes"]])
+        self.assertIn("./certs:/app/certs:ro", s["volumes"])
+        self.assertEqual(s["image"], "ghcr.io/soleil0815/samaudit:latest")
+        net = self.compose["networks"]["samaudit-net"]
+        self.assertEqual(net["name"], "samaudit-net")
+        self.assertIs(net["enable_ipv6"], False)
+        self.assertEqual(net["driver_opts"]["com.docker.network.bridge.name"], "br-samaudit")
+        self.assertIn("NETWORK=samaudit-net; BRIDGE=br-samaudit", self.script)
+
+    def test_shipped_in_image(self):
+        self.assertRegex((ROOT / "Dockerfile").read_text(), r"COPY [^\n]*docker-compose\.example\.yml /app/dist/")
+
+
 class VersionBounds(unittest.TestCase):
     def test_upper_bounds(self):
         self.assertEqual(lockutil.upper_bound("starlette", "1.6.2"), "2")
