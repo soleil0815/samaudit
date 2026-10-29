@@ -91,10 +91,10 @@ upd -y --load "$work/samaudit-$ver-amd64.tar.gz" || fail "Umstieg mit update.sh 
 [ -n "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' samaudit)" ] || fail "Container läuft nicht unter Compose"
 [ -f "$dir/docker-compose.yml" ] || fail "docker-compose.yml wurde nicht angelegt"
 grep -q "dc01.firma.local:10.0.10.10" "$dir/docker-compose.override.yml" || fail "DOCKER_EXTRA_HOSTS nicht übernommen"
-docker exec samaudit getent hosts dc01.firma.local | grep -q 10.0.10.10 || fail "Override-Datei wirkt nicht"
-curl -sfk https://localhost:19400/healthz | grep -q "\"$ver\"" || fail "healthz liefert nicht Version $ver"
-sudo sh -c "ls '$dir/data/backups/' | grep -q '^samaudit-vor-$ver-'" || fail "keine Sicherung vor-$ver angelegt"
-docker logs samaudit 2>&1 | grep -q "Hinweis: .*docker-compose" && fail "Compose-Hinweis trotz aktueller Datei"
+docker exec samaudit getent hosts dc01.firma.local | grep 10.0.10.10 >/dev/null || fail "Override-Datei wirkt nicht"
+curl -sfk https://localhost:19400/healthz | grep "\"$ver\"" >/dev/null || fail "healthz liefert nicht Version $ver"
+sudo sh -c "ls '$dir/data/backups/' | grep '^samaudit-vor-$ver-' >/dev/null" || fail "keine Sicherung vor-$ver angelegt"
+docker logs samaudit 2>&1 | grep "Hinweis: .*docker-compose" >/dev/null && fail "Compose-Hinweis trotz aktueller Datei"
 echo "1) Umstieg: ok"
 
 # --------------------------------------------------------------------------- 2) broken new version
@@ -117,8 +117,8 @@ echo "3) Zurückspielen: ok"
 # --------------------------------------------------------------------------- 4) database of a newer version
 db_py "import sqlite3; c = sqlite3.connect('/app/data/samaudit.db'); c.execute(\"UPDATE kv SET value='99.0.0' WHERE key='app_version'\"); c.commit()"
 docker restart samaudit >/dev/null
-for _ in $(seq 1 20); do docker logs samaudit 2>&1 | grep -q "START ABGEBROCHEN" && break; sleep 2; done
-docker logs samaudit 2>&1 | grep -q "START ABGEBROCHEN: Die Datenbank stammt von SAMAUDIT 99.0.0" || fail "Rückschritt wurde nicht erkannt"
+for _ in $(seq 1 20); do docker logs samaudit 2>&1 | grep "START ABGEBROCHEN" >/dev/null && break; sleep 2; done
+docker logs samaudit 2>&1 | grep "START ABGEBROCHEN: Die Datenbank stammt von SAMAUDIT 99.0.0" >/dev/null || fail "Rückschritt wurde nicht erkannt"
 upd -y --restore "$name" >/dev/null || fail "Zurückspielen nach Rückschritt fehlgeschlagen"
 echo "4) Schutz vor Rückschritt: ok"
 

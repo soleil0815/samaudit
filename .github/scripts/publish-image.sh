@@ -39,14 +39,14 @@ docker pull --platform linux/amd64 "$image@$digest"
 # image files for installations without internet (docker load), one per platform, plus checksums
 assets="${RUNNER_TEMP:-/tmp}/release-assets"
 rm -rf "$assets"; mkdir -p "$assets"
-save_opts=(); docker save --help 2>/dev/null | grep -q -- '--platform' && save_opts=(--platform)
+save_opts=(); docker save --help 2>/dev/null | grep -- '--platform' >/dev/null && save_opts=(--platform)
 for arch in amd64 arm64; do
   docker pull -q --platform "linux/$arch" "$image@$digest" >/dev/null
   docker tag "$image@$digest" "$image:$version"
   if [ ${#save_opts[@]} -gt 0 ]; then docker save --platform "linux/$arch" "$image:$version"
   else docker save "$image:$version"; fi | gzip -9 > "$assets/samaudit-$version-$arch.tar.gz" \
     || fail "Image-Datei fehlgeschlagen" "Die Image-Datei für $arch konnte nicht erstellt werden."
-  tar -tzf "$assets/samaudit-$version-$arch.tar.gz" | grep -q '^manifest.json$' \
+  tar -tzf "$assets/samaudit-$version-$arch.tar.gz" | grep '^manifest.json$' >/dev/null \
     || fail "Image-Datei fehlgeschlagen" "Die Image-Datei für $arch ist unvollständig."
   docker rmi "$image:$version" >/dev/null 2>&1 || true
 done
