@@ -174,6 +174,16 @@ class Workflows(unittest.TestCase):
         self.assertEqual(order, sorted(order), "exists? -> build -> check -> trivy -> latest? -> tag")
 
 
+    def test_no_grep_q_in_pipes_with_pipefail(self):
+        # "cmd | grep -q x" under "set -o pipefail": grep stops reading early, cmd gets SIGPIPE and the
+        # pipeline counts as failed although the text was found (broke the 2.0.0 release run)
+        for p in sorted((ROOT / ".github/scripts").glob("*.sh")) + sorted((ROOT / "tools").glob("*.sh")):
+            text = p.read_text(encoding="utf-8")
+            if "pipefail" not in text:
+                continue
+            for n, line in enumerate(text.splitlines(), 1):
+                self.assertIsNone(re.search(r"\|\s*grep\s+(-\w*q|--quiet)", line), f"{p.name}:{n}: {line.strip()}")
+
     def test_called_scripts_are_executable(self):
         # workflows call these scripts directly – without the executable bit the release fails (exit 126)
         out = subprocess.run(["git", "ls-files", "-s", ".github/scripts", "tools"], cwd=ROOT,
