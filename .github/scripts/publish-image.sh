@@ -36,6 +36,23 @@ docker pull --platform linux/amd64 "$image@$digest"
 .github/scripts/verify-image.sh "$image@$digest"
 .github/scripts/trivy.sh "$image@$digest"
 
+# image files for installations without internet (docker load), one per platform, plus checksums
+assets="${RUNNER_TEMP:-/tmp}/release-assets"
+rm -rf "$assets"; mkdir -p "$assets"
+save_opts=(); docker save --help 2>/dev/null | grep -q -- '--platform' && save_opts=(--platform)
+for arch in amd64 arm64; do
+  docker pull -q --platform "linux/$arch" "$image@$digest" >/dev/null
+  docker tag "$image@$digest" "$image:$version"
+  if [ ${#save_opts[@]} -gt 0 ]; then docker save --platform "linux/$arch" "$image:$version"
+  else docker save "$image:$version"; fi | gzip -9 > "$assets/samaudit-$version-$arch.tar.gz" \
+    || fail "Image-Datei fehlgeschlagen" "Die Image-Datei für $arch konnte nicht erstellt werden."
+  tar -tzf "$assets/samaudit-$version-$arch.tar.gz" | grep -q '^manifest.json$' \
+    || fail "Image-Datei fehlgeschlagen" "Die Image-Datei für $arch ist unvollständig."
+  docker rmi "$image:$version" >/dev/null 2>&1 || true
+done
+(cd "$assets" && sha256sum samaudit-*.tar.gz > SHA256SUMS)
+echo "image files: $(ls "$assets" | tr '\n' ' ')"
+
 tags=(-t "$image:$version")
 mapfile -t existing < <(git tag -l 'v*')
 if python3 tools/lockutil.py is-highest "$version" "${existing[@]}"; then

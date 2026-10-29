@@ -146,10 +146,26 @@ class Workflows(unittest.TestCase):
     def test_release_step_order(self):
         jobs = workflow("docker-image.yml")["jobs"]
         b = jobs["build"]
-        order = [step_index(b, s) for s in ("build", "verify", "trivy")]
+        order = [step_index(b, s) for s in ("build", "verify", "trivy", "e2e")]
         self.assertEqual(order, sorted(order))
+        self.assertIn("e2e-update.sh", b["steps"][step_index(b, "e2e")]["run"])
         self.assertEqual(sorted(jobs["publish"]["needs"]), ["build", "test"])
-        self.assertEqual(sorted(jobs["automerge"]["needs"]), ["build", "test"])
+
+    def test_owner_merges_and_publishing_needs_a_manual_start(self):
+        wf = workflow("docker-image.yml")
+        self.assertNotIn("automerge", wf["jobs"], "pull requests are merged by the owner, never automatically")
+        text = (WF / "docker-image.yml").read_text(encoding="utf-8")
+        self.assertNotIn("gh pr merge", text)
+        self.assertIn("github.event_name == 'workflow_dispatch'", wf["jobs"]["publish"]["if"])
+
+    def test_releases_carry_offline_image_files(self):
+        for name in ("docker-image.yml", "security-update.yml"):
+            pub = workflow(name)["jobs"]["publish"]
+            self.assertIn("release-assets/*", pub["steps"][step_index(pub, "release")]["run"], name)
+        s = (ROOT / ".github/scripts/publish-image.sh").read_text(encoding="utf-8")
+        self.assertIn("for arch in amd64 arm64", s)
+        self.assertIn("SHA256SUMS", s)
+        self.assertLess(s.index("trivy.sh"), s.index("docker save"), "only checked images become files")
 
     def test_publish_script_checks_before_tagging(self):
         s = (ROOT / ".github/scripts/publish-image.sh").read_text(encoding="utf-8")
@@ -170,38 +186,33 @@ class Workflows(unittest.TestCase):
 
 
 class ComposeTemplate(unittest.TestCase):
-    """docker-compose.example.yml must start the container exactly as hardened as update.sh."""
+    """docker-compose.yml: dieselbe Härtung wie der frühere Start durch update.sh (darf nicht verloren gehen)."""
 
     def setUp(self):
-        self.svc = yaml.safe_load((ROOT / "docker-compose.example.yml").read_text())["services"]["samaudit"]
-        self.compose = yaml.safe_load((ROOT / "docker-compose.example.yml").read_text())
-        self.script = (ROOT / "update.sh").read_text()
+        self.compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
+        self.svc = self.compose["services"]["samaudit"]
 
-    def test_same_hardening_as_update_sh(self):
+    def test_hardening(self):
         s = self.svc
-        self.assertIn("--read-only", self.script)
         self.assertIs(s["read_only"], True)
         self.assertEqual(s["tmpfs"], ["/tmp"])
         self.assertIn("no-new-privileges:true", s["security_opt"])
         self.assertEqual(s["cap_drop"], ["ALL"])
-        script_caps = re.findall(r"--cap-add (\w+)", self.script)
-        self.assertEqual(sorted(s["cap_add"]), sorted(script_caps))
+        self.assertEqual(sorted(s["cap_add"]), ["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"])
         self.assertEqual(s["restart"], "unless-stopped")
         self.assertEqual(s["logging"]["options"], {"max-size": "5m", "max-file": "3"})
+        self.assertNotIn("privileged", s)
 
-    def test_mounts_network_and_image(self):
+    def test_mounts_and_network(self):
         s = self.svc
-        self.assertIn("./data:/app/data", [v.split("  ")[0].strip() for v in s["volumes"]])
+        self.assertIn("./data:/app/data", s["volumes"])
         self.assertIn("./certs:/app/certs:ro", s["volumes"])
-        self.assertEqual(s["image"], "ghcr.io/soleil0815/samaudit:latest")
+        self.assertEqual(len(s["volumes"]), 2, "only data and certs – no program files from the host")
         net = self.compose["networks"]["samaudit-net"]
         self.assertEqual(net["name"], "samaudit-net")
         self.assertIs(net["enable_ipv6"], False)
         self.assertEqual(net["driver_opts"]["com.docker.network.bridge.name"], "br-samaudit")
-        self.assertIn("NETWORK=samaudit-net; BRIDGE=br-samaudit", self.script)
-
-    def test_shipped_in_image(self):
-        self.assertRegex((ROOT / "Dockerfile").read_text(), r"COPY [^\n]*docker-compose\.example\.yml /app/dist/")
+        self.assertNotIn("build", s, "no local build")
 
 
 class VersionBounds(unittest.TestCase):

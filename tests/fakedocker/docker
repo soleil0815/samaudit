@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Nachgebauter docker-Befehl für die Selbsttests von update.sh (kein echter Docker nötig).
+
+Zustand in $FAKE_STATE (JSON):
+  registry   {ref: image_id}            was "docker pull" liefern kann
+  images     {ref: image_id}            lokale Tags
+  meta       {image_id: {"version": "2.0.1", "dist": "/pfad/zu/dist", "health": "healthy"}}
+  containers {name: {"image": id, "labels": {...}, "mounts": [...], "health": "..."}}
+  networks   {name: {"labels": {...}}}
+  calls      Liste aller Aufrufe (mit SAMAUDIT_VERSION aus der Umgebung)
+"""
+import json
+import os
+import re
+import shutil
+import sys
+
+STATE = os.environ["FAKE_STATE"]
+
+
+def load():
+    with open(STATE, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save(s):
+    with open(STATE, "w", encoding="utf-8") as f:
+        json.dump(s, f, indent=1)
+
+
+def resolve(s, ref):
+    if ref in s["images"]:
+        return s["images"][ref]
+    if ref in s["meta"]:
+        return ref
+    return None
+
+
+def env_value(name):
+    if name in os.environ:
+        return os.environ[name]
+    if os.path.exists(".env"):
+        val = None
+        for line in open(".env", encoding="utf-8"):
+            m = re.match(rf"^\s*{name}\s*=\s*(.*)$", line)
+            if m:
+                val = m.group(1).split(" #")[0].strip().strip('"')
+        return val
+    return None
+
+
+def fmt_container(s, name, fmt):
+    c = s["containers"][name]
+    if "{{.Image}}" in fmt:
+        return c["image"]
+    m = re.search(r'index \.Config\.Labels "([^"]+)"', fmt)
+    if m:
+        return c.get("labels", {}).get(m.group(1), "")
+    if ".State.Health" in fmt:
+        return c.get("health", "healthy")
+    if ".Mounts" in fmt:
+        return "".join(x + "\n" for x in c.get("mounts", []))
+    return json.dumps(c)
+
+
+def main(argv):
+    s = load()
+    s["calls"].append({"argv": argv, "SAMAUDIT_VERSION": os.environ.get("SAMAUDIT_VERSION"), "cwd": os.getcwd()})
+    save(s)
+    if not argv:
+        return 1
+    cmd, rest = argv[0], argv[1:]
+    fmt = ""
+    inspecting = cmd == "inspect" or (cmd in ("image", "network") and rest[:1] == ["inspect"])
+    if inspecting and "-f" in rest:
+        i = rest.index("-f"); fmt = rest[i + 1]; rest = rest[:i] + rest[i + 2:]
+    if cmd == "info":
+        return 0
+    if cmd == "compose":
+        return compose(s, rest)
+    if cmd == "inspect":
+        name = rest[-1]
+        if name not in s["containers"]:
+            return 1
+        print(fmt_container(s, name, fmt) if fmt else json.dumps(s["containers"][name]))
+        return 0
+    if cmd == "image":
+        sub, rest = rest[0], rest[1:]
+        if sub == "inspect":
+            iid = resolve(s, rest[-1])
+            if not iid:
+                return 1
+            if "{{.Id}}" in fmt:
+                print(iid)
+            elif "image.version" in fmt:
+                print(s["meta"].get(iid, {}).get("version", ""))
+            return 0
+        if sub == "prune":
+            return 0
+        if sub == "ls":
+            for ref in sorted(s["images"]):
+                if ref.startswith("samaudit:"):
+                    print(ref)
+            return 0
+        if sub == "rm":
+            s["images"].pop(rest[-1], None); save(s); return 0
+        return 0
+    if cmd == "tag":
+        iid = resolve(s, rest[0])
+        if not iid:
+            return 1
+        s["images"][rest[1]] = iid; save(s); return 0
+    if cmd == "pull":
+        ref = rest[-1]
+        if ref not in s["registry"]:
+            print(f"pull access denied for {ref}", file=sys.stderr); return 1
+        s["images"][ref] = s["registry"][ref]; save(s); return 0
+    if cmd == "create":
+        iid = resolve(s, rest[-1])
+        if not iid:
+            return 1
+        cid = "cid-" + iid
+        s["containers"][cid] = {"image": iid, "created": True}; save(s)
+        print(cid); return 0
+    if cmd == "cp":
+        src, dst = rest[0], rest[1]
+        cid = src.split(":")[0]
+        iid = s["containers"][cid]["image"]
+        dist = s["meta"].get(iid, {}).get("dist")
+        if dist:
+            for n in os.listdir(dist):
+                shutil.copy(os.path.join(dist, n), os.path.join(dst, n))
+        return 0
+    if cmd == "rm":
+        name = rest[-1]
+        if name in s["containers"]:
+            del s["containers"][name]; save(s); return 0
+        return 1
+    if cmd == "load":
+        path = rest[rest.index("-i") + 1]
+        data = json.load(open(path, encoding="utf-8"))
+        for ref, iid in data["images"].items():
+            s["images"][ref] = iid
+            s["meta"].setdefault(iid, data.get("meta", {}).get(iid, {}))
+            print(f"Loaded image: {ref}")
+        save(s); return 0
+    if cmd == "network":
+        sub, name = rest[0], rest[-1]
+        if sub == "inspect":
+            if name not in s["networks"]:
+                return 1
+            m = re.search(r'index \.Labels "([^"]+)"', fmt)
+            print(s["networks"][name].get("labels", {}).get(m.group(1), "") if m else "{}")
+            return 0
+        if sub == "rm":
+            s["networks"].pop(name, None); save(s); return 0
+        return 0
+    if cmd == "ps":
+        for n, c in s["containers"].items():
+            if not c.get("created"):
+                print(n)
+        return 0
+    if cmd == "logs":
+        print("(log of samaudit)"); return 0
+    if cmd in ("stop", "start", "rename", "update"):
+        return 0
+    print(f"fake docker: unknown command {argv}", file=sys.stderr)
+    return 2
+
+
+def compose(s, rest):
+    sub = rest[0] if rest else ""
+    if sub == "version":
+        return 1 if os.environ.get("FAKE_NO_COMPOSE") else 0
+    if not os.path.exists("docker-compose.yml"):
+        print("no configuration file provided: not found", file=sys.stderr); return 1
+    if sub == "up":
+        net = s["networks"].get("samaudit-net")
+        if net is not None and not net.get("labels", {}).get("com.docker.compose.network"):
+            print("network samaudit-net was found but has incorrect label", file=sys.stderr); return 1
+        s["networks"]["samaudit-net"] = {"labels": {"com.docker.compose.network": "samaudit-net"}}
+        repo = env_value("SAMAUDIT_IMAGE") or "ghcr.io/soleil0815/samaudit"
+        tag = env_value("SAMAUDIT_VERSION") or "latest"
+        iid = resolve(s, f"{repo}:{tag}")
+        if not iid:
+            print(f"image {repo}:{tag} not found", file=sys.stderr); save(s); return 1
+        old = s["containers"].get("samaudit")
+        if old and not old.get("labels", {}).get("com.docker.compose.project"):
+            print('Conflict. The container name "/samaudit" is already in use', file=sys.stderr); save(s); return 1
+        s["containers"]["samaudit"] = {
+            "image": iid, "health": s["meta"].get(iid, {}).get("health", "healthy"),
+            "labels": {"com.docker.compose.project": "samaudit", "com.docker.compose.project.working_dir": os.getcwd()},
+            "mounts": [os.path.join(os.getcwd(), "data"), os.path.join(os.getcwd(), "certs")]}
+        save(s); return 0
+    if sub in ("stop", "run", "pull", "down"):
+        return 0
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

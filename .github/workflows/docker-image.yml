@@ -1,11 +1,12 @@
 # Program releases: builds, checks and publishes the container image ghcr.io/<owner>/<repo>.
 #
-#   pull request      -> self-tests, reproducible build, tests inside the image, Trivy – nothing published
-#   pull request from a branch claude/... of this repository: after all checks pass it is merged
-#                        automatically and this workflow is started for main
-#   main (push / manual start) -> if app/version.py contains a NEW version: publish <version>
-#                        (and latest if it is the highest version), then git tag + GitHub release.
-#                        An existing version is never published again.
+#   pull request / push to main -> self-tests, reproducible build, tests inside the image (incl. a real
+#                        run of update.sh with Docker Compose), Trivy – nothing is published.
+#                        Pull requests are merged by the repository owner, never automatically.
+#   manual start on main ("Run workflow", after the owner said "veröffentlichen") -> if app/version.py
+#                        contains a NEW version: publish <version> (and latest if it is the highest
+#                        version), git tag + GitHub release with the image files for installations
+#                        without internet. An existing version is never published again.
 #
 # Weekly security updates ("<version>-s<n>"): security-update.yml. Daily scan: scan-published.yml.
 # All actions are pinned to commit hashes; every job has only the permissions it needs.
@@ -68,6 +69,9 @@ jobs:
       - id: trivy
         name: Vulnerability scan (Trivy)
         run: .github/scripts/trivy.sh samaudit-check:ci
+      - id: e2e
+        name: Update path with Docker Compose (update.sh, rollback, restore, cleanup)
+        run: .github/scripts/e2e-update.sh samaudit-check:ci
       - name: Upload scan report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -78,9 +82,9 @@ jobs:
           if-no-files-found: ignore
 
   publish:
-    # new program version on main: publish exactly once
+    # new program version: only when started by hand on main – published exactly once
     needs: [test, build]
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write      # git tag + GitHub release
@@ -142,33 +146,9 @@ jobs:
           entry = next((e for e in json.load(open("app/docs/news.json", encoding="utf-8")) if e.get("version") == v), None)
           for i in (entry or {}).get("items", []):
               print(f"- **{label.get(i.get('type'), 'Info')}:** {i.get('de') or i.get('en')}")
-          print(f"\nImage: `ghcr.io/{repo}:{v}` – Update: `sh update.sh --pull`")
+          print(f"\nImage: `ghcr.io/{repo}:{v}` – Update: Container-Verwaltung oder `docker compose pull && docker compose up -d`")
+          print("\nOhne Internet: passende Image-Datei (amd64/arm64) und SHA256SUMS herunterladen, dann `sh update.sh --load <Datei>`.")
           PY
           gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "SAMAUDIT $VERSION" --notes-file notes.md
-
-  automerge:
-    # PRs from claude/... branches of this repository: merge exactly the tested commit, then start
-    # this workflow for main (a merge made with GITHUB_TOKEN does not trigger "push" workflows)
-    needs: [test, build]
-    if: >-
-      github.event_name == 'pull_request' &&
-      startsWith(github.head_ref, 'claude/') &&
-      github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      actions: write
-    steps:
-      - name: Merge and start the release run
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --merge --delete-branch --match-head-commit "$HEAD_SHA"
-          gh workflow run docker-image.yml --repo "$GITHUB_REPOSITORY" --ref main
-          echo "PR #$PR merged - release run for main started"
+            --title "SAMAUDIT $VERSION" --notes-file notes.md \
+            "$RUNNER_TEMP"/release-assets/*

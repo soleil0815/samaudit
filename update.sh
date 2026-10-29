@@ -1,553 +1,459 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# SAMAUDIT – install, update and rebuild the container
+# SAMAUDIT – Update von Hand. Mit einer Container-Verwaltung (Dockhand, Watchtower, Tugtainer …)
+# oder "docker compose pull && docker compose up -d" wird dieses Skript nicht gebraucht.
 #
-#   sh update.sh --pull         update to the latest image built on GitHub (ghcr.io), no local build
-#   sh update.sh --pull=1.7.6   … or to a specific version
-#   sh update.sh samaudit-v*.zip  install a new version from the ZIP (asks first), then build locally
-#   ./update.sh                 backup → build locally → start → health check → clean up
-#   ./update.sh -y …            no questions (e.g. for scripts)
-#   ./update.sh --restart       restart only (e.g. after changing .env), no rebuild
-#   ./update.sh --no-backup     skip the backup
-#   ./update.sh --no-cache      full rebuild (without Docker build cache)
-#   ./update.sh --help
+#   sh update.sh                   neueste Version holen (bzw. die in SAMAUDIT_VERSION festgelegte) und starten
+#   sh update.sh --version=2.0.1   bestimmte Version festlegen (wird in die .env geschrieben); --version=latest = wieder neueste
+#   sh update.sh --load DATEI      ohne Internet: Image-Datei aus dem GitHub-Release laden (docker load) und starten
+#   sh update.sh --restore [DATEI] Sicherung der Datenbank zurückspielen (Liste und Auswahl)
+#   sh update.sh --cleanup         Dateien früherer Versionen auflisten und nach Rückfrage entfernen
+#   -y                             ohne Rückfragen (Rückfall auf die vorige Version erfolgt dann automatisch)
 #
-# Reproducible: local builds use exactly the pinned versions of the source (base image with digest,
-# Debian snapshot, Python packages with hashes). Security updates come as new versions (-s<n>).
-# Requires Docker only – no Docker Compose.
-# Windows line endings (CRLF, e.g. after copying/editing on Windows) are repaired automatically.
-# The trailing "#" on the next two lines keeps them working even while the file still has CRLF.
-if grep -q "$(printf '\r')" "$0" 2>/dev/null; then echo "update.sh: converting Windows line endings (CRLF -> LF) …"; sed -i 's/\r$//' "$0" && exec bash "$0" "$@"; echo "Please run: sed -i 's/\r\$//' update.sh" >&2; exit 1; fi #
-# Started with "sh update.sh"? Then re-run automatically with bash (the script needs bash).
-if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi #
-set -euo pipefail
-ORIG_ARGS=("$@")
-ORIG_PWD="$PWD"
+# Ablauf: laufendes Image als "previous" merken → Version holen → docker compose up -d → Gesundheitscheck.
+# Startet die neue Version nicht, läuft wieder die vorige (eine dabei geänderte Datenbank wird aus der
+# Sicherung "vor-<Version>" zurückgespielt). Die Datenbank sichert SAMAUDIT beim Versionswechsel selbst.
+# Läuft mit /bin/sh (dash, busybox – z. B. Synology), braucht Docker mit Compose v2.
+#
+# Windows-Zeilenenden (CRLF) werden repariert; das "#" am Zeilenende hält die nächste Zeile auch mit CRLF lauffähig.
+if grep -q "$(printf '\r')" "$0" 2>/dev/null; then sed -i 's/\r$//' "$0" && exec sh "$0" "$@"; echo "Bitte ausführen: sed -i 's/\r\$//' update.sh" >&2; exit 1; fi #
+set -eu
+
 cd "$(dirname "$0")"
 INSTALL_DIR="$(pwd -P)"
-# Files that break with Windows line endings (shell scripts, Dockerfile, package lists)
-for f in entrypoint.sh Dockerfile requirements.txt .env.example; do
-  if [ -f "$f" ] && [ -w "$f" ] && grep -q $'\r' "$f"; then sed -i 's/\r$//' "$f"; echo "Converted Windows line endings in $f"; fi
-done
-
-SERVICE=samaudit
 CONTAINER=samaudit
-BACKUP_DIR=backups
-KEEP_BACKUPS=5
-KEEP_IMAGES=2
-HEALTH_TIMEOUT=120
+SERVICE=samaudit
+NETWORK=samaudit-net
+DEFAULT_REPO=ghcr.io/soleil0815/samaudit
+HEALTH_TIMEOUT="${SAMAUDIT_HEALTH_TIMEOUT:-180}"
+ROOT="${SAMAUDIT_TEST_ROOT:-}"        # nur für die Selbsttests: Ersatz für "/" (nie das echte /etc)
 
-DO_BACKUP=1; NO_CACHE=""; REFRESH_BASE=0; DO_LOCK=0; YES=0; RESTART_ONLY=0
-PULL=0; PULL_TAG=latest; SELF_UPDATED=0
-DEFAULT_IMAGE_REPO=ghcr.io/soleil0815/samaudit   # override with SAMAUDIT_IMAGE in .env
-NETWORK=samaudit-net; BRIDGE=br-samaudit
-ZIPS=(); CLEANUP_ZIPS=(); FROM_VERSION=""; PASS=()
-for a in "$@"; do
-  case "$a" in
-    --cleanup-zip=*) CLEANUP_ZIPS+=("${a#--cleanup-zip=}") ;;
-    --from-version=*) FROM_VERSION="${a#--from-version=}" ;;
-    -y|--yes) YES=1; PASS+=("$a") ;;
-    --no-backup) DO_BACKUP=0; PASS+=("$a") ;;
-    --no-cache) NO_CACHE="--no-cache"; PASS+=("$a") ;;
-    --refresh-base) REFRESH_BASE=1; PASS+=("$a") ;;   # obsolete: versions come from the lock files
-    --lock) DO_LOCK=1 ;;
-    --restart) RESTART_ONLY=1; DO_BACKUP=0 ;;
-    --pull) PULL=1 ;;
-    --pull=*) PULL=1; PULL_TAG="${a#--pull=}"; PULL_TAG="${PULL_TAG#v}" ;;
-    --skip-self-update) SELF_UPDATED=1 ;;
-    *.zip|*.ZIP|*.Zip)
-      z="$a"; case "$z" in /*) ;; *) z="$ORIG_PWD/$z" ;; esac
-      if [ -f "$z" ]; then ZIPS+=("$z")
-      else  # e.g. "samaudit-*.zip" while the file is "SAMAUDIT-v1.7.1.zip": match case-insensitively
-        shopt -s nullglob nocaseglob; m=($z); shopt -u nullglob nocaseglob
-        [ ${#m[@]} -gt 0 ] || { echo "ZIP file not found: $a"; exit 2; }
-        ZIPS+=("${m[@]}")
-      fi ;;
-    -h|--help) sed -n '3,19p' "$INSTALL_DIR/update.sh" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "Unknown option: $a (see --help)"; exit 2 ;;
+YES=0; MODE=update; NEW_VERSION=""; LOAD_FILE=""; RESTORE_FILE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -y|--yes) YES=1 ;;
+    --version=*) NEW_VERSION="${1#--version=}"; NEW_VERSION="${NEW_VERSION#v}" ;;
+    --load) shift; [ $# -gt 0 ] || { echo "--load braucht eine Datei" >&2; exit 2; }; LOAD_FILE="$1"; MODE=load ;;
+    --load=*) LOAD_FILE="${1#--load=}"; MODE=load ;;
+    --restore) MODE=restore; if [ $# -gt 1 ] && [ "${2#-}" = "$2" ]; then shift; RESTORE_FILE="$1"; fi ;;
+    --restore=*) MODE=restore; RESTORE_FILE="${1#--restore=}" ;;
+    --cleanup) MODE=cleanup ;;
+    -h|--help) sed -n '3,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --pull) ;;                                    # früherer Aufruf – entspricht jetzt dem Standard
+    --pull=*) NEW_VERSION="${1#--pull=}"; NEW_VERSION="${NEW_VERSION#v}" ;;
+    *.zip|*.ZIP) echo "ZIP-Pakete gibt es nicht mehr – SAMAUDIT kommt als fertiges Image. Einfach: sh update.sh" >&2; exit 2 ;;
+    *) echo "Unbekannte Option: $1 (siehe --help)" >&2; exit 2 ;;
   esac
+  shift
 done
 
-# ---------------------------------------------------------------------------
-c_ok=$'\e[32m'; c_warn=$'\e[33m'; c_err=$'\e[31m'; c_dim=$'\e[2m'; c_off=$'\e[0m'
-[ -t 1 ] || { c_ok=""; c_warn=""; c_err=""; c_dim=""; c_off=""; }
+# --------------------------------------------------------------------------- Hilfsfunktionen
+if [ -t 1 ]; then c_ok="$(printf '\033[32m')"; c_warn="$(printf '\033[33m')"; c_err="$(printf '\033[31m')"; c_off="$(printf '\033[0m')"
+else c_ok=""; c_warn=""; c_err=""; c_off=""; fi
 step() { printf '\n%s==>%s %s\n' "$c_ok" "$c_off" "$*"; }
-warn() { printf '%sWARNING:%s %s\n' "$c_warn" "$c_off" "$*"; }
-die()  { printf '%sERROR:%s %s\n' "$c_err" "$c_off" "$*" >&2; exit 1; }
-ask()  {  # ask "question" Y|N (default)  → 0 = yes
-  local def="$2" a
+warn() { printf '%sHINWEIS:%s %s\n' "$c_warn" "$c_off" "$*"; }
+die()  { printf '%sFEHLER:%s %s\n' "$c_err" "$c_off" "$*" >&2; exit 1; }
+ask() {  # ask "Frage" J|N  → 0 = ja; mit -y immer ja
   [ "$YES" = 1 ] && return 0
-  [ -t 0 ] || die "Cannot ask (no terminal input). Run with -y to skip questions."
-  if [ "$def" = Y ]; then read -r -p "$1 [Y/n] " a; [ -z "$a" ] || [[ "$a" =~ ^[yYjJ] ]]
-  else read -r -p "$1 [y/N] " a; [[ "$a" =~ ^[yYjJ] ]]; fi
+  [ -t 0 ] || die "Keine Eingabe möglich (kein Terminal). Mit -y ohne Rückfragen ausführen."
+  if [ "$2" = J ]; then printf '%s [J/n] ' "$1"; else printf '%s [j/N] ' "$1"; fi
+  read -r a || a=""
+  case "$a" in [jJyY]*) return 0 ;; "") [ "$2" = J ] ;; *) return 1 ;; esac
 }
-
-ask_strict() {  # like ask, but -y does NOT answer it (security-relevant questions) → 0 = yes
-  local a
+ask_strict() {  # sicherheitsrelevant: -y beantwortet das nicht
   [ -t 0 ] || return 1
-  read -r -p "$1 [y/N] " a; [[ "$a" =~ ^[yYjJ] ]]
+  printf '%s [j/N] ' "$1"; read -r a || a=""
+  case "$a" in [jJyY]*) return 0 ;; *) return 1 ;; esac
 }
-safe_rel() {  # safe_rel PATH → 0 if PATH is a plain relative path inside the SAMAUDIT folder
-  local p="$1"
-  [[ -n "$p" && "$p" != /* && ! "$p" =~ (^|/)\.\.(/|$) && ! "$p" =~ [[:cntrl:]] ]] || return 1
-  local d; d="$(cd "$(dirname "$p")" 2>/dev/null && pwd -P)" || return 0   # folder does not exist yet: fine
-  [[ "$d/" == "$INSTALL_DIR/"* || "$d" == "$INSTALL_DIR" ]]
+valid_tag() { printf '%s' "$1" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'; }
+
+env_get() {  # env_get NAME → Wert aus der .env (ohne Kommentar, ohne Anführungszeichen)
+  [ -f .env ] || return 0
+  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" .env | tail -n 1 \
+    | sed -e 's/[[:space:]]#.*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/" -e 's/[[:space:]]*$//'
 }
-
-command -v docker >/dev/null || die "docker is not installed."
-docker info >/dev/null 2>&1 || die "Cannot access Docker – run with sudo or add the user to the 'docker' group."
-
-# ---------------------------------------------------------------------------
-# Install a new version from a ZIP
-# ---------------------------------------------------------------------------
-# These files/folders belong to the operator and are NEVER overwritten or deleted:
-PROTECTED_RE='^(\.env|data/.*|backups/.*|certs/.*|base-image\.lock|docker-compose\.override\.yml|\.firewall-targets|\.samaudit-manifest|\.env\.run)$'
-MANIFEST=.samaudit-manifest
-
-ver_of() { sed -n 's/^VERSION = "\(.*\)"/\1/p' "$1" 2>/dev/null | head -1; }
-
-extract_zip() {  # extract_zip ZIP TARGET_DIR
-  if command -v unzip >/dev/null; then unzip -q -o "$1" -d "$2"
-  elif command -v bsdtar >/dev/null; then bsdtar -xf "$1" -C "$2"
-  elif command -v python3 >/dev/null; then python3 -m zipfile -e "$1" "$2"
+env_set() {  # env_set NAME WERT – Zeile ersetzen oder anhängen, Rechte bleiben
+  if grep -Eq "^[[:space:]]*#?[[:space:]]*$1[[:space:]]*=" .env; then
+    sed -i "s|^[[:space:]]*#\{0,1\}[[:space:]]*$1[[:space:]]*=.*|$1=$2|" .env
   else
-    docker run --rm -v "$1:/p.zip:ro" -v "$2:/out" "$(sed -n 's/^ARG PYTHON_IMAGE=//p' Dockerfile | head -1)" \
-      python -m zipfile -e /p.zip /out
+    printf '\n%s=%s\n' "$1" "$2" >> .env
   fi
 }
 
-install_package() {
-  local zip="" best="" v
-  # several ZIPs given (e.g. via *): take the one with the highest version
-  for z in "${ZIPS[@]}"; do
-    v="$(basename "$z" | sed -n 's/.*[vV]\([0-9][0-9.]*[0-9]\).*/\1/p')"
-    if [ -z "$best" ] || [ "$(printf '%s\n%s\n' "$best" "$v" | sort -V | tail -1)" = "$v" ]; then best="$v"; zip="$z"; fi
+command -v docker >/dev/null 2>&1 || die "docker ist nicht installiert."
+docker info >/dev/null 2>&1 || die "Kein Zugriff auf Docker – mit sudo ausführen oder den Benutzer in die Gruppe 'docker' aufnehmen."
+if docker compose version >/dev/null 2>&1; then COMPOSE="docker compose"
+elif command -v docker-compose >/dev/null 2>&1 && docker-compose version >/dev/null 2>&1; then COMPOSE="docker-compose"
+else die "Docker Compose fehlt (docker compose bzw. docker-compose)."; fi
+compose() { $COMPOSE "$@"; }
+
+[ -f .env ] && grep -q "$(printf '\r')" .env && sed -i 's/\r$//' .env && echo "Windows-Zeilenenden in .env repariert."
+
+REPO="$(env_get SAMAUDIT_IMAGE)"; REPO="${REPO:-$DEFAULT_REPO}"
+container_exists() { docker inspect "$CONTAINER" >/dev/null 2>&1; }
+label_of() { docker inspect -f "{{index .Config.Labels \"$2\"}}" "$1" 2>/dev/null || true; }
+health_of() { docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER" 2>/dev/null || echo missing; }
+image_version() { docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' "$1" 2>/dev/null || true; }
+compose_file_version() { sed -n 's/^[[:space:]]*SAMAUDIT_COMPOSE:[[:space:]]*"\{0,1\}\([0-9][0-9]*\)"\{0,1\}.*/\1/p' "$1" 2>/dev/null | head -n 1; }
+
+wait_healthy() {  # 0 = gesund
+  i=0
+  while [ "$i" -lt "$HEALTH_TIMEOUT" ]; do
+    st="$(health_of)"
+    case "$st" in
+      healthy) return 0 ;;
+      unhealthy|exited|dead|missing) return 1 ;;
+    esac
+    sleep 3; i=$((i + 3))
   done
-  [ -n "$zip" ] || zip="${ZIPS[0]}"
-
-  step "Checking package: $(basename "$zip")"
-  local tmp; tmp="$(mktemp -d "$INSTALL_DIR/.update-XXXXXX")"
-  trap 'rm -rf "$tmp"' EXIT
-  extract_zip "$zip" "$tmp" >/dev/null 2>&1 || die "ZIP file is damaged or unreadable: $zip"
-  # never trust links or odd names from a package
-  [ -z "$(find "$tmp" -type l | head -1)" ] || die "The ZIP contains symbolic links – refusing to install it."
-  local src; src="$(dirname "$(find "$tmp" -maxdepth 3 -path '*/app/version.py' | head -1)")"
-  src="${src%/app}"
-  [ -n "$src" ] && [ -f "$src/app/version.py" ] && [ -f "$src/Dockerfile" ] && [ -f "$src/update.sh" ] \
-    || die "The ZIP does not contain a SAMAUDIT package."
-  local new_ver old_ver; new_ver="$(ver_of "$src/app/version.py")"; old_ver="$(ver_of app/version.py)"
-  [ -n "$new_ver" ] || die "Cannot read the version in the package."
-
-  echo "   installed:   ${old_ver:-–}"
-  echo "   in package:  $new_ver"
-  if [ -n "$old_ver" ] && [ "$old_ver" != "$new_ver" ] && \
-     [ "$(printf '%s\n%s\n' "$old_ver" "$new_ver" | sort -V | tail -1)" = "$old_ver" ]; then
-    warn "The package is OLDER than the installed version (downgrade)."
-  elif [ "$old_ver" = "$new_ver" ]; then
-    echo "   (same version – will be installed again)"
-  fi
-  echo "   Your data and settings stay unchanged: .env, data/, certs/, backups/"
-  ask "Update SAMAUDIT ${old_ver:-} → $new_ver now?" N || { echo "Cancelled – nothing changed."; exit 0; }
-
-  # list of package files (relative)
-  local list; list="$(cd "$src" && find . -type f | sed 's#^\./##' | grep -Ev "$PROTECTED_RE" | grep -Ev '^certs/' | sort)"
-  local bad; bad="$(grep -E '(^/|(^|/)\.\.(/|$)|[[:cntrl:]])' <<< "$list" | head -3 || true)"
-  [ -z "$bad" ] || die "The ZIP contains unsafe file names: $bad"
-  # certs/README.txt may be updated
-  [ -f "$src/certs/README.txt" ] && list="$(printf '%s\ncerts/README.txt\n' "$list" | sort -u)"
-
-  # back up the current program files (for a rollback)
-  mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
-  local prog="$BACKUP_DIR/program-${old_ver:-old}-$(date +%Y%m%d-%H%M%S).tgz"
-  if [ -f "$MANIFEST" ]; then
-    (umask 077; tar czf "$prog" -T <(grep -Ev "$PROTECTED_RE" "$MANIFEST" | while read -r f; do [ -e "$f" ] && echo "$f"; done) 2>/dev/null) || true
-  else
-    (umask 077; tar czf "$prog" --exclude=./data --exclude=./backups --exclude=./certs --exclude=./.env \
-       --exclude='./.update-*' --exclude='*.zip' --exclude='*.ZIP' . 2>/dev/null) || true
-  fi
-  [ -s "$prog" ] && echo "   previous program files backed up: $prog"
-
-  step "Installing files"
-  local n=0 f
-  while IFS= read -r f; do
-    [ -n "$f" ] || continue
-    safe_rel "$f" || die "Unsafe path in package: $f"
-    mkdir -p "$(dirname "$f")"
-    # copy first, then rename: this safely replaces even the currently running update.sh
-    cp -p "$src/$f" "$f.new.$$" && mv -f "$f.new.$$" "$f"
-    n=$((n + 1))
-  done <<< "$list"
-  echo "   $n files updated"
-
-  # clean-up: files that no longer exist in the new version
-  local removed=0
-  if [ -f "$MANIFEST" ]; then
-    while IFS= read -r f; do
-      [ -n "$f" ] || continue
-      safe_rel "$f" || { warn "skipping unsafe manifest entry: $f"; continue; }
-      if [[ ! "$f" =~ $PROTECTED_RE ]] && ! grep -qxF "$f" <<< "$list" && [ -f "$f" ] && [ ! -L "$f" ]; then
-        rm -f "$f"; removed=$((removed + 1)); echo "   removed (no longer included): $f"
-      fi
-    done < "$MANIFEST"
-  else
-    # first install with a manifest: remove everything in app/ that is not in the package
-    while IFS= read -r f; do
-      if ! grep -qxF "$f" <<< "$list"; then rm -f "$f"; removed=$((removed + 1)); echo "   removed: $f"; fi
-    done < <(find app -type f ! -path '*/__pycache__/*' 2>/dev/null | sort)
-  fi
-  find app -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
-  find app -type d -empty -delete 2>/dev/null || true
-  printf '%s\n' "$list" > "$MANIFEST"
-  chmod 755 update.sh entrypoint.sh 2>/dev/null || true
-  [ "$removed" -gt 0 ] && echo "   $removed obsolete file(s) removed"
-  { ls -1t "$BACKUP_DIR"/program-*.tgz "$BACKUP_DIR"/programm-*.tgz 2>/dev/null || true; } | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f
-
-  rm -rf "$tmp"; trap - EXIT
-  # continue with the NEW update.sh (build, start, check, clean up)
-  local cz=(); for z in "${ZIPS[@]}"; do cz+=("--cleanup-zip=$z"); done
-  exec bash ./update.sh -y "${PASS[@]}" "--from-version=${old_ver:-}" "${cz[@]}"
+  return 1
 }
 
-[ ${#ZIPS[@]} -gt 0 ] && install_package
+# Wem gehört der Container? Eine andere Compose-Installation (z. B. Stack in Dockhand) nicht anfassen.
+check_owner() {
+  container_exists || return 0
+  wd="$(label_of "$CONTAINER" com.docker.compose.project.working_dir)"
+  if [ -n "$wd" ] && [ "$(cd "$wd" 2>/dev/null && pwd -P || echo "$wd")" != "$INSTALL_DIR" ]; then
+    die "Der Container $CONTAINER gehört zu einer anderen Compose-Installation ($wd), z. B. einem Stack in
+       Dockhand/Portainer. Bitte dort aktualisieren – oder dieses Skript in jenem Ordner ausführen."
+  fi
+}
 
-APP_VERSION="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' app/version.py 2>/dev/null || true)"
-BASE_TAG="$(sed -n 's/^ARG PYTHON_IMAGE=//p' Dockerfile 2>/dev/null | head -1 || true)"
-if [ "$PULL" = 0 ] && [ "$RESTART_ONLY" = 0 ]; then
-  [ -n "$APP_VERSION" ] && [ -n "$BASE_TAG" ] \
-    || die "Cannot determine version or base image (app/version.py, Dockerfile). Without the source code use: sh update.sh --pull"
+# --------------------------------------------------------------------------- Aufräumen (--cleanup)
+# Dateien früherer Versionen (ZIP-Weg, lokaler Bau, Host-Firewall). Daten, Sicherungen, Einstellungen,
+# Compose-Dateien und alles, was ein laufender Container einbindet, sind geschützt – auch über Links.
+CLEAN_FILES="Dockerfile entrypoint.sh run.py requirements.txt requirements.in requirements-dev.txt requirements-dev.in
+requirements.txt.new .dockerignore .gitattributes .gitignore .trivyignore README.md README.en.md LICENSE NOTICE
+THIRD-PARTY-NOTICES.md DATENSCHUTZ.md SECURITY.md CHANGELOG-SECURITY.md .samaudit-manifest base-image.lock .env.run
+.firewall-targets samaudit-firewall.sh docker-compose.override.example.yml docker-compose.example.yml"
+CLEAN_DIRS="app tools tests locks .github"
+
+realpath_of() {  # vollständig aufgelöster Pfad (auch für Links); leer, wenn nicht ermittelbar
+  if [ -d "$1" ]; then (cd -P "$1" 2>/dev/null && pwd -P)
+  else
+    d="$(cd -P "$(dirname "$1")" 2>/dev/null && pwd -P)" || return 0
+    b="$(basename "$1")"
+    if [ -L "$1" ]; then
+      t="$(readlink -f "$1" 2>/dev/null || true)"; [ -n "$t" ] && { printf '%s\n' "$t"; return 0; }
+    fi
+    printf '%s/%s\n' "$d" "$b"
+  fi
+}
+
+protected_paths() {
+  for p in data backups certs .env .env.example docker-compose.yml docker-compose.override.yml docker-compose.yml.alt update.sh; do
+    [ -e "$p" ] || [ -L "$p" ] || continue
+    realpath_of "$p"
+    [ -L "$p" ] && printf '%s/%s\n' "$INSTALL_DIR" "$p"
+  done
+  # eingebundene Ordner aller Container (auch gestoppter) – nie löschen, auch nicht über Umwege
+  for c in $(docker ps -aq 2>/dev/null); do
+    docker inspect -f '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}' "$c" 2>/dev/null || true
+  done | while IFS= read -r m; do [ -n "$m" ] && { realpath_of "$m" 2>/dev/null || printf '%s\n' "$m"; }; done
+  # Einhängepunkte unterhalb des Ordners (rm -r würde sonst hineinlaufen)
+  if [ -r "${ROOT}/proc/mounts" ]; then
+    awk '{print $2}' "${ROOT}/proc/mounts" | while IFS= read -r m; do
+      case "$m" in "$INSTALL_DIR"/*) printf '%s\n' "$m" ;; esac
+    done
+  fi
+}
+
+overlaps() {  # overlaps A B → 0, wenn A gleich B ist oder einer im anderen liegt
+  case "$1/" in "$2"/*) return 0 ;; esac
+  case "$2/" in "$1"/*) return 0 ;; esac
+  return 1
+}
+
+cleanup() {
+  set -f; OLDIFS="$IFS"; IFS='
+'                                                   # Namen mit Leerzeichen sicher behandeln, nichts expandieren
+  [ -d .git ] && die "Hier liegt eine Git-Arbeitskopie (.git) – das ist ein Entwicklerordner, --cleanup räumt hier nichts auf."
+  prot="$(protected_paths | sort -u)"
+  list=""
+  add() { list="${list}${1}
+"; }
+  IFS="$OLDIFS"; set +f
+  for f in $CLEAN_FILES; do { [ -e "$f" ] || [ -L "$f" ]; } && add "$f"; done
+  for d in $CLEAN_DIRS; do { [ -e "$d" ] || [ -L "$d" ]; } && add "$d"; done
+  for f in .update-* *.new.* samaudit*.zip SAMAUDIT*.zip Samaudit*.zip samaudit*.ZIP SAMAUDIT*.ZIP; do
+    { [ -e "$f" ] || [ -L "$f" ]; } && add "$f"
+  done
+  # Versionsordner: entpackte Pakete früherer Versionen (erkannt an app/version.py)
+  for d in samaudit* SAMAUDIT* Samaudit*; do
+    [ -d "$d" ] && [ ! -L "$d" ] && [ -f "$d/app/version.py" ] && add "$d"
+  done
+  list="$(printf '%s' "$list" | sort -u)"
+  set -f; IFS='
+'
+
+  ok=""; skipped=""
+  for f in $list; do
+    case "$f" in */*|..|.) skipped="$skipped  $f (unsicherer Name)
+"; continue ;; esac
+    if [ -L "$f" ]; then ok="$ok$f
+"; continue; fi                                  # Link: nur der Link selbst wird entfernt, nie das Ziel
+    r="$(realpath_of "$f")"
+    case "$r" in "$INSTALL_DIR"/*) ;; *) skipped="$skipped  $f (liegt nicht im SAMAUDIT-Ordner)
+"; continue ;; esac
+    hit=""
+    for p in $prot; do overlaps "$r" "$p" && { hit="$p"; break; }; done
+    if [ -n "$hit" ]; then skipped="$skipped  $f (geschützt: enthält oder ist $hit)
+"; continue; fi
+    ok="$ok$f
+"
+  done
+
+  IFS="$OLDIFS"; set +f
+  unit="${ROOT}/etc/systemd/system/samaudit-firewall.service"
+  [ -f "$unit" ] && has_unit=1 || has_unit=0
+  old_containers="$(for c in samaudit-old samaudit-alt; do docker inspect "$c" >/dev/null 2>&1 && echo "$c"; done; true)"
+  old_images="$(docker image ls --format '{{.Repository}}:{{.Tag}}' samaudit 2>/dev/null | grep -v '<none>' || true)"
+
+  if [ -z "$ok" ] && [ "$has_unit" = 0 ] && [ -z "$old_containers" ] && [ -z "$old_images" ]; then
+    echo "Nichts aufzuräumen – hier liegen nur noch docker-compose.yml, .env und die Daten."
+    [ -n "$skipped" ] && printf 'Nicht angefasst:\n%s' "$skipped"
+    return 0
+  fi
+  echo "Nicht mehr gebraucht (Programmdateien früherer Versionen):"
+  printf '%s' "$ok" | sed 's/^/  /'
+  [ "$has_unit" = 1 ] && echo "  Systemdienst samaudit-firewall (Host-Firewall früherer Versionen, braucht ggf. sudo)"
+  [ -n "$old_containers" ] && printf '%s\n' "$old_containers" | sed 's/^/  Container /'
+  [ -n "$old_images" ] && printf '%s\n' "$old_images" | sed 's/^/  lokal gebautes Image /'
+  [ -n "$skipped" ] && printf '\nNicht angefasst:\n%s' "$skipped"
+  echo
+  echo "Bleibt immer: .env, docker-compose.yml (+ .override/.alt), data/, backups/, certs/, update.sh."
+  ask "Diese Einträge jetzt löschen?" N || { echo "Abgebrochen – nichts gelöscht."; return 0; }
+
+  printf '%s' "$ok" | while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    if [ -L "$f" ]; then rm -f -- "$f"; else rm -rf -- "$f"; fi
+    echo "  entfernt: $f"
+  done
+  for c in $old_containers; do docker rm -f "$c" >/dev/null 2>&1 && echo "  entfernt: Container $c"; done
+  for i in $old_images; do docker image rm "$i" >/dev/null 2>&1 && echo "  entfernt: Image $i" || echo "  nicht entfernt (in Gebrauch): $i"; done
+  if [ "$has_unit" = 1 ]; then
+    SUDO=""; [ "$(id -u)" = 0 ] || { command -v sudo >/dev/null 2>&1 && SUDO=sudo; }
+    if [ -n "$ROOT" ]; then rm -f "$unit"
+    else
+      $SUDO systemctl disable --now samaudit-firewall >/dev/null 2>&1 || true
+      $SUDO rm -f "$unit" && $SUDO systemctl daemon-reload >/dev/null 2>&1 || true
+      if command -v iptables >/dev/null 2>&1; then
+        for ch in DOCKER-USER FORWARD; do
+          while $SUDO iptables -C "$ch" -i br-samaudit -j SAMAUDIT-EGRESS 2>/dev/null; do $SUDO iptables -D "$ch" -i br-samaudit -j SAMAUDIT-EGRESS; done
+        done
+        while $SUDO iptables -C INPUT -i br-samaudit -j SAMAUDIT-HOST 2>/dev/null; do $SUDO iptables -D INPUT -i br-samaudit -j SAMAUDIT-HOST; done
+        for t in SAMAUDIT-EGRESS SAMAUDIT-HOST; do $SUDO iptables -F "$t" 2>/dev/null || true; $SUDO iptables -X "$t" 2>/dev/null || true; done
+      fi
+    fi
+    echo "  entfernt: Systemdienst samaudit-firewall"
+  fi
+  echo "Fertig."
+}
+
+# --------------------------------------------------------------------------- Dateien aus dem Image
+# Das Image bringt docker-compose.yml, .env.example und update.sh mit (/app/dist).
+take_files_from_image() {  # take_files_from_image IMAGE
+  tmpd="$(mktemp -d)"
+  cid="$(docker create "$1" 2>/dev/null)" || { rm -rf "$tmpd"; return 0; }
+  docker cp "$cid:/app/dist/." "$tmpd/" >/dev/null 2>&1 || true
+  docker rm -f "$cid" >/dev/null 2>&1 || true
+  if [ -f "$tmpd/docker-compose.yml" ]; then
+    new_v="$(compose_file_version "$tmpd/docker-compose.yml")"
+    if [ ! -f docker-compose.yml ]; then
+      cp "$tmpd/docker-compose.yml" docker-compose.yml
+      echo "   docker-compose.yml angelegt (Version $new_v)"
+    else
+      old_v="$(compose_file_version docker-compose.yml)"
+      if [ "${new_v:-0}" -gt "${old_v:-0}" ]; then
+        cp -p docker-compose.yml docker-compose.yml.alt
+        cp "$tmpd/docker-compose.yml" docker-compose.yml.new.$$ && mv -f docker-compose.yml.new.$$ docker-compose.yml
+        warn "Neue docker-compose.yml (Version ${old_v:-ohne} → $new_v) abgelegt; die bisherige liegt als docker-compose.yml.alt daneben.
+         Eigene Änderungen bitte in docker-compose.override.yml übernehmen."
+      fi
+    fi
+  fi
+  [ -f "$tmpd/.env.example" ] && cp "$tmpd/.env.example" .env.example.new.$$ && mv -f .env.example.new.$$ .env.example
+  if [ -f "$tmpd/update.sh" ] && ! cmp -s "$tmpd/update.sh" update.sh; then
+    cp "$tmpd/update.sh" update.sh.new && chmod 644 update.sh.new
+    echo "   Im Image liegt eine neuere update.sh (gespeichert als update.sh.new; Unterschiede: diff update.sh update.sh.new)."
+    # update.sh läuft mit Ihren Rechten auf dem Host – nie ungefragt ersetzen (auch nicht mit -y)
+    if ask_strict "   Neue update.sh jetzt übernehmen (gilt ab dem nächsten Aufruf)?"; then
+      mv -f update.sh.new update.sh && chmod 755 update.sh && echo "   update.sh ersetzt."
+    fi
+  fi
+  rm -rf "$tmpd"
+}
+
+# --------------------------------------------------------------------------- Umstieg von update.sh ≤ 1.9
+# Früher startete update.sh den Container mit "docker run". Einmalig: Compose-Datei anlegen,
+# DOCKER_DNS/DOCKER_EXTRA_HOSTS in die Override-Datei übernehmen, alten Container und alte
+# Netz-Definition entfernen (Compose legt beides neu an). Das alte Image bleibt als "previous".
+migrate_legacy() {
+  if [ ! -f docker-compose.override.yml ]; then
+    dns="$(env_get DOCKER_DNS | tr ',;' '  ')"; hosts="$(env_get DOCKER_EXTRA_HOSTS | tr ',;' '  ')"
+    if [ -n "$dns$hosts" ]; then
+      {
+        echo "# Eigene Ergänzungen zur docker-compose.yml (übernommen aus DOCKER_DNS / DOCKER_EXTRA_HOSTS der .env)"
+        echo "services:"
+        echo "  $SERVICE:"
+        if [ -n "$dns" ]; then echo "    dns:"; for d in $dns; do echo "      - \"$d\""; done; fi
+        if [ -n "$hosts" ]; then echo "    extra_hosts:"; for h in $hosts; do echo "      - \"$h\""; done; fi
+      } > docker-compose.override.yml
+      echo "   DOCKER_DNS/DOCKER_EXTRA_HOSTS → docker-compose.override.yml übernommen"
+    fi
+  fi
+  for c in "$CONTAINER-old" "$CONTAINER-alt"; do docker rm -f "$c" >/dev/null 2>&1 || true; done
+  if container_exists && [ -z "$(label_of "$CONTAINER" com.docker.compose.project)" ]; then
+    docker rm -f "$CONTAINER" >/dev/null && echo "   bisherigen Container (gestartet mit docker run) entfernt – Daten bleiben"
+  fi
+}
+drop_foreign_network() {  # von update.sh ≤ 1.9 angelegtes Netz: Compose möchte es selbst verwalten
+  docker network inspect "$NETWORK" >/dev/null 2>&1 || return 0
+  [ -n "$(docker network inspect -f '{{index .Labels "com.docker.compose.network"}}' "$NETWORK" 2>/dev/null || true)" ] && return 0
+  docker network rm "$NETWORK" >/dev/null 2>&1 || warn "Docker-Netz $NETWORK konnte nicht entfernt werden (noch in Gebrauch?)."
+}
+
+# --------------------------------------------------------------------------- Rückfall
+rollback() {  # rollback NEUE_PROGRAMMVERSION STARTZEIT
+  step "Vorige Version wird wieder gestartet"
+  if docker image inspect "$REPO:previous" >/dev/null 2>&1; then
+    # hat die neue Version die Datenbank schon umgestellt? dann die Sicherung "vor-<Version>" zurück
+    if [ -n "$1" ]; then
+      compose stop "$SERVICE" >/dev/null 2>&1 || true
+      SAMAUDIT_VERSION="$TAG" compose run --rm --no-deps -T --name "$CONTAINER-restore" "$SERVICE" restore --rollback "$1" "$2" \
+        || warn "Datenbank konnte nicht automatisch zurückgespielt werden – siehe oben (sh update.sh --restore)."
+    fi
+    if [ "$(env_get SAMAUDIT_VERSION)" != "$ENV_TAG_BEFORE" ]; then
+      env_set SAMAUDIT_VERSION "${ENV_TAG_BEFORE:-latest}"
+      echo "   SAMAUDIT_VERSION in der .env wieder auf ${ENV_TAG_BEFORE:-latest} gesetzt"
+    fi
+    SAMAUDIT_VERSION=previous compose up -d >/dev/null 2>&1 || true
+    if wait_healthy; then
+      echo "   vorige Version läuft wieder (Image $REPO:previous)."
+      echo "   Hinweis: bis zum nächsten Update läuft sie unter dem Namen 'previous'."
+      return 0
+    fi
+    warn "Auch die vorige Version startet nicht – bitte Log prüfen: docker logs $CONTAINER"
+  else
+    warn "Keine vorige Version vorhanden."
+  fi
+  return 1
+}
+
+# --------------------------------------------------------------------------- Ablauf
+if [ "$MODE" = cleanup ]; then cleanup; exit 0; fi
+
+if [ ! -f .env ]; then
+  if [ -f .env.example ]; then cp .env.example .env; chmod 600 .env
+    die ".env fehlte und wurde aus .env.example angelegt. Bitte mindestens DOMAIN_FQDN eintragen und erneut starten."
+  fi
+  die ".env fehlt. Bitte .env.example herunterladen, als .env speichern und ausfüllen (mindestens DOMAIN_FQDN)."
 fi
+grep -Eq '^[[:space:]]*DOMAIN_FQDN[[:space:]]*=[[:space:]]*[^[:space:]#]' .env || warn "DOMAIN_FQDN ist in der .env nicht gesetzt."
+mkdir -p data certs
 
+check_owner
 
-# ---------------------------------------------------------------------------
-# --lock: obsolete (kept so old calls do not fail)
-# ---------------------------------------------------------------------------
-if [ "$DO_LOCK" = 1 ]; then
-  echo "--lock is no longer used here: pinned versions are computed with tools/update-locks.sh (maintainers)."
+if [ "$MODE" = restore ]; then
+  [ -f docker-compose.yml ] || die "docker-compose.yml fehlt – erst einmal sh update.sh ausführen."
+  step "Sicherung zurückspielen"
+  compose stop "$SERVICE" || true
+  if [ -n "$RESTORE_FILE" ]; then compose run --rm --no-deps --name "$CONTAINER-restore" "$SERVICE" restore "$(basename "$RESTORE_FILE")" || true
+  else compose run --rm --no-deps --name "$CONTAINER-restore" "$SERVICE" restore || true; fi
+  compose up -d
+  wait_healthy && echo "${c_ok}SAMAUDIT läuft.${c_off}" || die "SAMAUDIT ist nicht bereit (Status: $(health_of)) – docker logs $CONTAINER"
   exit 0
 fi
 
-# ---------------------------------------------------------------------------
-# Pre-checks
-# ---------------------------------------------------------------------------
-if [ ! -f .env ]; then
-  cp .env.example .env
-  chmod 600 .env
-  die ".env was missing and has been created from .env.example. Please set at least DOMAIN_FQDN and run again."
+# gewünschte Version (der bisherige Eintrag wird gemerkt – ein Rückfall stellt ihn wieder her)
+ENV_TAG_BEFORE="$(env_get SAMAUDIT_VERSION)"
+if [ -n "$NEW_VERSION" ]; then
+  valid_tag "$NEW_VERSION" || die "Ungültige Version: $NEW_VERSION"
+  env_set SAMAUDIT_VERSION "$NEW_VERSION"
+  echo "Version festgelegt: SAMAUDIT_VERSION=$NEW_VERSION (in der .env)"
 fi
-sed -e '1s/^\xEF\xBB\xBF//' -e 's/\r$//' .env | grep -Eq '^[[:space:]]*DOMAIN_FQDN[[:space:]]*=[[:space:]]*[^[:space:]#]' \
-  || warn "DOMAIN_FQDN is not set in .env."
-mkdir -p data certs
+TAG="$(env_get SAMAUDIT_VERSION)"; TAG="${TAG:-latest}"
+valid_tag "$TAG" || die "Ungültige SAMAUDIT_VERSION in der .env: $TAG"
+[ "$TAG" = previous ] && die "SAMAUDIT_VERSION=previous ist für den Rückfall reserviert – bitte eine Version oder latest eintragen."
 
-# ---------------------------------------------------------------------------
-# Run the container with plain Docker (no Docker Compose needed)
-# ---------------------------------------------------------------------------
-# .env may be saved with Windows line endings (CRLF) or a BOM (e.g. edited via WinSCP/Notepad)
-env_clean() { sed -e '1s/^\xEF\xBB\xBF//' -e 's/\r$//' .env; }
-env_get() { env_clean | sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" | tail -1 | sed 's/[[:space:]]#.*$//' | tr -d "\"'" | xargs; }
-
-# Prepare .env for "docker run --env-file": strip comments and quotes
-# (docker run would otherwise keep quotes as part of the value).
-make_runenv() {
-  (umask 077; : > .env.run)
-  local line key val
-  while IFS= read -r line || [ -n "$line" ]; do
-    line="${line#"${line%%[![:space:]]*}"}"
-    [ -z "$line" ] && continue
-    case "$line" in \#*) continue ;; esac
-    [[ "$line" == *=* ]] || continue
-    key="${line%%=*}"; key="${key%"${key##*[![:space:]]}"}"
-    val="${line#*=}"; val="${val#"${val%%[![:space:]]*}"}"
-    if [[ "$val" == \"*\"* ]]; then val="${val#\"}"; val="${val%%\"*}"
-    elif [[ "$val" == \'*\'* ]]; then val="${val#\'}"; val="${val%%\'*}"
-    else val="${val%%[[:space:]]#*}"; val="${val%"${val##*[![:space:]]}"}"; fi
-    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] && printf '%s=%s\n' "$key" "$val" >> .env.run
-  done < <(env_clean)
-}
-
-ensure_network() {
-  docker network inspect "$NETWORK" >/dev/null 2>&1 && return 0
-  docker network create --driver bridge --ipv6=false \
-    -o "com.docker.network.bridge.name=$BRIDGE" "$NETWORK" >/dev/null \
-    || die "Could not create Docker network $NETWORK."
-}
-
-start_container() {  # start_container IMAGE
-  local image="$1" port extra=() h dns=() hosts=()
-  port="$(env_get PORT)"; port="${port:-9400}"
-  [[ "$port" =~ ^[0-9]+$ ]] || die "PORT in .env is not a number: $port"
-  # optional: DNS servers and fixed host entries for the DCs (DOCKER_DNS / DOCKER_EXTRA_HOSTS in .env)
-  read -r -a dns <<< "$(env_get DOCKER_DNS | tr ',;' '  ')"
-  read -r -a hosts <<< "$(env_get DOCKER_EXTRA_HOSTS | tr ',;' '  ')"
-  for h in "${dns[@]}"; do extra+=(--dns "$h"); done
-  for h in "${hosts[@]}"; do extra+=(--add-host "$h"); done
-  make_runenv
-  ensure_network
-  # Do not delete the current container, set it aside – for a rollback if the new one does not run
-  docker rm -f "$CONTAINER-alt" >/dev/null 2>&1 || true
-  if docker inspect "$CONTAINER" >/dev/null 2>&1; then
-    # rename first (works while running), then stop – a failed rename leaves the service untouched
-    docker rename "$CONTAINER" "$CONTAINER-old" || die "Could not set the current container aside – nothing changed."
-    HAVE_OLD=1
-    trap 'echo; warn "interrupted – restoring the previous version"; rollback; rm -f "$INSTALL_DIR/.env.run"; exit 130' INT TERM HUP
-    docker update --restart=no "$CONTAINER-old" >/dev/null 2>&1 || true
-    docker stop "$CONTAINER-old" >/dev/null 2>&1 || true
-  fi
-  docker run -d --name "$CONTAINER" --hostname "$CONTAINER" \
-    --restart unless-stopped \
-    --env-file .env.run \
-    -p "$port:$port" \
-    -v "$INSTALL_DIR/data:/app/data" \
-    -v "$INSTALL_DIR/certs:/app/certs:ro" \
-    --network "$NETWORK" \
-    --log-driver json-file --log-opt max-size=5m --log-opt max-file=3 \
-    --read-only --tmpfs /tmp \
-    --security-opt no-new-privileges:true \
-    --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add DAC_OVERRIDE --cap-add SETUID --cap-add SETGID \
-    "${extra[@]}" \
-    "$image" >/dev/null \
-    || { rm -f .env.run; rollback; die "Container could not be started (see above) – the previous version keeps running."; }
-  rm -f .env.run
-}
-
-HAVE_OLD=0
-rollback() {  # discard the new container, start the previous one again
-  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-  if [ "$HAVE_OLD" = 1 ] && docker inspect "$CONTAINER-old" >/dev/null 2>&1; then
-    docker rename "$CONTAINER-old" "$CONTAINER"
-    docker update --restart=unless-stopped "$CONTAINER" >/dev/null 2>&1 || true
-    docker start "$CONTAINER" >/dev/null 2>&1 && echo "   previous version started again."
-  fi
-}
-trap 'rm -f "$INSTALL_DIR/.env.run"' EXIT
-
-# An earlier run was interrupted while switching containers? Then "samaudit-old" may be the last working
-# version – restore it instead of throwing it away.
-recover_interrupted() {
-  docker inspect "$CONTAINER-old" >/dev/null 2>&1 || return 0
-  local health
-  health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER" 2>/dev/null || echo missing)"
-  if [ "$health" = healthy ]; then
-    docker rm -f "$CONTAINER-old" >/dev/null 2>&1 || true      # left over, current one works
-    return 0
-  fi
-  warn "Found the previous version ($CONTAINER-old) from an interrupted update – restoring it."
-  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-  docker rename "$CONTAINER-old" "$CONTAINER" || die "Could not restore $CONTAINER-old – please check: docker ps -a"
-  docker update --restart=unless-stopped "$CONTAINER" >/dev/null 2>&1 || true
-  docker start "$CONTAINER" >/dev/null 2>&1 || true
-  echo "   previous version restored."
-}
-recover_interrupted
-
-running_version() {
-  docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$CONTAINER" 2>/dev/null || true
-}
-image_version() { docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$1" 2>/dev/null || true; }
-
-# Image that will be started: local build, pulled from GitHub, or (restart) the current one
-if [ "$PULL" = 1 ]; then
-  repo="$(env_get SAMAUDIT_IMAGE)"; repo="${repo:-$DEFAULT_IMAGE_REPO}"
-  case "${repo##*/}" in *:*) IMAGE="$repo" ;; *) IMAGE="$repo:$PULL_TAG" ;; esac
-  step "Pulling image $IMAGE"
-  docker pull "$IMAGE" || die "Could not pull $IMAGE.
-       Private repository/package? Log in once:  docker login ghcr.io -u <github-user>
-       (password: a personal access token with the scope read:packages)"
-  # update.sh, .env.example and docker-compose.example.yml ship inside the image – keep the local copies in sync
-  self_update_from_image() {
-    [ "$SELF_UPDATED" = 1 ] && return 0
-    local cid tmpd; tmpd="$(mktemp -d)"
-    cid="$(docker create "$IMAGE" 2>/dev/null)" || { rm -rf "$tmpd"; return 0; }
-    docker cp "$cid:/app/dist/." "$tmpd/" >/dev/null 2>&1 || true
-    docker rm -f "$cid" >/dev/null 2>&1 || true
-    [ -f "$tmpd/.env.example" ] && cp "$tmpd/.env.example" ".env.example.new.$$" && mv -f ".env.example.new.$$" .env.example
-    [ -f "$tmpd/docker-compose.example.yml" ] && cp "$tmpd/docker-compose.example.yml" docker-compose.example.yml
-    [ -f "$tmpd/certs-README.txt" ] && mkdir -p certs && cp "$tmpd/certs-README.txt" certs/README.txt
-    if [ -f "$tmpd/update.sh" ] && ! cmp -s "$tmpd/update.sh" update.sh; then
-      # update.sh runs with your rights on the host – never replace it unasked (not even with -y)
-      cp "$tmpd/update.sh" update.sh.new && chmod 644 update.sh.new
-      echo "   The image contains a newer update.sh (saved as update.sh.new; changes: diff update.sh update.sh.new)."
-      if ask_strict "   Use the new update.sh now?"; then
-        chmod 755 update.sh.new && mv -f update.sh.new update.sh
-        rm -rf "$tmpd"
-        echo "   update.sh replaced – continuing with the new version"
-        exec bash ./update.sh "${ORIG_ARGS[@]}" --skip-self-update
-      fi
-      echo "   keeping the current update.sh"
-    fi
-    rm -rf "$tmpd"
-  }
-  self_update_from_image
-  APP_VERSION="$(image_version "$IMAGE")"
-  if [ "$RESTART_ONLY" = 0 ] && docker inspect "$CONTAINER" >/dev/null 2>&1 && \
-     [ "$(docker inspect --format '{{.Image}}' "$CONTAINER")" = "$(docker image inspect --format '{{.Id}}' "$IMAGE")" ]; then
-    echo "   SAMAUDIT ${APP_VERSION:-} is already up to date – nothing to do. (Restart anyway: sh update.sh --pull --restart)"
-    exit 0
-  fi
-elif [ "$RESTART_ONLY" = 1 ]; then
-  IMAGE="$(docker inspect --format '{{.Config.Image}}' "$CONTAINER" 2>/dev/null || true)"
-  IMAGE="${IMAGE:-samaudit:$APP_VERSION}"
-  APP_VERSION="$(image_version "$IMAGE")"
-else
-  IMAGE="samaudit:$APP_VERSION"
+# 1) laufendes Image als "previous" merken
+OLD_ID=""; OLD_VER=""
+if container_exists; then
+  OLD_ID="$(docker inspect -f '{{.Image}}' "$CONTAINER")"
+  OLD_VER="$(image_version "$OLD_ID")"
+  docker tag "$OLD_ID" "$REPO:previous"
 fi
 
-OLD_VERSION="$(running_version | tr -cd '0-9A-Za-z.-')"
-APP_VERSION="$(printf '%s' "${APP_VERSION:-}" | tr -cd '0-9A-Za-z.-')"
-echo "SAMAUDIT: installed ${OLD_VERSION:-–}  →  new ${APP_VERSION:-?}"
-
-# ---------------------------------------------------------------------------
-# Backup (consistent copy of the database via the SQLite backup API)
-# ---------------------------------------------------------------------------
-if [ "$DO_BACKUP" = 1 ]; then
-  if [ "$(docker inspect --format '{{.State.Running}}' "$CONTAINER" 2>/dev/null || echo false)" = "true" ]; then
-    step "Creating backup"
-    ts="$(date +%Y%m%d-%H%M%S)"
-    mkdir -p "$BACKUP_DIR"; chmod 700 "$BACKUP_DIR"
-    out="$BACKUP_DIR/samaudit-${OLD_VERSION:-old}-$ts.tgz"
-    # The backup is built in memory inside the container and streamed out directly as .tgz
-    # (docker cp cannot read /tmp inside the container because it is a tmpfs there).
-    (umask 077; docker exec -u 10001:10001 "$CONTAINER" python -c "
-import io, os, sqlite3, sys, tarfile, time
-buf = io.BytesIO()
-with tarfile.open(fileobj=buf, mode='w:gz') as tar:
-    def add(name, data):
-        ti = tarfile.TarInfo(name); ti.size = len(data); ti.mtime = int(time.time()); ti.mode = 0o600
-        tar.addfile(ti, io.BytesIO(data))
-    for db in ('/app/data/samaudit.db', '/app/data/adaudit.db'):
-        if os.path.exists(db):
-            src = sqlite3.connect(db); mem = sqlite3.connect(':memory:')
-            src.backup(mem)                      # consistent copy, even while running
-            add('samaudit.db', mem.serialize()); mem.close(); src.close()
-            break
-    if os.path.isdir('/app/data/tls'):
-        tar.add('/app/data/tls', arcname='tls')
-sys.stdout.buffer.write(buf.getvalue())
-" > "$out") || { rm -f "$out"; die "Backup failed – aborting (without backup: ./update.sh --no-backup)."; }
-    tar tzf "$out" >/dev/null 2>&1 || { rm -f "$out"; die "Backup is unreadable – aborting (without backup: ./update.sh --no-backup)."; }
-    echo "   $out ($(du -h "$out" | cut -f1)) – contains reports and certificate keys, treat as confidential."
-    # keep only the most recent backups
-    { ls -1t "$BACKUP_DIR"/samaudit-*.tgz 2>/dev/null || true; } | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f
+# 2) Version holen
+if [ "$MODE" = load ]; then
+  [ -f "$LOAD_FILE" ] || die "Datei nicht gefunden: $LOAD_FILE"
+  sums="$(dirname "$LOAD_FILE")/SHA256SUMS"
+  if [ -f "$sums" ]; then
+    want="$(grep -F " $(basename "$LOAD_FILE")" "$sums" | awk '{print $1}' | head -n 1)"
+    if command -v sha256sum >/dev/null 2>&1; then have="$(sha256sum "$LOAD_FILE" | awk '{print $1}')"
+    else have="$(openssl dgst -sha256 "$LOAD_FILE" 2>/dev/null | awk '{print $NF}')"; fi
+    [ -n "$want" ] && [ "$want" = "$have" ] || die "Prüfsumme stimmt nicht (SHA256SUMS) – Datei beschädigt oder falsch."
+    echo "   Prüfsumme in Ordnung"
   else
-    echo "${c_dim}(container not running – no backup needed/possible)${c_off}"
+    warn "Keine SHA256SUMS neben der Datei – Prüfsumme nicht geprüft."
   fi
-fi
-
-# ---------------------------------------------------------------------------
-# Build and start
-# ---------------------------------------------------------------------------
-if [ "$RESTART_ONLY" = 1 ] || [ "$PULL" = 1 ]; then
-  docker image inspect "$IMAGE" >/dev/null 2>&1 \
-    || die "Image $IMAGE is missing – run sh update.sh (or sh update.sh --pull) first."
+  step "Image laden: $(basename "$LOAD_FILE")"
+  out="$(docker load -i "$LOAD_FILE")" || die "Image konnte nicht geladen werden."
+  printf '%s\n' "$out"
+  loaded="$(printf '%s\n' "$out" | sed -n 's/^Loaded image: //p' | grep -F "$REPO:" | head -n 1)"
+  [ -n "$loaded" ] || die "Die Datei enthält kein Image von $REPO."
+  TAG="${loaded##*:}"; env_set SAMAUDIT_VERSION "$TAG"
+  echo "   SAMAUDIT_VERSION=$TAG (in der .env)"
 else
-  # reproducible: base image (tag + digest), Debian snapshot and Python packages come from the
-  # lock files in the source (Dockerfile, requirements.txt) – the same as the published image
-  rm -f base-image.lock      # file of older versions, no longer used
-  step "Building image samaudit:$APP_VERSION (pinned versions)"
-  docker build $NO_CACHE --build-arg "APP_VERSION=$APP_VERSION" -t "samaudit:$APP_VERSION" . \
-    || die "Build failed (see above). The running container is unchanged."
+  step "Image holen: $REPO:$TAG"
+  docker pull "$REPO:$TAG" || die "Image konnte nicht geholt werden. Privates Repository? Einmal anmelden:
+       docker login ghcr.io -u <GitHub-Benutzer>   (Passwort: Token mit read:packages – wird nicht angezeigt)"
+fi
+NEW_ID="$(docker image inspect -f '{{.Id}}' "$REPO:$TAG")"
+NEW_VER="$(image_version "$REPO:$TAG")"
+echo "SAMAUDIT: bisher ${OLD_VER:-–}  →  neu ${NEW_VER:-$TAG}"
+
+# 3) Compose-Datei (und Vorlagen) aus dem Image
+take_files_from_image "$REPO:$TAG"
+[ -f docker-compose.yml ] || die "docker-compose.yml fehlt und ist auch nicht im Image enthalten."
+
+LEGACY=0
+if container_exists && [ -z "$(label_of "$CONTAINER" com.docker.compose.project)" ]; then LEGACY=1; fi
+if [ "$LEGACY" = 0 ] && [ "$OLD_ID" = "$NEW_ID" ] && [ "$(health_of)" = healthy ]; then
+  echo "SAMAUDIT ${NEW_VER:-} ist aktuell – nichts zu tun."
+  exit 0
 fi
 
-# ---------------------------------------------------------------------------
-# Remove the host firewall of earlier versions (samaudit-firewall.sh no longer exists)
-# ---------------------------------------------------------------------------
-remove_old_firewall() {
-  local SUDO=""
-  if [ "$(id -u)" != 0 ]; then command -v sudo >/dev/null && SUDO=sudo || return 0; fi
-  local found=0
-  if [ -f /etc/systemd/system/samaudit-firewall.service ]; then
-    found=1
-    $SUDO systemctl disable samaudit-firewall >/dev/null 2>&1 || true
-    $SUDO systemctl stop samaudit-firewall >/dev/null 2>&1 || true
-    $SUDO rm -f /etc/systemd/system/samaudit-firewall.service
-    $SUDO systemctl daemon-reload >/dev/null 2>&1 || true
-    $SUDO systemctl reset-failed samaudit-firewall >/dev/null 2>&1 || true
-  fi
-  if command -v iptables >/dev/null; then
-    local ch tbl
-    for ch in DOCKER-USER FORWARD; do
-      while $SUDO iptables -C "$ch" -i "$BRIDGE" -j SAMAUDIT-EGRESS 2>/dev/null; do found=1; $SUDO iptables -D "$ch" -i "$BRIDGE" -j SAMAUDIT-EGRESS; done
-    done
-    while $SUDO iptables -C INPUT -i "$BRIDGE" -j SAMAUDIT-HOST 2>/dev/null; do found=1; $SUDO iptables -D INPUT -i "$BRIDGE" -j SAMAUDIT-HOST; done
-    for tbl in SAMAUDIT-EGRESS SAMAUDIT-HOST; do
-      if $SUDO iptables -L "$tbl" -n >/dev/null 2>&1; then found=1; $SUDO iptables -F "$tbl" 2>/dev/null || true; $SUDO iptables -X "$tbl" 2>/dev/null || true; fi
-    done
-  fi
-  if command -v ip6tables >/dev/null; then
-    for ch in DOCKER-USER FORWARD; do
-      while $SUDO ip6tables -C "$ch" -i "$BRIDGE" -j DROP 2>/dev/null; do found=1; $SUDO ip6tables -D "$ch" -i "$BRIDGE" -j DROP; done
-    done
-  fi
-  rm -f .firewall-targets
-  [ "$found" = 1 ] && echo "   Host firewall of earlier versions removed (rules and systemd unit samaudit-firewall)."
-  return 0
-}
-remove_old_firewall
-
-step "Starting container"
-start_container "$IMAGE"
-
-step "Health check"
-status=""
-for ((i = 0; i < HEALTH_TIMEOUT; i += 3)); do
-  status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER" 2>/dev/null || echo missing)"
-  case "$status" in
-    healthy) break ;;
-    unhealthy|exited|dead|missing|restarting) break ;;
-    running) [ "$i" -ge 15 ] && { status=healthy; break; } ;;   # image without health check
-  esac
-  sleep 3
-done
-if [ "$status" != "healthy" ]; then
-  docker logs --tail 40 "$CONTAINER" || true
-  rollback
-  [ -n "$(ls -1 data/samaudit.db.vor-*.bak 2>/dev/null | head -1)" ] && \
-    echo "   Note: if the new version changed the database, a copy from before is in data/samaudit.db.vor-*.bak"
-  die "New container is not ready (status: $status, log above). The previous version keeps running."
+# 4) starten
+if [ "$LEGACY" = 1 ]; then
+  step "Umstieg auf Docker Compose (einmalig)"
+  migrate_legacy
 fi
-NEW_VERSION="$(running_version)"
-echo "   ${c_ok}running${c_off} – version $NEW_VERSION"
-# app log messages that are worth showing (the app logs in German)
-docker logs --since 5m "$CONTAINER" 2>&1 | grep -E "ERROR|Konfiguration:|Zertifikat" | tail -5 || true
+drop_foreign_network
+step "Starten"
+START="$(date +%s)"
+compose up -d || { rollback "" "" || true; die "docker compose up ist fehlgeschlagen (siehe oben)."; }
 
-trap - INT TERM HUP
-docker rm -f "$CONTAINER-old" >/dev/null 2>&1 || true   # previous version no longer needed
+# 5) Gesundheitscheck
+step "Gesundheitscheck"
+if ! wait_healthy; then
+  docker logs --tail 40 "$CONTAINER" 2>&1 || true
+  if [ -n "$OLD_ID" ] && ask "Die neue Version startet nicht. Vorige Version wieder starten?" J; then
+    rollback "${NEW_VER%%-s*}" "$START" || true
+    die "Neue Version ${NEW_VER:-$TAG} ist nicht bereit (Log oben). Es läuft wieder die vorige."
+  fi
+  die "Neue Version ${NEW_VER:-$TAG} ist nicht bereit (Status: $(health_of), Log oben)."
+fi
+echo "   ${c_ok}läuft${c_off} – Version ${NEW_VER:-$TAG}"
+docker logs --since 5m "$CONTAINER" 2>&1 | grep -E "ERROR|Konfiguration:|Hinweis:|gesichert" | tail -n 5 || true
 
-# ---------------------------------------------------------------------------
-# Clean-up: keep only the most recent image versions (for a rollback)
-# ---------------------------------------------------------------------------
-if [ "$RESTART_ONLY" = 0 ] && [ "$PULL" = 0 ]; then
-step "Removing old images"
-mapfile -t old < <(docker image ls samaudit --format '{{.CreatedAt}}\t{{.Repository}}:{{.Tag}}' | grep -v '<none>' \
-                   | sort -r | cut -f2 | tail -n +$((KEEP_IMAGES + 1)))
-for img in "${old[@]}"; do
-  [ "$img" = "samaudit:$APP_VERSION" ] && continue
-  docker image rm "$img" >/dev/null 2>&1 && echo "   removed: $img" || true
-done
+# 6) aufräumen: nicht mehr benannte SAMAUDIT-Images (previous bleibt für einen Rückschritt)
 docker image prune -f --filter "label=org.opencontainers.image.title=SAMAUDIT" >/dev/null 2>&1 || true
-elif [ "$PULL" = 1 ]; then
-  # older pulled versions become untagged ("dangling") – remove them
-  docker image prune -f --filter "label=org.opencontainers.image.title=SAMAUDIT" >/dev/null 2>&1 || true
-fi
 
 host="$(env_get PUBLIC_HOSTNAME)"; port="$(env_get PORT)"
 scheme=https; [ "$(env_get TLS_ENABLED | tr 'A-Z' 'a-z')" = "false" ] && scheme=http
 echo
-echo "${c_ok}Done.${c_off} SAMAUDIT $NEW_VERSION is running: $scheme://${host:-<server>}:${port:-9400}"
-
-# ---------------------------------------------------------------------------
-# After a package update: confirm the result, clean up ZIP files
-# ---------------------------------------------------------------------------
-if [ ${#CLEANUP_ZIPS[@]} -gt 0 ]; then
-  echo
-  echo "Update ${FROM_VERSION:-} → $NEW_VERSION completed and verified."
-  YES=0  # always ask here if someone is at the terminal
-  if [ -t 0 ]; then
-    if ask "Delete the uploaded ZIP file(s) now?" Y; then
-      for z in "${CLEANUP_ZIPS[@]}"; do [ -f "$z" ] && rm -f "$z" && echo "   deleted: $(basename "$z")"; done
-    else
-      echo "   ZIP file(s) kept."
-    fi
-  fi
-  rm -rf "$INSTALL_DIR"/.update-* 2>/dev/null || true
-  echo "Rollback if needed: restore the program files from backups/program-*.tgz and run ./update.sh."
+echo "${c_ok}Fertig.${c_off} SAMAUDIT ${NEW_VER:-$TAG} läuft: $scheme://${host:-<server>}:${port:-9400}"
+if [ "$LEGACY" = 1 ] || [ -d app ] || [ -f Dockerfile ]; then
+  echo "Programmdateien früherer Versionen werden nicht mehr gebraucht. Aufräumen: sh update.sh --cleanup"
 fi

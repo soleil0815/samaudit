@@ -17,6 +17,13 @@ log = logging.getLogger("samaudit")
 
 def main() -> None:
     os.makedirs(settings.data_dir, exist_ok=True)
+    # vor allem anderen: nur eine Instanz, Rückschritt erkennen, vor einem Versionswechsel sichern
+    from app import datastate
+    try:
+        datastate.prepare()
+    except datastate.StartRefused as e:
+        log.error("START ABGEBROCHEN: %s", e)
+        raise SystemExit(78) from None
     kwargs = {"host": "0.0.0.0", "port": settings.port, "log_level": "info", "access_log": False,
               "proxy_headers": bool(settings.trusted_proxies), "server_header": False}
     if settings.trusted_proxies:

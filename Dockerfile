@@ -12,7 +12,7 @@ FROM ${PYTHON_IMAGE}
 
 ARG DEBIAN_SNAPSHOT=20261025T000000Z
 ARG DEBIAN_CODENAME=trixie
-ARG APP_VERSION=1.9.8
+ARG APP_VERSION=2.0.0
 # version of this image: program version, or "<program version>-s<n>" for a security update
 ARG IMAGE_VERSION=
 LABEL org.opencontainers.image.title="SAMAUDIT" \
@@ -69,7 +69,7 @@ COPY run.py entrypoint.sh ./
 # Licence (AGPL-3.0-or-later) and third-party notices travel with the image
 COPY LICENSE NOTICE THIRD-PARTY-NOTICES.md /app/
 # Shipped with the image so "update.sh --pull" can keep the local copies up to date
-COPY update.sh .env.example docker-compose.example.yml /app/dist/
+COPY update.sh .env.example docker-compose.yml /app/dist/
 COPY certs/README.txt /app/dist/certs-README.txt
 
 # Unprivileged program user. The container starts briefly as root so entrypoint.sh can take
@@ -81,7 +81,7 @@ RUN groupadd --system --gid 10001 samaudit \
  && chmod 755 /app/entrypoint.sh
 
 EXPOSE 9400
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --start-interval=3s \
   CMD python -c "import os,ssl,urllib.request as u; s=os.environ.get('TLS_ENABLED','true').lower() in ('1','true','yes','ja','on'); p=os.environ.get('PORT','9400'); u.urlopen(('https' if s else 'http')+'://127.0.0.1:'+p+'/healthz', context=ssl._create_unverified_context() if s else None, timeout=4)" || exit 1
 
 ENTRYPOINT ["/app/entrypoint.sh"]

@@ -204,6 +204,7 @@ jobs:
           push "$SHA:refs/tags/v$VERSION"
           push "$SHA:refs/heads/main" \
             || echo "::warning title=main nicht aktualisiert::main hat sich inzwischen geändert. Das Release v$VERSION ist veröffentlicht; die Paketstände übernimmt der nächste Lauf."
-          { tail -n +2 "$RUNNER_TEMP/entry.md"; echo; echo "Image: \`ghcr.io/${GITHUB_REPOSITORY,,}:$VERSION\` – Update: \`sh update.sh --pull\`"; } > notes.md
+          { tail -n +2 "$RUNNER_TEMP/entry.md"; echo; echo "Image: \`ghcr.io/${GITHUB_REPOSITORY,,}:$VERSION\` – Update: Container-Verwaltung oder \`docker compose pull && docker compose up -d\`"; echo; echo "Ohne Internet: passende Image-Datei und SHA256SUMS herunterladen, dann \`sh update.sh --load <Datei>\`."; } > notes.md
           gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --verify-tag \
-            --title "SAMAUDIT $VERSION (Sicherheitsupdate)" --notes-file notes.md
+            --title "SAMAUDIT $VERSION (Sicherheitsupdate)" --notes-file notes.md \
+            "$RUNNER_TEMP"/release-assets/*

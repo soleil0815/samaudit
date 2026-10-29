@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS cert_pins (
     is_ca       INTEGER NOT NULL DEFAULT 0,
     der         BLOB,
     first_seen  TEXT NOT NULL,
-    last_seen   TEXT
+    last_seen   TEXT,
+    names       TEXT
 );
 CREATE TABLE IF NOT EXISTS kv (
     key   TEXT PRIMARY KEY,
@@ -117,26 +118,11 @@ def conn():
             raise
 
 
-def _backup_before_migration(c: sqlite3.Connection, tag: str) -> None:
-    """Vor einer Schemaänderung eine Kopie der Datenbank in data/ ablegen (für den Fall eines Rückfalls)."""
-    dest = f"{settings.db_path}.vor-{tag}.bak"
-    if os.path.exists(dest):
-        return
-    try:
-        target = sqlite3.connect(dest)
-        with target:
-            c.backup(target)
-        target.close()
-        os.chmod(dest, 0o600)
-        log.info("Datenbank vor Schemaänderung gesichert: %s", dest)
-    except Exception as e:  # noqa: BLE001
-        log.warning("Sicherung vor Schemaänderung fehlgeschlagen: %s", e)
-
-
 def _migrate(c: sqlite3.Connection) -> None:
     cols = {r[1] for r in c.execute("PRAGMA table_info(cert_pins)").fetchall()}
-    if "names" not in cols:
-        _backup_before_migration(c, "pin-names")
+    # Schemaänderungen hier ergänzen und datastate.SCHEMA_VERSION erhöhen – die Sicherung
+    # „vor-<Version>“ legt datastate.check_and_backup() vorher an.
+    if "names" not in cols:                                   # Schema 2
         c.execute("ALTER TABLE cert_pins ADD COLUMN names TEXT")
 
 
@@ -144,6 +130,8 @@ def init() -> None:
     with conn() as c:
         c.executescript(SCHEMA)
         _migrate(c)
+        from .datastate import write_meta
+        write_meta(c)  # Programm- und Schemaversion merken (Schutz vor Rückschritt)
         # Scans, die beim letzten Beenden noch liefen, als abgebrochen markieren
         c.execute("UPDATE scans SET status='error', error='Abgebrochen (Neustart)' WHERE status='running'")
     try:
