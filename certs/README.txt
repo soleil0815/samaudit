@@ -7,7 +7,7 @@ restart, and takes precedence over this folder.
 
 Alternatively (without the web interface) put the file(s) into this folder and restart:
 
-    sh update.sh --restart
+    docker compose restart
 
 SAMAUDIT detects automatically:
 
@@ -30,7 +30,7 @@ running with the self-signed certificate and shows the reason there.
 Important:
   - The certificate must contain the name used to open SAMAUDIT
     (e.g. samaudit.firma.local) – set PUBLIC_HOSTNAME in .env to the same name.
-  - After a renewal, replace the files and run "sh update.sh --restart".
+  - After a renewal, replace the files and run "docker compose restart".
   - A certificate uploaded via the web interface takes precedence; it can also be
     removed there.
   - The files do not need to be readable by others on the host (chmod 600 is enough);

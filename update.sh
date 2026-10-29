@@ -6,7 +6,8 @@
 #   sh update.sh                   neueste Version holen (bzw. die in SAMAUDIT_VERSION festgelegte) und starten
 #   sh update.sh --version=2.0.1   bestimmte Version festlegen (wird in die .env geschrieben); --version=latest = wieder neueste
 #   sh update.sh --load DATEI      ohne Internet: Image-Datei aus dem GitHub-Release laden (docker load) und starten
-#   sh update.sh --restore [DATEI] Sicherung der Datenbank zurückspielen (Liste und Auswahl)
+#   sh update.sh --restore [DATEI] Sicherung der Datenbank zurückspielen (Liste und Auswahl);
+#                                  mit --version=… danach diese Version starten (Rückschritt auf eine ältere Version)
 #   sh update.sh --cleanup         Dateien früherer Versionen auflisten und nach Rückfrage entfernen
 #   -y                             ohne Rückfragen (Rückfall auf die vorige Version erfolgt dann automatisch)
 #
@@ -38,7 +39,7 @@ while [ $# -gt 0 ]; do
     --restore) MODE=restore; if [ $# -gt 1 ] && [ "${2#-}" = "$2" ]; then shift; RESTORE_FILE="$1"; fi ;;
     --restore=*) MODE=restore; RESTORE_FILE="${1#--restore=}" ;;
     --cleanup) MODE=cleanup ;;
-    -h|--help) sed -n '3,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     --pull) ;;                                    # früherer Aufruf – entspricht jetzt dem Standard
     --pull=*) NEW_VERSION="${1#--pull=}"; NEW_VERSION="${NEW_VERSION#v}" ;;
     *.zip|*.ZIP) echo "ZIP-Pakete gibt es nicht mehr – SAMAUDIT kommt als fertiges Image. Einfach: sh update.sh" >&2; exit 2 ;;
@@ -357,12 +358,18 @@ check_owner
 if [ "$MODE" = restore ]; then
   [ -f docker-compose.yml ] || die "docker-compose.yml fehlt – erst einmal sh update.sh ausführen."
   step "Sicherung zurückspielen"
+  # zurückgespielt wird mit dem bisherigen Image; mit --version=… wird danach die gewünschte Version gestartet
   compose stop "$SERVICE" || true
-  if [ -n "$RESTORE_FILE" ]; then compose run --rm --no-deps --name "$CONTAINER-restore" "$SERVICE" restore "$(basename "$RESTORE_FILE")" || true
-  else compose run --rm --no-deps --name "$CONTAINER-restore" "$SERVICE" restore || true; fi
-  compose up -d
-  wait_healthy && echo "${c_ok}SAMAUDIT läuft.${c_off}" || die "SAMAUDIT ist nicht bereit (Status: $(health_of)) – docker logs $CONTAINER"
-  exit 0
+  rc=0
+  if [ -n "$RESTORE_FILE" ]; then compose run --rm --no-deps --name "$CONTAINER-restore" "$SERVICE" restore "$(basename "$RESTORE_FILE")" || rc=$?
+  else compose run --rm --no-deps --name "$CONTAINER-restore" "$SERVICE" restore || rc=$?; fi
+  if [ "$rc" != 0 ] || [ -z "$NEW_VERSION" ]; then
+    compose up -d
+    wait_healthy && echo "${c_ok}SAMAUDIT läuft.${c_off}" || die "SAMAUDIT ist nicht bereit (Status: $(health_of)) – docker logs $CONTAINER"
+    [ "$rc" = 0 ] || die "Es wurde nichts zurückgespielt (siehe oben)."
+    exit 0
+  fi
+  echo "   zurückgespielt – jetzt Wechsel auf Version $NEW_VERSION"
 fi
 
 # gewünschte Version (der bisherige Eintrag wird gemerkt – ein Rückfall stellt ihn wieder her)

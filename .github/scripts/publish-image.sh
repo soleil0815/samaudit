@@ -50,7 +50,8 @@ for arch in amd64 arm64; do
     || fail "Image-Datei fehlgeschlagen" "Die Image-Datei für $arch ist unvollständig."
   docker rmi "$image:$version" >/dev/null 2>&1 || true
 done
-(cd "$assets" && sha256sum samaudit-*.tar.gz > SHA256SUMS)
+cp docker-compose.yml .env.example update.sh "$assets/"          # files for a new installation
+(cd "$assets" && sha256sum samaudit-*.tar.gz docker-compose.yml .env.example update.sh > SHA256SUMS)
 echo "image files: $(ls "$assets" | tr '\n' ' ')"
 
 tags=(-t "$image:$version")

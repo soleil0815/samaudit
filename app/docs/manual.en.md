@@ -107,7 +107,7 @@ Bottom left: **DE / EN** switches the language, **Dark / Light** the appearance.
 
 ### Requirements
 
-- Linux server with Docker (Docker Compose is not required).
+- Server or NAS with Docker and Docker Compose (or a container manager such as Dockhand or Portainer).
 - From the server to the DCs: TCP 636 (LDAPS), TCP 445 (SMB/SYSVOL), DNS.
 - A group **`SAMAUDIT-Benutzer`** in the domain containing the auditors' normal accounts:
   - Windows: `New-ADGroup SAMAUDIT-Benutzer -GroupScope Global` and `Add-ADGroupMember SAMAUDIT-Benutzer -Members max.muster`
@@ -115,22 +115,36 @@ Bottom left: **DE / EN** switches the language, **Dark / Light** the appearance.
 
 ### Installation
 
+The server only holds `docker-compose.yml`, `.env` and the data folder – the program lives in the image.
+
 ```bash
-unzip samaudit-v*.zip -d /opt && cd /opt/samaudit
+mkdir -p /opt/samaudit && cd /opt/samaudit
+IMG=ghcr.io/soleil0815/samaudit:latest
+docker run --rm --entrypoint cat $IMG /app/dist/docker-compose.yml > docker-compose.yml
+docker run --rm --entrypoint cat $IMG /app/dist/.env.example       > .env.example
 cp .env.example .env
 nano .env            # enter at least DOMAIN_FQDN and PUBLIC_HOSTNAME
-./update.sh
+docker compose up -d
 ```
 
-`update.sh` builds the image, starts the container and checks that everything works. Then open `https://<PUBLIC_HOSTNAME>:9400` in the browser. On first access the browser warns about the self-signed certificate – upload your own certificate under **Connection**.
+Both files are also attached to every GitHub release. Then open `https://<PUBLIC_HOSTNAME>:9400` in the browser. On first access the browser warns about the self-signed certificate – upload your own certificate under **Connection**.
+
+**With Dockhand, Portainer & co.:** create a stack from the content of `docker-compose.yml`, store the settings of `.env` with the stack and replace the paths `./data` and `./certs` with a fixed folder (e.g. `/opt/samaudit/data`).
+
+**DCs not resolvable via DNS?** Put a file `docker-compose.override.yml` next to `docker-compose.yml` – Compose reads it automatically:
+
+```yaml
+services:
+  samaudit:
+    dns: [10.0.10.10]
+    extra_hosts: ["dc01.firma.local:10.0.10.10"]
+```
 
 **Try it without a domain:** set `DEMO_MODE=true` in `.env` and sign in with `demo` / `demo`.
 
-**With Docker Compose or Dockhand:** the file `docker-compose.example.yml` (also inside the image under `/app/dist/`) starts SAMAUDIT with the same security settings as `update.sh`. Paste it as a stack in Dockhand or Portainer and replace the paths `./data`, `./certs` and `.env` with the SAMAUDIT folder. Use only one way per container – when switching from `update.sh`, run `docker rm -f samaudit && docker network rm samaudit-net` once. `DOCKER_DNS`/`DOCKER_EXTRA_HOSTS` then do not apply; use `dns:`/`extra_hosts:` in the file instead. Backups of `data/` are then not made by `update.sh` but by you.
-
 ### Settings (`.env`)
 
-All settings live in the `.env` file (annotated template: `.env.example`). After a change, `sh update.sh --restart` is enough. The most important ones:
+All settings live in the `.env` file (annotated template: `.env.example`). After a change: `docker compose up -d`. The most important ones:
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -139,7 +153,8 @@ All settings live in the `.env` file (annotated template: `.env.example`). After
 | `ALLOWED_GROUPS` | `SAMAUDIT-Benutzer` | auditor group(s) |
 | `DENIED_GROUPS` | – | additionally blocked groups |
 | `PUBLIC_HOSTNAME` | – | name used to open SAMAUDIT |
-| `PORT` | `9400` | port of the web interface |
+| `PORT` | `9400` | port of the web interface on the server |
+| `SAMAUDIT_VERSION` | `latest` | image version, e.g. `2.0.0` |
 | `LDAP_CERT_MODE` | `auto` | pin the DC certificate (`auto`), always trust (`trust`), verify against a CA (`verify`) |
 | `INACTIVE_DAYS` | `180` | when an account counts as inactive |
 | `SMB_CHECKS` | `true` | SYSVOL checks via SMB |
@@ -152,31 +167,44 @@ The complete list is in the README.
 
 ### Update
 
-**Ready-made image from GitHub (recommended):**
+**With a container manager (recommended):** Dockhand, Watchtower, Tugtainer or similar keep the container `samaudit` up to date. Recommendation: schedule updates **at night** – a restart aborts a scan that is running.
+
+**By hand:**
 
 ```bash
-sh update.sh --pull
+docker compose pull && docker compose up -d
 ```
 
-Fetches the newest version from `ghcr.io/soleil0815/samaudit`, backs up the database and certificates first, starts the new version, verifies it and automatically starts the previous one again on problems. `update.sh` itself is updated along the way. A specific version: `sh update.sh --pull=1.9.8` (or one of its security updates, e.g. `1.9.8-s1`). If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
+or `sh update.sh`: remembers the running version, checks the new one and starts the previous one again on problems; brings a newer `docker-compose.yml` along if needed (the previous one is kept as `docker-compose.yml.alt`). Also runs on a NAS. If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
 
-**Via ZIP file (local build):**
+**On every version change** SAMAUDIT itself backs up the database on first start to `data/backups/samaudit-vor-<version>-<time>.db` (the last 5 are kept) – however the update arrived.
 
-Copy the new ZIP file into the SAMAUDIT folder (e.g. with WinSCP) and run there:
+**Pinning a version:** set `SAMAUDIT_VERSION=2.0.0` in `.env` (or a security update such as `2.0.0-s1`), then `docker compose up -d`. Back to the newest: `SAMAUDIT_VERSION=latest`.
+
+**Going back to an older version:** an older version does not start on the database of a newer one but names the backup to restore in the log (`docker compose logs`). Order:
 
 ```bash
-sh update.sh samaudit-*.zip
+docker compose stop
+docker compose run --rm samaudit restore    # choose a backup, e.g. "samaudit-vor-2.1.0-…" to go back from 2.1.0
+nano .env                                   # SAMAUDIT_VERSION=2.0.0
+docker compose up -d
 ```
 
-The script shows the installed and the new version and asks for confirmation. It then backs up the current program files (`backups/program-*.tgz`), installs the new ones and removes files that no longer exist in the new version. Your `.env`, `data/`, `certs/` and `backups/` are never changed. Finally it asks whether to delete the ZIP file. Without a ZIP (`./update.sh`) it only rebuilds and restarts, with `--restart` it only restarts.
+Or in one step: `sh update.sh --restore --version=2.0.0`.
 
-On every run the script also backs up the database and certificates to `backups/` (the last 5 are kept), rebuilds, starts, checks that it works and removes old images. If the new version does not run, the previous one is started again automatically. Your `.env`, `data/`, `certs/` and `backups/` are kept. Options: `--no-backup`, `--no-cache`, `--help`. It builds from the pinned versions of the program source – the same as on GitHub.
+**Without internet:** get the image file (`samaudit-<version>-amd64.tar.gz`, on ARM `-arm64`) and `SHA256SUMS` from the GitHub release, copy them into the SAMAUDIT folder and run `sh update.sh --load samaudit-<version>-amd64.tar.gz`.
+
+**Switching from version 1.x** (previously `update.sh` with ZIP or `--pull`):
+
+1. Get the new `update.sh`: `docker pull ghcr.io/soleil0815/samaudit:latest` and `docker run --rm --entrypoint cat ghcr.io/soleil0815/samaudit:latest /app/dist/update.sh > update.sh`
+2. `sh update.sh` – switches to Docker Compose once (data stay, `DOCKER_DNS`/`DOCKER_EXTRA_HOSTS` are moved into `docker-compose.override.yml`).
+3. `sh update.sh --cleanup` – lists the files of earlier versions that are no longer needed and deletes them after asking. Data, backups, `.env`, Compose files and mounted folders are never touched.
 
 ### Security updates and versions
 
-Every component of the image has a pinned version: the base image (Debian 13 "trixie", Python 3.13) with its checksum, the Debian packages and the Python packages. Early every Monday GitHub checks whether there are newer packages within this base. If so, it rebuilds without cache, tests inside the image and scans with Trivy. Only if everything passes is a security update published with the version `<version>-s<n>`, e.g. `1.9.7-s1`, and as `latest`. The changed packages are listed in `CHANGELOG-SECURITY.md`. If there is nothing new, nothing happens. The running version is shown bottom left and at `/healthz` (field `image`).
+Every component of the image has a pinned version: the base image (Debian 13 "trixie", Python 3.13) with its checksum, the Debian packages and the Python packages. Early every Monday GitHub checks whether there are newer packages within this base. If so, it rebuilds without cache, tests inside the image and scans with Trivy. Only if everything passes is a security update published with the version `<version>-s<n>`, e.g. `2.0.0-s1`, and as `latest`. The changed packages are listed in `CHANGELOG-SECURITY.md`. If there is nothing new, nothing happens. The running version is shown bottom left and at `/healthz` (field `image`).
 
-Anyone watching `latest` (e.g. Dockhand, Watchtower) or running `sh update.sh --pull` gets the update. To stay on a version, specify it explicitly.
+Anyone using `latest` (container manager or `docker compose pull && docker compose up -d`) gets the update. To stay on a version, specify it explicitly.
 
 In addition, the published image is scanned daily, and every week it is checked how long Python 3.13 and Debian 13 still receive security updates: less than 12 months gives a notice, less than 6 months a red run. Python and Debian are never moved to a new major release automatically.
 
@@ -196,16 +224,17 @@ SAMAUDIT itself only connects to the domain controllers (LDAP, LDAPS, Global Cat
 
 ### Data, backup and restore
 
-Everything SAMAUDIT stores lives in the `data/` folder inside the SAMAUDIT folder: the database `samaudit.db` (reports, activity log, pinned DC certificates) and, under `tls/`, the certificates of the web interface.
+Everything SAMAUDIT stores is in the `data/` folder: the database `samaudit.db` (reports, activity log, remembered DC certificates), under `backups/` the automatic backups before every version change and under `tls/` the web UI certificates.
 
-**Backup:** automatic on every `./update.sh`, stored in `backups/`. **Restore:**
+**Restoring a backup:**
 
 ```bash
-docker stop samaudit
-sudo rm -f data/samaudit.db-wal data/samaudit.db-shm
-sudo tar xzf backups/samaudit-<version>-<date>.tgz -C data
-docker start samaudit
+docker compose stop
+docker compose run --rm samaudit restore    # list of backups, choose a number
+docker compose up -d
 ```
+
+The database from before the restore is kept as `samaudit-ersetzt-<time>.db`. **Full backup** (e.g. before moving): `docker compose stop`, `sudo tar czf samaudit-backup.tgz data .env`, `docker compose start`.
 
 ### Privacy
 
@@ -215,10 +244,11 @@ SAMAUDIT sends no data to third parties, loads nothing from the internet and del
 
 | Problem | Solution |
 |---|---|
-| `update.sh` says ".env was missing" | `.env` was created from the template – enter `DOMAIN_FQDN`, run again. |
-| No DC reachable | DNS inside the container: add the DCs in `.env` via `DOCKER_EXTRA_HOSTS=dc01.firma.local:10.0.0.10` or set `DOCKER_DNS`, then `sh update.sh --restart`. |
+| Container does not start, log: "START ABGEBROCHEN: Die Datenbank stammt von …" | An older version runs on the database of a newer one – restore the backup named there (see above) or use the newer version again. |
+| Notice "docker-compose.yml is outdated" | Get the current file (`sh update.sh` or `/app/dist/docker-compose.yml` from the image), own additions into `docker-compose.override.yml`, `docker compose up -d`. |
+| No DC reachable | DNS inside the container: add `dns`/`extra_hosts` in `docker-compose.override.yml` (see Installation), then `docker compose up -d`. |
 | Many checks "not checkable (SMB)" | Allow TCP 445 to the DCs or set `SMB_CHECKS=false`. |
-| View logs | `docker logs -f samaudit` |
+| View logs | `docker compose logs -f` |
 | Check version | `curl -k https://localhost:9400/healthz` |
 
 ---

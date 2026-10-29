@@ -162,6 +162,23 @@ class UpdateFlow(unittest.TestCase):
         self.assertIn("SAMAUDIT_VERSION=2.0.0", (e.dir / ".env").read_text())
         self.assertNotIn("2.0.1", (e.dir / ".env").read_text())
 
+    def test_restore_then_older_version(self):
+        e = Env(self)
+        e.image("img2", "2.1.0", tags=("latest",), local=True)
+        e.image("img1", "2.0.0", tags=("2.0.0",))
+        (e.dir / "docker-compose.yml").write_text(compose_text(1), encoding="utf-8")
+        e.running("img2")
+        r = e.run("-y", "--restore", "samaudit-vor-2.1.0-20261029-030000.db", "--version=2.0.0")
+        self.assertEqual(r.returncode, 0, e.out)
+        runs = e.calls("compose", "run")
+        self.assertEqual(runs[0]["argv"][-2:], ["restore", "samaudit-vor-2.1.0-20261029-030000.db"])
+        idx_run = e.state["calls"].index(runs[0])
+        ups = [i for i, c in enumerate(e.state["calls"]) if c["argv"][:3] == ["compose", "up", "-d"]]
+        self.assertEqual(len(ups), 1, "no start of the newer version in between")
+        self.assertGreater(ups[0], idx_run)
+        self.assertEqual(e.state["containers"]["samaudit"]["image"], "img1")
+        self.assertIn("SAMAUDIT_VERSION=2.0.0", (e.dir / ".env").read_text())
+
     def test_failed_start_asks_before_rollback(self):
         e = Env(self)
         e.image("img1", "2.0.0", tags=("old",), local=True)
