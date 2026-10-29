@@ -1,5 +1,26 @@
 [
   {
+    "version": "2.0.0",
+    "date": "2026-10-29",
+    "items": [
+      {
+        "type": "feature",
+        "de": "Installation und Updates wie bei Docker üblich: Auf dem Server liegen nur noch docker-compose.yml, .env und die Daten. Updates per Container-Verwaltung (Dockhand, Watchtower …) oder docker compose pull && docker compose up -d. Bestehende Installationen stellen einmal mit sh update.sh um und räumen mit sh update.sh --cleanup auf.",
+        "en": "Installation and updates the usual Docker way: the server only holds docker-compose.yml, .env and the data. Updates via a container manager (Dockhand, Watchtower …) or docker compose pull && docker compose up -d. Existing installations switch once with sh update.sh and clean up with sh update.sh --cleanup."
+      },
+      {
+        "type": "security",
+        "de": "SAMAUDIT sichert die Datenbank vor jedem Versionswechsel selbst (data/backups) und startet eine ältere Version nicht auf der Datenbank einer neueren – mit klarer Meldung, welche Sicherung zurückzuspielen ist.",
+        "en": "SAMAUDIT backs up its database itself before every version change (data/backups) and does not start an older version on the database of a newer one – with a clear message which backup to restore."
+      },
+      {
+        "type": "notice",
+        "de": "Neu: DNS-Server und feste DC-Einträge gehören jetzt in die docker-compose.override.yml (DOCKER_DNS/DOCKER_EXTRA_HOSTS werden beim Umstieg übernommen). Im Container läuft SAMAUDIT immer auf Port 9400; PORT in der .env bestimmt den Port nach außen.",
+        "en": "New: DNS servers and fixed DC entries now go into docker-compose.override.yml (DOCKER_DNS/DOCKER_EXTRA_HOSTS are taken over when switching). Inside the container SAMAUDIT always listens on port 9400; PORT in .env sets the port on the server."
+      }
+    ]
+  },
+  {
     "version": "1.9.8",
     "date": "2026-10-28",
     "items": [

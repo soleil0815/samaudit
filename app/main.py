@@ -22,7 +22,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 
-from . import auth, db, scanner
+from . import auth, datastate, db, scanner
 from .charts import hbars, level_class, login_dial, seal, trend
 from .config import settings
 from .adutil import LOCAL_TZ
@@ -119,7 +119,7 @@ def render(request: Request, name: str, ctx: dict, status: int = 200) -> Respons
     from . import news
     base = {"request": request, "lang": lang, "sess": session_of(request), "path": request.url.path,
             "news_unseen": news.unseen(request.cookies.get(news.COOKIE)), "news_headline": news.headline,
-            "news_text": news.text}
+            "news_text": news.text, "compose_msg": datastate.compose_message(lang)}
     base.update(ctx)
     return templates.TemplateResponse(request, name, base, status_code=status)
 

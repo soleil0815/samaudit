@@ -10,6 +10,9 @@ DATA="${DATA_DIR:-/app/data}"
 CERTS_SRC=/app/certs
 CERTS_RUN=/tmp/certs
 
+# "restore": play back a database backup (docker compose run --rm samaudit restore [file])
+if [ "${1:-}" = "restore" ]; then shift; set -- python -m app.restore "$@"; fi
+
 if [ "$(id -u)" = "0" ]; then
   mkdir -p "$DATA"
   chown -R "$APP_UID:$APP_GID" "$DATA"

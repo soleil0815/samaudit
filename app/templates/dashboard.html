@@ -16,6 +16,12 @@
   {% endif %}
 </div>
 
+{% if compose_msg %}
+<div class="news-strip sec" role="alert">
+  <span class="news-strip-tag">{{ 'Compose' }}</span>
+  <span class="news-strip-text">{{ compose_msg }}</span>
+</div>
+{% endif %}
 {% set nh = news_headline(news_unseen) %}{% if nh %}
 <div class="news-strip{{ ' sec' if nh.security }}" role="note">
   <span class="news-strip-tag">{{ t('news_new_in', lang, v=nh.version) }}</span>
