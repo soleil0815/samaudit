@@ -258,7 +258,7 @@ cp .env.example .env && nano .env        # mindestens DOMAIN_FQDN eintragen
 docker compose up -d
 ```
 
-`docker-compose.yml` und `.env.example` liegen auch jedem GitHub-Release bei. Danach im Browser `https://<server>:9400` öffnen. Beim ersten Start wird ein selbstsigniertes HTTPS-Zertifikat erzeugt (einmalige Browserwarnung); eigenes Zertifikat: siehe [Eigenes HTTPS-Zertifikat](#eigenes-https-zertifikat). Vorher die Prüfer-Gruppe anlegen – siehe [Wer darf sich anmelden?](#wer-darf-sich-anmelden).
+`docker-compose.yml` und `env.example` (als `.env.example` speichern) liegen ab 2.0.1 bzw. dem ersten Sicherheitsupdate auch jedem GitHub-Release bei. Danach im Browser `https://<server>:9400` öffnen. Beim ersten Start wird ein selbstsigniertes HTTPS-Zertifikat erzeugt (einmalige Browserwarnung); eigenes Zertifikat: siehe [Eigenes HTTPS-Zertifikat](#eigenes-https-zertifikat). Vorher die Prüfer-Gruppe anlegen – siehe [Wer darf sich anmelden?](#wer-darf-sich-anmelden).
 
 **Mit Dockhand, Portainer & Co.:** Inhalt der `docker-compose.yml` als Stack anlegen, die Einstellungen aus `.env.example` als Umgebungsdatei des Stacks hinterlegen und die Pfade `./data` und `./certs` durch einen festen Ordner ersetzen, z. B. `/opt/samaudit/data`.
 
@@ -444,7 +444,7 @@ Mit `update.sh` in einem Schritt: `sh update.sh --restore --version=2.0.0` (zeig
 
 ### Ohne Internet
 
-1. Auf einem Rechner mit Internet aus dem GitHub-Release herunterladen: die Image-Datei für den Server (`samaudit-<Version>-amd64.tar.gz`; Server/NAS mit ARM-Prozessor: `…-arm64.tar.gz`) und `SHA256SUMS`, für eine neue Installation auch `docker-compose.yml`, `.env.example` und `update.sh`.
+1. Auf einem Rechner mit Internet aus dem GitHub-Release herunterladen: die Image-Datei für den Server (`samaudit-<Version>-amd64.tar.gz`; Server/NAS mit ARM-Prozessor: `…-arm64.tar.gz`) und `SHA256SUMS`, für eine neue Installation auch `docker-compose.yml`, `env.example` (als `.env.example` speichern) und `update.sh`.
 2. Die Dateien in den SAMAUDIT-Ordner auf dem Server kopieren.
 3. `sh update.sh --load samaudit-<Version>-amd64.tar.gz` – prüft die Prüfsumme, lädt das Image (`docker load`), trägt `SAMAUDIT_VERSION` in die `.env` ein, startet und prüft. Ohne `update.sh`: `docker load -i <Datei>`, `SAMAUDIT_VERSION=<Version>` in die `.env`, `docker compose up -d`.
 
@@ -567,7 +567,7 @@ Das Container-Image wird auf GitHub gebaut und in der GitHub Container Registry 
 | Ereignis | Ergebnis |
 |---|---|
 | Pull Request, Push auf `main` | Selbsttests, Bau aus den festen Versionen, Tests im Image, echter Durchlauf des Update-Wegs mit Docker Compose (Umstieg, Rückfall, Zurückspielen, Aufräumen), Trivy – nichts wird veröffentlicht. Pull Requests führt der Besitzer zusammen, nie automatisch. |
-| manueller Start auf `main` (*Actions → Container image → Run workflow*) | wenn `app/version.py` eine neue Version enthält: Image `<Version>` und `latest` (falls höchste Version), Git-Tag `v<Version>`, GitHub-Release (Text aus `app/docs/news.json`) mit Image-Dateien für amd64/arm64, `SHA256SUMS`, `docker-compose.yml`, `.env.example` und `update.sh`. Eine schon veröffentlichte Version wird nie neu gebaut oder überschrieben. |
+| manueller Start auf `main` (*Actions → Container image → Run workflow*) | wenn `app/version.py` eine neue Version enthält: Image `<Version>` und `latest` (falls höchste Version), Git-Tag `v<Version>`, GitHub-Release (Text aus `app/docs/news.json`) mit Image-Dateien für amd64/arm64, `SHA256SUMS`, `docker-compose.yml`, `env.example` und `update.sh`. Eine schon veröffentlichte Version wird nie neu gebaut oder überschrieben. |
 | montags 03:17 UTC | Sicherheitsupdate `<Version>-s<n>` (siehe oben) |
 | täglich 05:43 UTC | Scan des veröffentlichten `latest` |
 

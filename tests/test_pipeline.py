@@ -165,6 +165,9 @@ class Workflows(unittest.TestCase):
         s = (ROOT / ".github/scripts/publish-image.sh").read_text(encoding="utf-8")
         self.assertIn("for arch in amd64 arm64", s)
         self.assertIn("SHA256SUMS", s)
+        # every file of the release folder must be visible to the "release-assets/*" glob (no leading dot)
+        self.assertIn('"$assets/env.example"', s)
+        self.assertNotRegex(s, r'"\$assets/\.')
         self.assertLess(s.index("trivy.sh"), s.index("docker save"), "only checked images become files")
 
     def test_publish_script_checks_before_tagging(self):
