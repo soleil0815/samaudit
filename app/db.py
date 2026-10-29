@@ -128,7 +128,8 @@ def _migrate(c: sqlite3.Connection) -> None:
 
 def init() -> None:
     with conn() as c:
-        c.executescript(SCHEMA)
+        c.executescript(SCHEMA)                 # nur CREATE … IF NOT EXISTS
+        c.execute("BEGIN IMMEDIATE")            # Migrationen und Versionsangabe ganz oder gar nicht
         _migrate(c)
         from .datastate import write_meta
         write_meta(c)  # Programm- und Schemaversion merken (Schutz vor Rückschritt)

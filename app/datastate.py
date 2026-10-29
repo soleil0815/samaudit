@@ -113,17 +113,39 @@ def _backups_for(version: str) -> list[str]:
     return [f for f in list_backups() if os.path.basename(f).startswith(f"samaudit-vor-{version}-")]
 
 
+_VOR = re.compile(r"^samaudit-vor-(.+?)-(\d{8}-\d{6})(?:-\d+)?\.db$")
+
+
 def _prune() -> None:
+    """Je Programmversion bleiben die älteste (Stand vor dem ersten Wechsel) und die neueste Sicherung;
+    behalten werden die Sicherungen der letzten BACKUP_KEEP Versionen. So kann eine Absturzschleife
+    keine nützlichen älteren Sicherungen verdrängen."""
     keep = backup_keep()
     if keep == 0:
         return
-    vor = [f for f in list_backups() if os.path.basename(f).startswith("samaudit-vor-")]
-    for f in vor[keep:]:
+    groups: dict[str, list[str]] = {}
+    for f in list_backups():                                   # neueste zuerst
+        m = _VOR.match(os.path.basename(f))
+        if m:
+            groups.setdefault(m.group(1), []).append(f)
+    order = sorted(groups, key=lambda v: os.path.getmtime(groups[v][0]), reverse=True)
+    remove: list[str] = []
+    for i, v in enumerate(order):
+        files = groups[v]
+        if i >= keep:
+            remove += files
+        elif len(files) > 2:
+            remove += files[1:-1]                              # zwischen neuester und ältester
+    for f in remove:
         try:
             os.remove(f)
             log.info("Alte Sicherung entfernt: %s", f)
         except OSError as e:
             log.warning("Alte Sicherung nicht entfernbar: %s (%s)", f, e)
+
+
+def _db_mtime() -> float:
+    return max(os.path.getmtime(p) for p in (settings.db_path, settings.db_path + "-wal") if os.path.exists(p))
 
 
 def backup_now(label: str) -> str:
@@ -135,7 +157,8 @@ def backup_now(label: str) -> str:
     while os.path.exists(dest):
         n += 1
         dest = os.path.join(backup_dir(), f"samaudit-{label}-{stamp}-{n}.db")
-    src = sqlite3.connect(settings.db_path, timeout=30)
+    # nur lesend öffnen: verändert die Datenbank (und ihren Zeitstempel) nicht
+    src = sqlite3.connect(f"file:{settings.db_path}?mode=ro", uri=True, timeout=30)
     try:
         tmp = dest + ".part"
         target = sqlite3.connect(tmp)
@@ -154,7 +177,11 @@ def check_and_backup() -> str | None:
     """Vor db.init(): Rückschritt erkennen, bei Versionswechsel sichern. Gibt den Sicherungspfad zurück."""
     if not os.path.exists(settings.db_path):
         return None                                   # neue Installation
-    meta = _read_meta(settings.db_path)
+    try:
+        meta = _read_meta(settings.db_path)
+    except sqlite3.DatabaseError as e:
+        raise StartRefused(f"Die Datenbank {settings.db_path} ist nicht lesbar ({e}). Bitte eine Sicherung "
+                           "zurückspielen: „docker compose run --rm samaudit restore“.") from None
     db_app = meta.get("app_version")
     try:
         db_schema = int(meta.get("schema_version", "0"))
@@ -175,6 +202,11 @@ def check_and_backup() -> str | None:
                            f"({VERSION}). Eine ältere Version kann sie nicht sicher verwenden. {what}")
     if db_app == VERSION and db_schema == SCHEMA_VERSION:
         return None                                   # gleiche Version wie zuletzt – nichts zu tun
+    # schon gesichert und seitdem unverändert (z. B. Neustart nach einem Absturz)? dann keine weitere Kopie
+    same = [b for b in _backups_for(VERSION) if os.path.getmtime(b) >= _db_mtime()]
+    if same:
+        log.info("Sicherung vor dem Wechsel auf %s besteht bereits: %s", VERSION, same[0])
+        return same[0]
     try:
         dest = backup_now(f"vor-{VERSION}")
     except Exception as e:  # noqa: BLE001

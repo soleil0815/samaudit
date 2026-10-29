@@ -172,16 +172,79 @@ class DataState(unittest.TestCase):
         self.assertTrue(any("samaudit-ersetzt-" in f for f in self.ds.list_backups()))
         self.assertEqual(self.rs.main(["../../etc/passwd"]), 1)
 
-    def test_rollback_restores_only_what_the_failed_update_changed(self):
+    def test_rollback_restores_the_state_before_the_update(self):
         self.start()
+        con = sqlite3.connect(self.db.settings.db_path)
+        con.execute("INSERT INTO kv VALUES('marker', 'vorher')"); con.commit(); con.close()
+        self.set_meta("1.0.0")
+        time.sleep(0.05)
         since = time.time()
-        self.set_meta(None)
-        self.start()                          # „neue Version“ übernimmt die Datenbank → Sicherung vor-<VERSION>
+        self.start()                          # neue Version übernimmt die Datenbank → Sicherung vor-<VERSION>
+        con = sqlite3.connect(self.db.settings.db_path)
+        con.execute("UPDATE kv SET value='nachher' WHERE key='marker'"); con.commit(); con.close()
+        time.sleep(0.05)
+        self.ds.backup_now(f"vor-{self.ds.VERSION}")   # spätere (teilweise migrierte) Kopie darf nicht gewinnen
         self.db._con.close(); self.db._con = None
-        self.assertEqual(self.rs.rollback(self.ds.VERSION, since), 0)
-        self.assertIsNone(self.ds._read_meta(self.db.settings.db_path).get("app_version"))
-        # Datenbank nicht von der neuen Version verändert → nichts zurückspielen
-        self.assertEqual(self.rs.rollback("77.0.0", since), 0)
+        self.assertEqual(self.rs.rollback(since), 0)
+        v = sqlite3.connect(self.db.settings.db_path).execute("SELECT value FROM kv WHERE key='marker'").fetchone()[0]
+        self.assertEqual(v, "vorher")
+        self.assertEqual(self.ds._read_meta(self.db.settings.db_path).get("app_version"), "1.0.0")
+
+    def test_rollback_of_security_update_changes_nothing(self):
+        self.start()                          # 2.0.0 → 2.0.0-s1: gleiche Programmversion, keine Sicherung
+        since = time.time()
+        self.assertIsNone(self.start())
+        self.db._con.close(); self.db._con = None
+        self.assertEqual(self.rs.rollback(since), 0)
+        self.assertFalse(any("ersetzt" in f for f in self.ds.list_backups()))
+
+    def test_crash_loop_does_not_pile_up_backups(self):
+        self.start()
+        self.set_meta("1.0.0")
+        self.db._con.close(); self.db._con = None
+        first = self.ds.check_and_backup()    # neue Version stürzt danach ab, bevor sie etwas schreibt
+        for _ in range(6):
+            self.assertEqual(self.ds.check_and_backup(), first)
+        self.assertEqual(len(self.ds._backups_for(self.ds.VERSION)), 1)
+
+    def test_prune_keeps_oldest_backup_per_version(self):
+        os.environ["BACKUP_KEEP"] = "2"
+        self.start()
+        names = []
+        for v in ("1.0.0", "1.1.0", "1.2.0", "1.2.0", "1.2.0", "1.2.0"):
+            names.append(os.path.basename(self.ds.backup_now(f"vor-{v}")))
+            time.sleep(0.02)
+        self.ds._prune()
+        left = {os.path.basename(f) for f in self.ds.list_backups()}
+        self.assertNotIn(names[0], left)                         # 1.0.0: dritte Version → weg
+        self.assertIn(names[1], left)                            # 1.1.0 bleibt
+        self.assertIn(names[2], left)                            # älteste 1.2.0 bleibt
+        self.assertIn(names[5], left)                            # neueste 1.2.0 bleibt
+        self.assertNotIn(names[3], left)
+
+    def test_unreadable_database_gives_clear_message(self):
+        with open(self.db.settings.db_path, "wb") as f:
+            f.write(b"das ist keine SQLite-Datenbank" * 100)
+        with self.assertRaises(self.ds.StartRefused) as cm:
+            self.ds.check_and_backup()
+        self.assertIn("restore", str(cm.exception))
+
+    def test_failed_migration_leaves_old_version_marked(self):
+        self.start()
+        self.set_meta("1.0.0", "1")
+        orig = self.db._migrate
+        def broken(c):
+            c.execute("ALTER TABLE scans ADD COLUMN halb TEXT")
+            raise RuntimeError("Migration bricht ab")
+        self.db._migrate = broken
+        self.addCleanup(setattr, self.db, "_migrate", orig)
+        self.db._con.close(); self.db._con = None
+        with self.assertRaises(RuntimeError):
+            self.db.init()
+        self.db._con.close(); self.db._con = None
+        cols = {r[1] for r in sqlite3.connect(self.db.settings.db_path).execute("PRAGMA table_info(scans)")}
+        self.assertNotIn("halb", cols, "half-done migration must be rolled back")
+        self.assertEqual(self.ds._read_meta(self.db.settings.db_path)["app_version"], "1.0.0")
 
 
 class ComposeVersion(unittest.TestCase):

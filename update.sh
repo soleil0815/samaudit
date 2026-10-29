@@ -11,23 +11,14 @@
 #   sh update.sh --cleanup         Dateien früherer Versionen auflisten und nach Rückfrage entfernen
 #   -y                             ohne Rückfragen (Rückfall auf die vorige Version erfolgt dann automatisch)
 #
-# Ablauf: laufendes Image als "previous" merken → Version holen → docker compose up -d → Gesundheitscheck.
+# Ablauf: neue Version holen → laufendes Image als "previous" merken → docker compose up -d → Gesundheitscheck.
 # Startet die neue Version nicht, läuft wieder die vorige (eine dabei geänderte Datenbank wird aus der
 # Sicherung "vor-<Version>" zurückgespielt). Die Datenbank sichert SAMAUDIT beim Versionswechsel selbst.
 # Läuft mit /bin/sh (dash, busybox – z. B. Synology), braucht Docker mit Compose v2.
 #
 # Windows-Zeilenenden (CRLF) werden repariert; das "#" am Zeilenende hält die nächste Zeile auch mit CRLF lauffähig.
-if grep -q "$(printf '\r')" "$0" 2>/dev/null; then sed -i 's/\r$//' "$0" && exec sh "$0" "$@"; echo "Bitte ausführen: sed -i 's/\r\$//' update.sh" >&2; exit 1; fi #
+if grep -q "$(printf '\r')" "$0" 2>/dev/null; then tr -d '\r' < "$0" > "$0.lf.$$" && cat "$0.lf.$$" > "$0" && rm -f "$0.lf.$$" && exec sh "$0" "$@"; echo "Bitte update.sh mit Unix-Zeilenenden (LF) speichern." >&2; exit 1; fi #
 set -eu
-
-cd "$(dirname "$0")"
-INSTALL_DIR="$(pwd -P)"
-CONTAINER=samaudit
-SERVICE=samaudit
-NETWORK=samaudit-net
-DEFAULT_REPO=ghcr.io/soleil0815/samaudit
-HEALTH_TIMEOUT="${SAMAUDIT_HEALTH_TIMEOUT:-180}"
-ROOT="${SAMAUDIT_TEST_ROOT:-}"        # nur für die Selbsttests: Ersatz für "/" (nie das echte /etc)
 
 YES=0; MODE=update; NEW_VERSION=""; LOAD_FILE=""; RESTORE_FILE=""
 while [ $# -gt 0 ]; do
@@ -47,6 +38,20 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+# relativer Pfad zur Image-Datei: gilt vom Aufrufort aus
+case "$LOAD_FILE" in ""|/*) ;; *) LOAD_FILE="$PWD/$LOAD_FILE" ;; esac
+
+cd "$(dirname "$0")"
+INSTALL_DIR="$(pwd -P)"
+CONTAINER=samaudit
+SERVICE=samaudit
+NETWORK=samaudit-net
+BRIDGE=br-samaudit
+DEFAULT_REPO=ghcr.io/soleil0815/samaudit
+HEALTH_TIMEOUT="${SAMAUDIT_HEALTH_TIMEOUT:-180}"
+ROOT="${SAMAUDIT_TEST_ROOT:-}"        # nur für die Selbsttests: Ersatz für "/" (nie das echte /etc)
+NL='
+'
 
 # --------------------------------------------------------------------------- Hilfsfunktionen
 if [ -t 1 ]; then c_ok="$(printf '\033[32m')"; c_warn="$(printf '\033[33m')"; c_err="$(printf '\033[31m')"; c_off="$(printf '\033[0m')"
@@ -68,27 +73,37 @@ ask_strict() {  # sicherheitsrelevant: -y beantwortet das nicht
 }
 valid_tag() { printf '%s' "$1" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'; }
 
+strip_cr() {  # strip_cr DATEI – Windows-Zeilenenden entfernen (Datei/Link bleibt dieselbe, Rechte bleiben)
+  tmp="$(mktemp "$INSTALL_DIR/.cr.XXXXXX")"
+  tr -d '\r' < "$1" > "$tmp" && cat "$tmp" > "$1"; rm -f "$tmp"
+}
 env_get() {  # env_get NAME → Wert aus der .env (ohne Kommentar, ohne Anführungszeichen)
   [ -f .env ] || return 0
   sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" .env | tail -n 1 \
     | sed -e 's/[[:space:]]#.*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/" -e 's/[[:space:]]*$//'
 }
-env_set() {  # env_set NAME WERT – Zeile ersetzen oder anhängen, Rechte bleiben
-  if grep -Eq "^[[:space:]]*#?[[:space:]]*$1[[:space:]]*=" .env; then
-    sed -i "s|^[[:space:]]*#\{0,1\}[[:space:]]*$1[[:space:]]*=.*|$1=$2|" .env
-  else
-    printf '\n%s=%s\n' "$1" "$2" >> .env
-  fi
+env_set() {  # env_set NAME WERT – Zeile(n) ersetzen oder anhängen; die .env bleibt dieselbe Datei (auch als Link)
+  tmp="$(mktemp "$INSTALL_DIR/.env.tmp.XXXXXX")"
+  awk -v k="$1" -v v="$2" '
+    { line = $0; sub(/^[ \t]*#?[ \t]*/, "", line)
+      if (index(line, k) == 1) { rest = substr(line, length(k) + 1); sub(/^[ \t]*/, "", rest)
+        if (substr(rest, 1, 1) == "=") { print k "=" v; done = 1; next } }
+      print }
+    END { if (!done) { print ""; print k "=" v } }' .env > "$tmp" && cat "$tmp" > .env
+  rm -f "$tmp"
 }
 
 command -v docker >/dev/null 2>&1 || die "docker ist nicht installiert."
 docker info >/dev/null 2>&1 || die "Kein Zugriff auf Docker – mit sudo ausführen oder den Benutzer in die Gruppe 'docker' aufnehmen."
 if docker compose version >/dev/null 2>&1; then COMPOSE="docker compose"
-elif command -v docker-compose >/dev/null 2>&1 && docker-compose version >/dev/null 2>&1; then COMPOSE="docker-compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+  cv="$(docker-compose version --short 2>/dev/null || true)"
+  case "$cv" in 1.*|"") die "docker-compose ${cv:-?} ist zu alt – benötigt wird Docker Compose v2 (docker compose)." ;; esac
+  COMPOSE="docker-compose"
 else die "Docker Compose fehlt (docker compose bzw. docker-compose)."; fi
 compose() { $COMPOSE "$@"; }
 
-[ -f .env ] && grep -q "$(printf '\r')" .env && sed -i 's/\r$//' .env && echo "Windows-Zeilenenden in .env repariert."
+if [ -f .env ] && grep -q "$(printf '\r')" .env; then strip_cr .env; echo "Windows-Zeilenenden in .env repariert."; fi
 
 REPO="$(env_get SAMAUDIT_IMAGE)"; REPO="${REPO:-$DEFAULT_REPO}"
 container_exists() { docker inspect "$CONTAINER" >/dev/null 2>&1; }
@@ -96,6 +111,7 @@ label_of() { docker inspect -f "{{index .Config.Labels \"$2\"}}" "$1" 2>/dev/nul
 health_of() { docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER" 2>/dev/null || echo missing; }
 image_version() { docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' "$1" 2>/dev/null || true; }
 compose_file_version() { sed -n 's/^[[:space:]]*SAMAUDIT_COMPOSE:[[:space:]]*"\{0,1\}\([0-9][0-9]*\)"\{0,1\}.*/\1/p' "$1" 2>/dev/null | head -n 1; }
+volume_lines() { grep -E '^[[:space:]]*-[[:space:]].*:/app/(data|certs)' "$1" 2>/dev/null | sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//' || true; }
 
 wait_healthy() {  # 0 = gesund
   i=0
@@ -110,50 +126,66 @@ wait_healthy() {  # 0 = gesund
   return 1
 }
 
+realpath_of() {  # vollständig aufgelöster Pfad (Links, ..), auch ohne Leserecht am Ziel; leer = unbekannt
+  r="$(readlink -f "$1" 2>/dev/null || true)"
+  if [ -z "$r" ]; then
+    if [ -d "$1" ]; then r="$( (cd -P "$1" 2>/dev/null && pwd -P) || true)"
+    else d="$( (cd -P "$(dirname "$1")" 2>/dev/null && pwd -P) || true)"; [ -n "$d" ] && r="$d/$(basename "$1")"; fi
+  fi
+  printf '%s\n' "$r"
+}
+
 # Wem gehört der Container? Eine andere Compose-Installation (z. B. Stack in Dockhand) nicht anfassen.
 check_owner() {
   container_exists || return 0
   wd="$(label_of "$CONTAINER" com.docker.compose.project.working_dir)"
-  if [ -n "$wd" ] && [ "$(cd "$wd" 2>/dev/null && pwd -P || echo "$wd")" != "$INSTALL_DIR" ]; then
+  if [ -n "$wd" ] && [ "$(realpath_of "$wd")" != "$INSTALL_DIR" ] && [ "$wd" != "$INSTALL_DIR" ]; then
     die "Der Container $CONTAINER gehört zu einer anderen Compose-Installation ($wd), z. B. einem Stack in
        Dockhand/Portainer. Bitte dort aktualisieren – oder dieses Skript in jenem Ordner ausführen."
   fi
 }
 
 # --------------------------------------------------------------------------- Aufräumen (--cleanup)
-# Dateien früherer Versionen (ZIP-Weg, lokaler Bau, Host-Firewall). Daten, Sicherungen, Einstellungen,
-# Compose-Dateien und alles, was ein laufender Container einbindet, sind geschützt – auch über Links.
+# Dateien früherer Versionen (ZIP-Weg, lokaler Bau, Host-Firewall). Nur in einem SAMAUDIT-Ordner, nur
+# bekannte Namen. Daten, Sicherungen, Einstellungen, Compose-Dateien und alles, was ein Container im
+# Ordner einbindet, sind geschützt – auch über Links und Einhängepunkte. Im Zweifel wird nichts gelöscht.
 CLEAN_FILES="Dockerfile entrypoint.sh run.py requirements.txt requirements.in requirements-dev.txt requirements-dev.in
 requirements.txt.new .dockerignore .gitattributes .gitignore .trivyignore README.md README.en.md LICENSE NOTICE
 THIRD-PARTY-NOTICES.md DATENSCHUTZ.md SECURITY.md CHANGELOG-SECURITY.md .samaudit-manifest base-image.lock .env.run
 .firewall-targets samaudit-firewall.sh docker-compose.override.example.yml docker-compose.example.yml"
-CLEAN_DIRS="app tools tests locks .github"
 
-realpath_of() {  # vollständig aufgelöster Pfad (auch für Links); leer, wenn nicht ermittelbar
-  if [ -d "$1" ]; then (cd -P "$1" 2>/dev/null && pwd -P)
-  else
-    d="$(cd -P "$(dirname "$1")" 2>/dev/null && pwd -P)" || return 0
-    b="$(basename "$1")"
-    if [ -L "$1" ]; then
-      t="$(readlink -f "$1" 2>/dev/null || true)"; [ -n "$t" ] && { printf '%s\n' "$t"; return 0; }
-    fi
-    printf '%s/%s\n' "$d" "$b"
-  fi
+is_samaudit_dir() {  # Ordner eines Unterordners mit Programmdateien, erkannt am Inhalt
+  case "$1" in
+    app) grep -qs 'APP_NAME = "SAMAUDIT"' app/version.py ;;
+    tools) [ -f tools/clean-history.sh ] || [ -f tools/lockutil.py ] || [ -f tools/update-locks.sh ] ;;
+    tests) [ -f tests/smoke.py ] ;;
+    locks) [ -f locks/os-packages.txt ] ;;
+    .github) [ -f .github/workflows/docker-image.yml ] ;;
+    *) return 1 ;;
+  esac
 }
 
-protected_paths() {
+protected_paths() {  # eine Zeile je geschütztem Pfad (aufgelöst UND wie im Ordner geschrieben)
   for p in data backups certs .env .env.example docker-compose.yml docker-compose.override.yml docker-compose.yml.alt update.sh; do
-    [ -e "$p" ] || [ -L "$p" ] || continue
-    realpath_of "$p"
-    [ -L "$p" ] && printf '%s/%s\n' "$INSTALL_DIR" "$p"
+    printf '%s/%s\n' "$INSTALL_DIR" "$p"
+    if [ -e "$p" ] || [ -L "$p" ]; then r="$(realpath_of "$p")"; [ -n "$r" ] && printf '%s\n' "$r"; fi
   done
-  # eingebundene Ordner aller Container (auch gestoppter) – nie löschen, auch nicht über Umwege
-  for c in $(docker ps -aq 2>/dev/null); do
+  # Ordner, die Container (auch gestoppte) aus diesem Ordner einbinden
+  ids="$(docker ps -aq)" || return 1
+  for c in $ids; do
     docker inspect -f '{{range .Mounts}}{{.Source}}{{"\n"}}{{end}}' "$c" 2>/dev/null || true
-  done | while IFS= read -r m; do [ -n "$m" ] && { realpath_of "$m" 2>/dev/null || printf '%s\n' "$m"; }; done
-  # Einhängepunkte unterhalb des Ordners (rm -r würde sonst hineinlaufen)
+  done | while IFS= read -r m; do
+    [ -n "$m" ] || continue
+    r="$(realpath_of "$m")"; [ -n "$r" ] || r="$m"
+    case "$r" in "$INSTALL_DIR"|"$INSTALL_DIR"/*) printf '%s\n' "$r" ;; esac
+  done
+  # Einhängepunkte unterhalb des Ordners (rm -r würde sonst hineinlaufen); /proc/mounts kodiert Leerzeichen als \040
   if [ -r "${ROOT}/proc/mounts" ]; then
-    awk '{print $2}' "${ROOT}/proc/mounts" | while IFS= read -r m; do
+    awk '{ p = $2
+           while (match(p, /\\[0-7][0-7][0-7]/)) {
+             o = substr(p, RSTART + 1, 3); c = (substr(o,1,1) * 64) + (substr(o,2,1) * 8) + substr(o,3,1)
+             p = substr(p, 1, RSTART - 1) sprintf("%c", c) substr(p, RSTART + 4) }
+           print p }' "${ROOT}/proc/mounts" | while IFS= read -r m; do
       case "$m" in "$INSTALL_DIR"/*) printf '%s\n' "$m" ;; esac
     done
   fi
@@ -166,45 +198,58 @@ overlaps() {  # overlaps A B → 0, wenn A gleich B ist oder einer im anderen li
 }
 
 cleanup() {
-  set -f; OLDIFS="$IFS"; IFS='
-'                                                   # Namen mit Leerzeichen sicher behandeln, nichts expandieren
-  [ -d .git ] && die "Hier liegt eine Git-Arbeitskopie (.git) – das ist ein Entwicklerordner, --cleanup räumt hier nichts auf."
-  prot="$(protected_paths | sort -u)"
-  list=""
-  add() { list="${list}${1}
-"; }
-  IFS="$OLDIFS"; set +f
+  { [ -e .git ] || [ -L .git ]; } && die "Hier liegt eine Git-Arbeitskopie (.git) – das ist ein Entwicklerordner, --cleanup räumt hier nichts auf."
+  if ! grep -qs 'SAMAUDIT_COMPOSE' docker-compose.yml && [ ! -f .samaudit-manifest ] \
+     && ! grep -qs 'APP_NAME = "SAMAUDIT"' app/version.py; then
+    die "Das ist kein SAMAUDIT-Ordner (keine docker-compose.yml von SAMAUDIT, keine Programmdateien) – nichts aufgeräumt."
+  fi
+  prot="$(protected_paths)" || die "Die geschützten Pfade konnten nicht vollständig ermittelt werden (Docker erreichbar?) – nichts gelöscht."
+  case "$NL$prot$NL" in *"$NL$INSTALL_DIR/data$NL"*) ;; *) die "Schutzliste unvollständig – nichts gelöscht." ;; esac
+
+  list=""; skipped=""
+  add() { list="$list$1$NL"; }
   for f in $CLEAN_FILES; do { [ -e "$f" ] || [ -L "$f" ]; } && add "$f"; done
-  for d in $CLEAN_DIRS; do { [ -e "$d" ] || [ -L "$d" ]; } && add "$d"; done
-  for f in .update-* *.new.* samaudit*.zip SAMAUDIT*.zip Samaudit*.zip samaudit*.ZIP SAMAUDIT*.ZIP; do
-    { [ -e "$f" ] || [ -L "$f" ]; } && add "$f"
+  for d in app tools tests locks .github; do
+    if [ -L "$d" ]; then add "$d"
+    elif [ -d "$d" ]; then
+      if is_samaudit_dir "$d"; then add "$d"; else skipped="$skipped  $d/ (nicht als SAMAUDIT-Ordner erkannt)$NL"; fi
+    fi
   done
-  # Versionsordner: entpackte Pakete früherer Versionen (erkannt an app/version.py)
+  for f in .update-* update.sh.new.[0-9]* docker-compose.yml.new.[0-9]* .env.example.new.[0-9]* \
+           samaudit*.zip SAMAUDIT*.zip Samaudit*.zip samaudit*.ZIP SAMAUDIT*.ZIP; do
+    { [ -e "$f" ] || [ -L "$f" ]; } || continue
+    case "$f" in *"$NL"*) skipped="$skipped  (Name mit Zeilenumbruch übersprungen)$NL"; continue ;; esac
+    add "$f"
+  done
+  # Versionsordner: entpackte Pakete früherer Versionen (erkannt an app/version.py) – nie mit Daten darin
   for d in samaudit* SAMAUDIT* Samaudit*; do
-    [ -d "$d" ] && [ ! -L "$d" ] && [ -f "$d/app/version.py" ] && add "$d"
+    [ -d "$d" ] && [ ! -L "$d" ] && grep -qs 'APP_NAME = "SAMAUDIT"' "$d/app/version.py" || continue
+    case "$d" in *"$NL"*) continue ;; esac
+    if [ -e "$d/data" ] || [ -n "$(find "$d" \( -name '*.db' -o -name '*.tgz' -o -name '.env' \) 2>/dev/null | head -n 1)" ]; then
+      skipped="$skipped  $d/ (enthält Daten oder Einstellungen)$NL"; continue
+    fi
+    add "$d"
   done
   list="$(printf '%s' "$list" | sort -u)"
-  set -f; IFS='
-'
 
-  ok=""; skipped=""
+  ok=""
+  set -f; OLDIFS="$IFS"; IFS="$NL"
   for f in $list; do
-    case "$f" in */*|..|.) skipped="$skipped  $f (unsicherer Name)
-"; continue ;; esac
-    if [ -L "$f" ]; then ok="$ok$f
-"; continue; fi                                  # Link: nur der Link selbst wird entfernt, nie das Ziel
+    [ -n "$f" ] || continue
+    case "$f" in */*|..|.|-*) skipped="$skipped  $f (unsicherer Name)$NL"; continue ;; esac
+    if [ -L "$f" ]; then ok="$ok$f$NL"; continue; fi            # Link: nur der Link selbst wird entfernt, nie das Ziel
     r="$(realpath_of "$f")"
-    case "$r" in "$INSTALL_DIR"/*) ;; *) skipped="$skipped  $f (liegt nicht im SAMAUDIT-Ordner)
-"; continue ;; esac
+    case "$r" in "$INSTALL_DIR"/*) ;; *) skipped="$skipped  $f (Pfad nicht sicher bestimmbar)$NL"; continue ;; esac
     hit=""
-    for p in $prot; do overlaps "$r" "$p" && { hit="$p"; break; }; done
-    if [ -n "$hit" ]; then skipped="$skipped  $f (geschützt: enthält oder ist $hit)
-"; continue; fi
-    ok="$ok$f
-"
+    for p in $prot; do [ -n "$p" ] && overlaps "$r" "$p" && { hit="$p"; break; }; done
+    if [ -n "$hit" ]; then skipped="$skipped  $f (geschützt: enthält oder ist $hit)$NL"; continue; fi
+    if [ -d "$f" ] && [ "$(find "$f" -xdev 2>/dev/null | wc -l)" != "$(find "$f" 2>/dev/null | wc -l)" ]; then
+      skipped="$skipped  $f (enthält ein eingehängtes Laufwerk)$NL"; continue
+    fi
+    ok="$ok$f$NL"
   done
-
   IFS="$OLDIFS"; set +f
+
   unit="${ROOT}/etc/systemd/system/samaudit-firewall.service"
   [ -f "$unit" ] && has_unit=1 || has_unit=0
   old_containers="$(for c in samaudit-old samaudit-alt; do docker inspect "$c" >/dev/null 2>&1 && echo "$c"; done; true)"
@@ -240,9 +285,9 @@ cleanup() {
       $SUDO rm -f "$unit" && $SUDO systemctl daemon-reload >/dev/null 2>&1 || true
       if command -v iptables >/dev/null 2>&1; then
         for ch in DOCKER-USER FORWARD; do
-          while $SUDO iptables -C "$ch" -i br-samaudit -j SAMAUDIT-EGRESS 2>/dev/null; do $SUDO iptables -D "$ch" -i br-samaudit -j SAMAUDIT-EGRESS; done
+          while $SUDO iptables -C "$ch" -i "$BRIDGE" -j SAMAUDIT-EGRESS 2>/dev/null; do $SUDO iptables -D "$ch" -i "$BRIDGE" -j SAMAUDIT-EGRESS; done
         done
-        while $SUDO iptables -C INPUT -i br-samaudit -j SAMAUDIT-HOST 2>/dev/null; do $SUDO iptables -D INPUT -i br-samaudit -j SAMAUDIT-HOST; done
+        while $SUDO iptables -C INPUT -i "$BRIDGE" -j SAMAUDIT-HOST 2>/dev/null; do $SUDO iptables -D INPUT -i "$BRIDGE" -j SAMAUDIT-HOST; done
         for t in SAMAUDIT-EGRESS SAMAUDIT-HOST; do $SUDO iptables -F "$t" 2>/dev/null || true; $SUDO iptables -X "$t" 2>/dev/null || true; done
       fi
     fi
@@ -266,10 +311,18 @@ take_files_from_image() {  # take_files_from_image IMAGE
     else
       old_v="$(compose_file_version docker-compose.yml)"
       if [ "${new_v:-0}" -gt "${old_v:-0}" ]; then
-        cp -p docker-compose.yml docker-compose.yml.alt
-        cp "$tmpd/docker-compose.yml" docker-compose.yml.new.$$ && mv -f docker-compose.yml.new.$$ docker-compose.yml
-        warn "Neue docker-compose.yml (Version ${old_v:-ohne} → $new_v) abgelegt; die bisherige liegt als docker-compose.yml.alt daneben.
+        if [ "$(volume_lines docker-compose.yml)" != "$(volume_lines "$tmpd/docker-compose.yml")" ]; then
+          # die bisherige Datei bindet andere Ordner ein – nicht ersetzen, sonst liefe SAMAUDIT auf leeren Daten
+          cp "$tmpd/docker-compose.yml" docker-compose.yml.neu
+          warn "Im Image liegt eine neuere docker-compose.yml (Version $new_v), Ihre Datei bindet aber andere Ordner ein.
+         Sie wurde NICHT ersetzt; die neue liegt als docker-compose.yml.neu daneben. Bitte die eigenen Pfade
+         in eine docker-compose.override.yml übernehmen und dann docker-compose.yml.neu → docker-compose.yml."
+        else
+          cp -p docker-compose.yml docker-compose.yml.alt
+          cp "$tmpd/docker-compose.yml" docker-compose.yml.new.$$ && mv -f docker-compose.yml.new.$$ docker-compose.yml
+          warn "Neue docker-compose.yml (Version ${old_v:-ohne} → $new_v) abgelegt; die bisherige liegt als docker-compose.yml.alt daneben.
          Eigene Änderungen bitte in docker-compose.override.yml übernehmen."
+        fi
       fi
     fi
   fi
@@ -287,8 +340,16 @@ take_files_from_image() {  # take_files_from_image IMAGE
 
 # --------------------------------------------------------------------------- Umstieg von update.sh ≤ 1.9
 # Früher startete update.sh den Container mit "docker run". Einmalig: Compose-Datei anlegen,
-# DOCKER_DNS/DOCKER_EXTRA_HOSTS in die Override-Datei übernehmen, alten Container und alte
-# Netz-Definition entfernen (Compose legt beides neu an). Das alte Image bleibt als "previous".
+# DOCKER_DNS/DOCKER_EXTRA_HOSTS in die Override-Datei übernehmen, alten Container beiseitestellen
+# (für den Rückfall) und seine Netz-Definition lösen (Compose legt das Netz selbst an).
+legacy_check_mount() {
+  src="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app/data"}}{{.Source}}{{end}}{{end}}' "$CONTAINER" 2>/dev/null || true)"
+  [ -n "$src" ] || return 0
+  if [ "$(realpath_of "$src")" != "$INSTALL_DIR/data" ] && [ "$src" != "$INSTALL_DIR/data" ]; then
+    die "Der laufende Container $CONTAINER verwendet die Daten aus $src, nicht aus $INSTALL_DIR/data.
+       Bitte update.sh im Ordner der bisherigen Installation ausführen – hier wird nichts geändert."
+  fi
+}
 migrate_legacy() {
   if [ ! -f docker-compose.override.yml ]; then
     dns="$(env_get DOCKER_DNS | tr ',;' '  ')"; hosts="$(env_get DOCKER_EXTRA_HOSTS | tr ',;' '  ')"
@@ -303,10 +364,32 @@ migrate_legacy() {
       echo "   DOCKER_DNS/DOCKER_EXTRA_HOSTS → docker-compose.override.yml übernommen"
     fi
   fi
-  for c in "$CONTAINER-old" "$CONTAINER-alt"; do docker rm -f "$c" >/dev/null 2>&1 || true; done
-  if container_exists && [ -z "$(label_of "$CONTAINER" com.docker.compose.project)" ]; then
-    docker rm -f "$CONTAINER" >/dev/null && echo "   bisherigen Container (gestartet mit docker run) entfernt – Daten bleiben"
+  if grep -Eq "^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=[[:space:]]*[^'[:space:]][^#]*[\$]" .env 2>/dev/null; then
+    warn "In der .env enthält ein Wert ein \$-Zeichen. Docker Compose würde es als Variable lesen –
+         solche Werte bitte in einfache Anführungszeichen setzen, z. B. TLS_PFX_PASSWORD='ab\$cd'."
   fi
+  for c in "$CONTAINER-old" "$CONTAINER-alt"; do docker rm -f "$c" >/dev/null 2>&1 || true; done
+  docker stop "$CONTAINER" >/dev/null 2>&1 || true
+  docker rename "$CONTAINER" "$CONTAINER-alt" || die "Der bisherige Container ließ sich nicht beiseitestellen – nichts geändert."
+  docker update --restart=no "$CONTAINER-alt" >/dev/null 2>&1 || true
+  docker network disconnect -f "$NETWORK" "$CONTAINER-alt" >/dev/null 2>&1 || true
+  LEGACY_ASIDE=1
+  echo "   bisherigen Container (gestartet mit docker run) beiseitegestellt – Daten bleiben"
+}
+legacy_back() {  # Umstieg misslungen: alten Container wieder wie vorher starten
+  [ "${LEGACY_ASIDE:-0}" = 1 ] || return 1
+  step "Bisherige Installation wird wieder gestartet"
+  compose down >/dev/null 2>&1 || true
+  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  docker network inspect "$NETWORK" >/dev/null 2>&1 || \
+    docker network create --driver bridge -o "com.docker.network.bridge.name=$BRIDGE" "$NETWORK" >/dev/null 2>&1 || true
+  docker network connect "$NETWORK" "$CONTAINER-alt" >/dev/null 2>&1 || true
+  docker rename "$CONTAINER-alt" "$CONTAINER" && docker update --restart=unless-stopped "$CONTAINER" >/dev/null 2>&1 || true
+  docker start "$CONTAINER" >/dev/null 2>&1 || true
+  LEGACY_ASIDE=0
+  wait_healthy && { echo "   bisherige Installation läuft wieder."; return 0; }
+  warn "Auch die bisherige Installation startet nicht – bitte prüfen: docker ps -a"
+  return 1
 }
 drop_foreign_network() {  # von update.sh ≤ 1.9 angelegtes Netz: Compose möchte es selbst verwalten
   docker network inspect "$NETWORK" >/dev/null 2>&1 || return 0
@@ -315,30 +398,45 @@ drop_foreign_network() {  # von update.sh ≤ 1.9 angelegtes Netz: Compose möch
 }
 
 # --------------------------------------------------------------------------- Rückfall
-rollback() {  # rollback NEUE_PROGRAMMVERSION STARTZEIT
+# Die vorige Version läuft danach unter ihrer eigenen Versionsnummer (in der .env festgelegt) –
+# so startet auch ein späteres "docker compose up -d" oder eine Container-Verwaltung nicht die kaputte.
+rollback() {
   step "Vorige Version wird wieder gestartet"
-  if docker image inspect "$REPO:previous" >/dev/null 2>&1; then
-    # hat die neue Version die Datenbank schon umgestellt? dann die Sicherung "vor-<Version>" zurück
-    if [ -n "$1" ]; then
-      compose stop "$SERVICE" >/dev/null 2>&1 || true
-      SAMAUDIT_VERSION="$TAG" compose run --rm --no-deps -T --name "$CONTAINER-restore" "$SERVICE" restore --rollback "$1" "$2" \
-        || warn "Datenbank konnte nicht automatisch zurückgespielt werden – siehe oben (sh update.sh --restore)."
-    fi
-    if [ "$(env_get SAMAUDIT_VERSION)" != "$ENV_TAG_BEFORE" ]; then
-      env_set SAMAUDIT_VERSION "${ENV_TAG_BEFORE:-latest}"
-      echo "   SAMAUDIT_VERSION in der .env wieder auf ${ENV_TAG_BEFORE:-latest} gesetzt"
-    fi
-    SAMAUDIT_VERSION=previous compose up -d >/dev/null 2>&1 || true
-    if wait_healthy; then
-      echo "   vorige Version läuft wieder (Image $REPO:previous)."
-      echo "   Hinweis: bis zum nächsten Update läuft sie unter dem Namen 'previous'."
-      return 0
-    fi
-    warn "Auch die vorige Version startet nicht – bitte Log prüfen: docker logs $CONTAINER"
-  else
-    warn "Keine vorige Version vorhanden."
+  [ -n "$OLD_ID" ] || { warn "Keine vorige Version vorhanden."; return 1; }
+  compose stop "$SERVICE" >/dev/null 2>&1 || true
+  # hat die neue Version die Datenbank schon übernommen? dann deren Sicherung "vor-…" zurückspielen
+  SAMAUDIT_VERSION="$TAG" compose run --rm --no-deps -T --name "$CONTAINER-restore" "$SERVICE" restore --rollback "$START" \
+    || warn "Datenbank konnte nicht automatisch zurückgespielt werden (siehe oben) – ggf. sh update.sh --restore."
+  back_tag="$OLD_VER"; valid_tag "$back_tag" || back_tag="${ENV_TAG_BEFORE:-latest}"
+  [ "$back_tag" = previous ] && back_tag=latest
+  docker tag "$OLD_ID" "$REPO:$back_tag"
+  env_set SAMAUDIT_VERSION "$back_tag"
+  ROLLED_BACK=1
+  compose up -d >/dev/null 2>&1 || true
+  if wait_healthy; then
+    echo "   vorige Version $back_tag läuft wieder."
+    [ "$back_tag" != "${ENV_TAG_BEFORE:-latest}" ] && \
+      echo "   SAMAUDIT_VERSION=$back_tag ist jetzt in der .env festgelegt – nach Behebung wieder ${ENV_TAG_BEFORE:-latest} eintragen."
+    return 0
   fi
+  warn "Auch die vorige Version startet nicht – bitte Log prüfen: docker logs $CONTAINER"
   return 1
+}
+
+# Bei einem Abbruch nichts halb lassen: .env zurück, angehaltenen Dienst wieder starten
+ENV_CHANGED=0; STOPPED=0; ROLLED_BACK=0; LEGACY_ASIDE=0
+on_exit() {
+  rc=$?
+  [ "$rc" = 0 ] && return 0
+  if [ "$ENV_CHANGED" = 1 ] && [ "$ROLLED_BACK" = 0 ]; then
+    env_set SAMAUDIT_VERSION "${ENV_TAG_BEFORE:-latest}"
+    echo "   SAMAUDIT_VERSION in der .env wieder auf ${ENV_TAG_BEFORE:-latest} gesetzt."
+  fi
+  if [ "$LEGACY_ASIDE" = 1 ]; then legacy_back || true
+  elif [ "$STOPPED" = 1 ] && [ "$ROLLED_BACK" = 0 ] && [ "$(health_of)" != healthy ]; then
+    echo "   bisherige Version wird wieder gestartet …"; compose up -d >/dev/null 2>&1 || true
+  fi
+  exit "$rc"
 }
 
 # --------------------------------------------------------------------------- Ablauf
@@ -354,44 +452,41 @@ grep -Eq '^[[:space:]]*DOMAIN_FQDN[[:space:]]*=[[:space:]]*[^[:space:]#]' .env |
 mkdir -p data certs
 
 check_owner
+trap on_exit EXIT
 
-if [ "$MODE" = restore ]; then
+ENV_TAG_BEFORE="$(env_get SAMAUDIT_VERSION)"
+if [ -n "$NEW_VERSION" ]; then valid_tag "$NEW_VERSION" || die "Ungültige Version: $NEW_VERSION"; TAG="$NEW_VERSION"
+else TAG="${ENV_TAG_BEFORE:-latest}"; fi
+valid_tag "$TAG" || die "Ungültige SAMAUDIT_VERSION in der .env: $TAG"
+[ "$TAG" = previous ] && die "Die Version 'previous' ist reserviert – bitte eine Versionsnummer oder latest eintragen."
+
+restore_now() {  # zurückspielen mit dem bisherigen Image (das neuere kennt "restore" sicher)
   [ -f docker-compose.yml ] || die "docker-compose.yml fehlt – erst einmal sh update.sh ausführen."
   step "Sicherung zurückspielen"
-  # zurückgespielt wird mit dem bisherigen Image; mit --version=… wird danach die gewünschte Version gestartet
   compose stop "$SERVICE" || true
-  rc=0
-  if [ -n "$RESTORE_FILE" ]; then compose run --rm --no-deps --name "$CONTAINER-restore" "$SERVICE" restore "$(basename "$RESTORE_FILE")" || rc=$?
-  else compose run --rm --no-deps --name "$CONTAINER-restore" "$SERVICE" restore || rc=$?; fi
-  if [ "$rc" != 0 ] || [ -z "$NEW_VERSION" ]; then
-    compose up -d
-    wait_healthy && echo "${c_ok}SAMAUDIT läuft.${c_off}" || die "SAMAUDIT ist nicht bereit (Status: $(health_of)) – docker logs $CONTAINER"
-    [ "$rc" = 0 ] || die "Es wurde nichts zurückgespielt (siehe oben)."
-    exit 0
-  fi
-  echo "   zurückgespielt – jetzt Wechsel auf Version $NEW_VERSION"
+  STOPPED=1
+  if [ -n "$RESTORE_FILE" ]; then
+    SAMAUDIT_VERSION="${ENV_TAG_BEFORE:-latest}" compose run --rm --no-deps --name "$CONTAINER-restore" "$SERVICE" restore "$(basename "$RESTORE_FILE")"
+  else
+    SAMAUDIT_VERSION="${ENV_TAG_BEFORE:-latest}" compose run --rm --no-deps --name "$CONTAINER-restore" "$SERVICE" restore
+  fi || die "Es wurde nichts zurückgespielt (siehe oben)."
+}
+
+if [ "$MODE" = restore ] && [ -z "$NEW_VERSION" ]; then
+  restore_now
+  compose up -d
+  wait_healthy && echo "${c_ok}SAMAUDIT läuft.${c_off}" || die "SAMAUDIT ist nicht bereit (Status: $(health_of)) – docker logs $CONTAINER"
+  STOPPED=0
+  exit 0
 fi
 
-# gewünschte Version (der bisherige Eintrag wird gemerkt – ein Rückfall stellt ihn wieder her)
-ENV_TAG_BEFORE="$(env_get SAMAUDIT_VERSION)"
-if [ -n "$NEW_VERSION" ]; then
-  valid_tag "$NEW_VERSION" || die "Ungültige Version: $NEW_VERSION"
-  env_set SAMAUDIT_VERSION "$NEW_VERSION"
-  echo "Version festgelegt: SAMAUDIT_VERSION=$NEW_VERSION (in der .env)"
-fi
-TAG="$(env_get SAMAUDIT_VERSION)"; TAG="${TAG:-latest}"
-valid_tag "$TAG" || die "Ungültige SAMAUDIT_VERSION in der .env: $TAG"
-[ "$TAG" = previous ] && die "SAMAUDIT_VERSION=previous ist für den Rückfall reserviert – bitte eine Version oder latest eintragen."
-
-# 1) laufendes Image als "previous" merken
 OLD_ID=""; OLD_VER=""
 if container_exists; then
   OLD_ID="$(docker inspect -f '{{.Image}}' "$CONTAINER")"
   OLD_VER="$(image_version "$OLD_ID")"
-  docker tag "$OLD_ID" "$REPO:previous"
 fi
 
-# 2) Version holen
+# 1) neue Version holen – die .env wird erst geändert, wenn das Image da ist
 if [ "$MODE" = load ]; then
   [ -f "$LOAD_FILE" ] || die "Datei nicht gefunden: $LOAD_FILE"
   sums="$(dirname "$LOAD_FILE")/SHA256SUMS"
@@ -409,52 +504,75 @@ if [ "$MODE" = load ]; then
   printf '%s\n' "$out"
   loaded="$(printf '%s\n' "$out" | sed -n 's/^Loaded image: //p' | grep -F "$REPO:" | head -n 1)"
   [ -n "$loaded" ] || die "Die Datei enthält kein Image von $REPO."
-  TAG="${loaded##*:}"; env_set SAMAUDIT_VERSION "$TAG"
-  echo "   SAMAUDIT_VERSION=$TAG (in der .env)"
+  TAG="${loaded##*:}"
+  valid_tag "$TAG" && [ "$TAG" != previous ] || die "Ungültige Version in der Image-Datei: $TAG"
 else
   step "Image holen: $REPO:$TAG"
-  docker pull "$REPO:$TAG" || die "Image konnte nicht geholt werden. Privates Repository? Einmal anmelden:
-       docker login ghcr.io -u <GitHub-Benutzer>   (Passwort: Token mit read:packages – wird nicht angezeigt)"
+  docker pull "$REPO:$TAG" || die "Image $REPO:$TAG konnte nicht geholt werden (Version vorhanden? Privates Repository? Dann einmal:
+       docker login ghcr.io -u <GitHub-Benutzer> – Passwort: Token mit read:packages, wird nicht angezeigt)."
 fi
 NEW_ID="$(docker image inspect -f '{{.Id}}' "$REPO:$TAG")"
 NEW_VER="$(image_version "$REPO:$TAG")"
 echo "SAMAUDIT: bisher ${OLD_VER:-–}  →  neu ${NEW_VER:-$TAG}"
 
-# 3) Compose-Datei (und Vorlagen) aus dem Image
+# 2) bei --restore --version=…: jetzt zurückspielen (das neue Image ist schon da)
+[ "$MODE" = restore ] && restore_now
+
+# 3) Version in die .env
+if [ "$TAG" != "${ENV_TAG_BEFORE:-latest}" ] || { [ -n "$NEW_VERSION$LOAD_FILE" ] && [ -z "$ENV_TAG_BEFORE" ]; }; then
+  env_set SAMAUDIT_VERSION "$TAG"; ENV_CHANGED=1
+  echo "   SAMAUDIT_VERSION=$TAG (in der .env)"
+fi
+
+# 4) Compose-Datei (und Vorlagen) aus dem Image
 take_files_from_image "$REPO:$TAG"
 [ -f docker-compose.yml ] || die "docker-compose.yml fehlt und ist auch nicht im Image enthalten."
 
 LEGACY=0
 if container_exists && [ -z "$(label_of "$CONTAINER" com.docker.compose.project)" ]; then LEGACY=1; fi
-if [ "$LEGACY" = 0 ] && [ "$OLD_ID" = "$NEW_ID" ] && [ "$(health_of)" = healthy ]; then
+if [ "$LEGACY" = 0 ] && [ "$MODE" != restore ] && [ "$OLD_ID" = "$NEW_ID" ] && [ "$(health_of)" = healthy ]; then
   echo "SAMAUDIT ${NEW_VER:-} ist aktuell – nichts zu tun."
+  ENV_CHANGED=0
   exit 0
 fi
 
-# 4) starten
+# 5) laufendes Image als "previous" merken, starten
+[ -n "$OLD_ID" ] && docker tag "$OLD_ID" "$REPO:previous"
 if [ "$LEGACY" = 1 ]; then
   step "Umstieg auf Docker Compose (einmalig)"
+  legacy_check_mount
   migrate_legacy
 fi
 drop_foreign_network
 step "Starten"
 START="$(date +%s)"
-compose up -d || { rollback "" "" || true; die "docker compose up ist fehlgeschlagen (siehe oben)."; }
+STOPPED=1
+if ! compose up -d; then
+  if [ "$LEGACY" = 1 ]; then legacy_back || true; die "docker compose up ist fehlgeschlagen (siehe oben). Die bisherige Installation läuft weiter."; fi
+  if [ -n "$OLD_ID" ] && rollback; then die "docker compose up ist fehlgeschlagen (siehe oben). Es läuft wieder die vorige Version."; fi
+  die "docker compose up ist fehlgeschlagen (siehe oben)."
+fi
 
-# 5) Gesundheitscheck
+# 6) Gesundheitscheck
 step "Gesundheitscheck"
 if ! wait_healthy; then
   docker logs --tail 40 "$CONTAINER" 2>&1 || true
+  if [ "$LEGACY" = 1 ]; then
+    legacy_back && die "Neue Version ${NEW_VER:-$TAG} ist nicht bereit (Log oben). Die bisherige Installation läuft wieder."
+    die "Neue Version ${NEW_VER:-$TAG} ist nicht bereit (Log oben)."
+  fi
   if [ -n "$OLD_ID" ] && ask "Die neue Version startet nicht. Vorige Version wieder starten?" J; then
-    rollback "${NEW_VER%%-s*}" "$START" || true
-    die "Neue Version ${NEW_VER:-$TAG} ist nicht bereit (Log oben). Es läuft wieder die vorige."
+    rollback && die "Neue Version ${NEW_VER:-$TAG} ist nicht bereit (Log oben). Es läuft wieder die vorige."
+    die "Neue Version ${NEW_VER:-$TAG} ist nicht bereit, und die vorige startet auch nicht (siehe oben)."
   fi
   die "Neue Version ${NEW_VER:-$TAG} ist nicht bereit (Status: $(health_of), Log oben)."
 fi
+STOPPED=0; ENV_CHANGED=0
 echo "   ${c_ok}läuft${c_off} – Version ${NEW_VER:-$TAG}"
 docker logs --since 5m "$CONTAINER" 2>&1 | grep -E "ERROR|Konfiguration:|Hinweis:|gesichert" | tail -n 5 || true
+if [ "$LEGACY" = 1 ]; then docker rm -f "$CONTAINER-alt" >/dev/null 2>&1 || true; LEGACY_ASIDE=0; fi
 
-# 6) aufräumen: nicht mehr benannte SAMAUDIT-Images (previous bleibt für einen Rückschritt)
+# 7) aufräumen: nicht mehr benannte SAMAUDIT-Images (previous bleibt für einen Rückschritt)
 docker image prune -f --filter "label=org.opencontainers.image.title=SAMAUDIT" >/dev/null 2>&1 || true
 
 host="$(env_get PUBLIC_HOSTNAME)"; port="$(env_get PORT)"

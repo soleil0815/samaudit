@@ -27,10 +27,12 @@ def compose_text(version: int) -> str:
 class Env:
     """Ein Installationsordner + Zustand des nachgebauten docker."""
 
-    def __init__(self, tc: unittest.TestCase):
+    def __init__(self, tc: unittest.TestCase, name: str = "install"):
         self.tmp = Path(tempfile.mkdtemp(prefix="samaudit-test-"))
         tc.addCleanup(shutil.rmtree, self.tmp, True)
-        self.dir = self.tmp / "install"
+        self.extra_env: dict[str, str] = {}
+        self.extra_path = ""
+        self.dir = self.tmp / name
         self.dir.mkdir()
         shutil.copy(ROOT / "update.sh", self.dir / "update.sh")
         (self.dir / ".env").write_text("DOMAIN_FQDN=firma.local\nPORT=9400\n", encoding="utf-8")
@@ -70,11 +72,11 @@ class Env:
         self.state = json.loads(self.state_file.read_text(encoding="utf-8"))
         return self.state
 
-    def run(self, *args: str, inp: str | None = None) -> subprocess.CompletedProcess:
-        env = {"PATH": f"{FAKE}:{os.environ['PATH']}", "FAKE_STATE": str(self.state_file),
+    def run(self, *args: str, inp: str | None = None, cwd: Path | None = None) -> subprocess.CompletedProcess:
+        env = {"PATH": f"{self.extra_path}{FAKE}:{os.environ['PATH']}", "FAKE_STATE": str(self.state_file),
                "SAMAUDIT_TEST_ROOT": str(self.rootfs), "SAMAUDIT_HEALTH_TIMEOUT": "6", "HOME": str(self.tmp),
-               "LANG": "C.UTF-8"}
-        r = subprocess.run([SH, "update.sh", *args], cwd=self.dir, env=env, input=inp, capture_output=True,
+               "LANG": "C.UTF-8", **self.extra_env}
+        r = subprocess.run([SH, str(self.dir / "update.sh"), *args], cwd=cwd or self.dir, env=env, input=inp, capture_output=True,
                            text=True, timeout=120)
         self.load()
         self.out = r.stdout + r.stderr
@@ -142,13 +144,13 @@ class UpdateFlow(unittest.TestCase):
         self.assertEqual(e.state["containers"]["samaudit"]["image"], "img1", e.out)
         runs = e.calls("compose", "run")
         self.assertTrue(runs, e.out)
-        self.assertIn("--rollback", runs[0]["argv"])
-        self.assertIn("2.0.1", runs[0]["argv"])          # Programmversion ohne -sN
-        self.assertNotIn("2.0.1-s2", runs[0]["argv"])
+        self.assertEqual(runs[0]["argv"][-2], "--rollback")
+        self.assertTrue(runs[0]["argv"][-1].isdigit())                # Startzeit des Updates
         self.assertEqual(runs[0]["SAMAUDIT_VERSION"], "latest")      # Restore mit dem neuen Image
-        ups = e.calls("compose", "up", "-d")
-        self.assertEqual(ups[-1]["SAMAUDIT_VERSION"], "previous")
-        self.assertIn("vorige", e.out)
+        # die vorige Version läuft unter ihrer eigenen Nummer, die .env ist darauf festgelegt
+        self.assertIn("SAMAUDIT_VERSION=2.0.0", (e.dir / ".env").read_text())
+        self.assertEqual(e.state["images"][f"{REPO}:2.0.0"], "img1")
+        self.assertIn("vorige Version 2.0.0 läuft wieder", e.out)
 
     def test_rollback_resets_the_version_in_env(self):
         e = Env(self)
@@ -266,6 +268,124 @@ class UpdateFlow(unittest.TestCase):
         self.assertIn("SAMAUDIT_VERSION=2.0.2", (e.dir / ".env").read_text())
         self.assertEqual(e.state["containers"]["samaudit"]["image"], "img9")
 
+    # ---- Funde der unabhängigen Prüfung (dürfen nicht wiederkommen) ----
+    def test_env_untouched_when_version_does_not_exist(self):
+        e = Env(self)
+        e.image("img1", "2.0.0", tags=("latest",), local=True)
+        (e.dir / "docker-compose.yml").write_text(compose_text(1), encoding="utf-8")
+        e.running("img1")
+        before = (e.dir / ".env").read_text()
+        r = e.run("-y", "--version=2.0.9")                       # Tippfehler: gibt es nicht
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual((e.dir / ".env").read_text(), before)
+        self.assertFalse(e.calls("compose", "stop"))
+        self.assertFalse(e.calls("compose", "up", "-d"))
+
+    def test_restore_with_missing_version_changes_nothing(self):
+        e = Env(self)
+        e.image("img1", "2.1.0", tags=("latest",), local=True)
+        (e.dir / "docker-compose.yml").write_text(compose_text(1), encoding="utf-8")
+        e.running("img1")
+        r = e.run("-y", "--restore", "x.db", "--version=2.0.9")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertFalse(e.calls("compose", "stop"), "image must be fetched before anything is stopped")
+        self.assertFalse(e.calls("compose", "run"))
+
+    def test_noop_keeps_previous(self):
+        e = Env(self)
+        e.image("img1", "2.0.0", tags=("old",), local=True)
+        e.image("img2", "2.0.1", local=True)
+        e.state["images"][f"{REPO}:previous"] = "img1"
+        (e.dir / "docker-compose.yml").write_text(compose_text(1), encoding="utf-8")
+        e.running("img2")
+        r = e.run("-y")
+        self.assertIn("nichts zu tun", e.out)
+        self.assertEqual(e.state["images"][f"{REPO}:previous"], "img1")
+
+    def test_relative_load_path(self):
+        e = Env(self)
+        e.image("img9", "2.0.2", tags=())
+        f = e.tmp / "img.tar.gz"
+        f.write_text(json.dumps({"images": {f"{REPO}:2.0.2": "img9"}}), encoding="utf-8")
+        r = e.run("-y", "--load", "img.tar.gz", cwd=e.tmp)     # Aufruf aus einem anderen Ordner
+        self.assertEqual(r.returncode, 0, e.out)
+        self.assertEqual(e.state["containers"]["samaudit"]["image"], "img9")
+
+    def test_compose_file_with_own_paths_is_not_replaced(self):
+        e = Env(self)
+        e.image("img1", "2.0.0", tags=("old",), local=True)
+        e.image("img2", "2.1.0", compose_version=2)
+        own = compose_text(1).replace("- ./data:/app/data", "- /volume1/samaudit/data:/app/data")
+        (e.dir / "docker-compose.yml").write_text(own, encoding="utf-8")
+        e.running("img1")
+        r = e.run("-y")
+        self.assertEqual((e.dir / "docker-compose.yml").read_text(), own)
+        self.assertTrue((e.dir / "docker-compose.yml.neu").exists())
+        self.assertIn("NICHT ersetzt", e.out)
+
+    def test_legacy_container_of_other_folder_is_not_touched(self):
+        e = Env(self)
+        e.image("old", "1.9.8", tags=("1.9.8",), local=True)
+        e.image("img2", "2.0.0")
+        e.running("old", compose=False)
+        e.state["containers"]["samaudit"]["mounts"] = ["/srv/anderer-ordner/data"]
+        e.save()
+        r = e.run("-y")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("/srv/anderer-ordner/data", e.out)
+        self.assertIn("samaudit", e.state["containers"])
+        self.assertEqual(e.state["containers"]["samaudit"]["image"], "old")
+
+    def test_legacy_migration_failure_restores_old_container(self):
+        e = Env(self)
+        e.image("old", "1.9.8", tags=("1.9.8",), local=True)
+        e.image("img2", "2.0.0")
+        e.running("old", compose=False)
+        e.state["networks"]["samaudit-net"] = {"labels": {}}
+        e.save()
+        e.extra_env["FAKE_UP_FAILS"] = "1"
+        r = e.run("-y")
+        self.assertNotEqual(r.returncode, 0)
+        c = e.state["containers"].get("samaudit")
+        self.assertIsNotNone(c, e.out)
+        self.assertEqual(c["image"], "old")
+        self.assertNotIn("samaudit-alt", e.state["containers"])
+        self.assertIn("bisherige Installation", e.out)
+
+    def test_rollback_without_version_label_still_restores_database(self):
+        e = Env(self)
+        e.image("img1", "", tags=("old",), local=True)
+        e.image("img3", "", health="unhealthy")
+        (e.dir / "docker-compose.yml").write_text(compose_text(1), encoding="utf-8")
+        e.running("img1")
+        e.run("-y")
+        self.assertTrue(e.calls("compose", "run"), e.out)
+        self.assertEqual(e.state["containers"]["samaudit"]["image"], "img1")
+
+    def test_compose_v1_is_refused(self):
+        e = Env(self)
+        bindir = e.tmp / "bin"
+        bindir.mkdir()
+        (bindir / "docker-compose").write_text("#!/bin/sh\necho 1.29.2\n", encoding="utf-8")
+        os.chmod(bindir / "docker-compose", 0o755)
+        e.extra_path = f"{bindir}:"
+        e.extra_env["FAKE_NO_COMPOSE"] = "1"
+        r = e.run("-y")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("zu alt", e.out)
+
+    def test_env_symlink_stays_a_symlink(self):
+        e = Env(self)
+        e.image("img1", "2.0.0", tags=("2.0.0",))
+        real = e.tmp / "secret.env"
+        real.write_text("DOMAIN_FQDN=firma.local\nSAMAUDIT_VERSION=latest\n", encoding="utf-8")
+        (e.dir / ".env").unlink()
+        os.symlink(real, e.dir / ".env")
+        r = e.run("-y", "--version=2.0.0")
+        self.assertEqual(r.returncode, 0, e.out)
+        self.assertTrue(os.path.islink(e.dir / ".env"))
+        self.assertIn("SAMAUDIT_VERSION=2.0.0", real.read_text())
+
     def test_zip_and_build_paths_are_gone(self):
         e = Env(self)
         r = e.run("samaudit-v1.9.8.zip")
@@ -292,10 +412,10 @@ class Cleanup(unittest.TestCase):
                   ".samaudit-manifest", "base-image.lock", "samaudit-v1.9.6.zip", "SAMAUDIT-v1.7.1.zip"):
             (d / f).write_text("x", encoding="utf-8")
         (d / "app").mkdir()
-        (d / "app" / "version.py").write_text('VERSION = "1.9.8"\n', encoding="utf-8")
+        (d / "app" / "version.py").write_text('APP_NAME = "SAMAUDIT"\nVERSION = "1.9.8"\n', encoding="utf-8")
         (d / ".update-abc").mkdir()
         (d / "samaudit-v1.9.6" / "app").mkdir(parents=True)
-        (d / "samaudit-v1.9.6" / "app" / "version.py").write_text("x", encoding="utf-8")
+        (d / "samaudit-v1.9.6" / "app" / "version.py").write_text('APP_NAME = "SAMAUDIT"\n', encoding="utf-8")
         # Daten, Sicherungen, Einstellungen
         (d / "data").mkdir()
         (d / "data" / "samaudit.db").write_text("DATEN", encoding="utf-8")
@@ -329,6 +449,7 @@ class Cleanup(unittest.TestCase):
         shutil.rmtree(d / "app")
         os.symlink(d / "data", d / "app")                      # Programmordner ist ein Link auf die Daten
         (d / "locks").mkdir()
+        (d / "locks" / "os-packages.txt").write_text("x", encoding="utf-8")
         os.symlink(d / "data" / "samaudit.db", d / "locks" / "db-link")   # Link im zu löschenden Ordner
         os.symlink(d / "backups", d / "tools")
         r = e.run("--cleanup", "-y")
@@ -344,6 +465,7 @@ class Cleanup(unittest.TestCase):
         d = e.dir
         # die Daten liegen IN einem Ordner mit Programmnamen (data ist ein Link dorthin)
         (d / "tests").mkdir()
+        (d / "tests" / "smoke.py").write_text("x", encoding="utf-8")
         shutil.move(str(d / "data"), str(d / "tests" / "data"))
         os.symlink(d / "tests" / "data", d / "data")
         r = e.run("--cleanup", "-y")
@@ -355,6 +477,7 @@ class Cleanup(unittest.TestCase):
         e = self.make()
         d = e.dir
         (d / "tools").mkdir()
+        (d / "tools" / "lockutil.py").write_text("x", encoding="utf-8")
         (d / "tools" / "wichtig.txt").write_text("EINGEBUNDEN", encoding="utf-8")
         e.state["containers"]["anderer"] = {"image": "x", "labels": {}, "mounts": [str(d / "tools")]}
         e.save()
@@ -366,6 +489,7 @@ class Cleanup(unittest.TestCase):
         e = self.make()
         d = e.dir
         (d / "locks").mkdir()
+        (d / "locks" / "os-packages.txt").write_text("x", encoding="utf-8")
         (d / "locks" / "nas").mkdir()
         (e.rootfs / "proc" / "mounts").write_text(f"/dev/sdb1 {d}/locks/nas ext4 rw 0 0\n", encoding="utf-8")
         r = e.run("--cleanup", "-y")
@@ -384,6 +508,81 @@ class Cleanup(unittest.TestCase):
         r = e.run("--cleanup", "-y")
         self.assertNotEqual(r.returncode, 0)
         self.assertTrue((e.dir / "Dockerfile").exists())
+
+    # ---- Funde der unabhängigen Prüfung ----
+    def test_unreadable_data_does_not_disable_protection(self):
+        e = self.make()
+        d = e.dir
+        (d / "tools").mkdir()
+        (d / "tools" / "lockutil.py").write_text("x", encoding="utf-8")
+        (d / "tools" / "wichtig.txt").write_text("EINGEBUNDEN", encoding="utf-8")
+        e.state["containers"]["anderer"] = {"image": "x", "labels": {}, "mounts": [str(d / "tools")]}
+        e.save()
+        os.chmod(d / "data", 0)                          # wie data/ (UID 10001, 0700) für einen Nicht-root-Benutzer
+        self.addCleanup(os.chmod, d / "data", 0o755)
+        r = e.run("--cleanup", "-y")
+        os.chmod(d / "data", 0o755)
+        self.assertTrue((d / "tools" / "wichtig.txt").exists(), e.out)
+        self.assertEqual((d / "data" / "samaudit.db").read_text(), "DATEN")
+
+    def test_docker_failure_aborts_cleanup(self):
+        e = self.make()
+        e.extra_env["FAKE_PS_FAILS"] = "1"
+        r = e.run("--cleanup", "-y")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertTrue((e.dir / "Dockerfile").exists())
+
+    def test_mount_point_in_folder_with_space(self):
+        e = Env(self, name="sam audit")
+        d = e.dir
+        (d / "docker-compose.yml").write_text(compose_text(1), encoding="utf-8")
+        (d / "data").mkdir()
+        (d / "locks" / "nas").mkdir(parents=True)
+        (d / "locks" / "os-packages.txt").write_text("x", encoding="utf-8")
+        (d / "locks" / "nas" / "datei").write_text("NAS", encoding="utf-8")
+        mp = str(d / "locks" / "nas").replace(" ", "\\040")
+        (e.rootfs / "proc" / "mounts").write_text(f"//nas/share {mp} cifs rw 0 0\n", encoding="utf-8")
+        r = e.run("--cleanup", "-y")
+        self.assertEqual((d / "locks" / "nas" / "datei").read_text(), "NAS", e.out)
+
+    def test_refuses_outside_a_samaudit_folder(self):
+        e = Env(self)
+        d = e.dir
+        for f in ("README.md", "LICENSE"):
+            (d / f).write_text("MEINS", encoding="utf-8")
+        (d / "tools").mkdir()
+        r = e.run("--cleanup", "-y")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual((d / "README.md").read_text(), "MEINS")
+        self.assertTrue((d / "tools").exists())
+
+    def test_git_file_counts_as_checkout(self):
+        e = self.make()
+        (e.dir / ".git").write_text("gitdir: /x\n", encoding="utf-8")
+        r = e.run("--cleanup", "-y")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertTrue((e.dir / "Dockerfile").exists())
+
+    def test_unknown_files_and_folders_are_left_alone(self):
+        e = self.make()
+        d = e.dir
+        (d / "bericht.new.docx").write_text("MEINS", encoding="utf-8")
+        (d / "tools").mkdir()
+        (d / "tools" / "mein-skript.sh").write_text("MEINS", encoding="utf-8")
+        (d / "x.new.\nnotes.txt").write_text("x", encoding="utf-8")
+        (d / "notes.txt").write_text("MEINS", encoding="utf-8")
+        old = d / "samaudit-v1.7.0"
+        (old / "app").mkdir(parents=True)
+        (old / "app" / "version.py").write_text('APP_NAME = "SAMAUDIT"\n', encoding="utf-8")
+        (old / "data").mkdir()
+        (old / "data" / "samaudit.db").write_text("ALTE DATEN", encoding="utf-8")
+        r = e.run("--cleanup", "-y")
+        self.assertEqual(r.returncode, 0, e.out)
+        self.assertEqual((d / "bericht.new.docx").read_text(), "MEINS")
+        self.assertEqual((d / "tools" / "mein-skript.sh").read_text(), "MEINS")
+        self.assertEqual((d / "notes.txt").read_text(), "MEINS")
+        self.assertEqual((old / "data" / "samaudit.db").read_text(), "ALTE DATEN")
+        self.assertFalse((d / "Dockerfile").exists())
 
     def test_names_with_spaces(self):
         e = self.make()

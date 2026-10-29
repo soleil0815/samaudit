@@ -26,8 +26,10 @@
 #
 # Container-Verwaltung ohne Override-Datei (z. B. Stack in Dockhand/Portainer): Inhalt einfügen und
 # die Pfade ./data und ./certs durch den Datenordner ersetzen, z. B. /opt/samaudit/data.
+# Portainer speichert die Umgebungsvariablen eines Stacks als „stack.env“: dort env_file: stack.env eintragen.
 # Container managers without an override file (e.g. a stack in Dockhand/Portainer): paste the
 # content and replace the paths ./data and ./certs with your data folder, e.g. /opt/samaudit/data.
+# Portainer stores a stack's environment variables as "stack.env": use env_file: stack.env there.
 
 name: samaudit
 

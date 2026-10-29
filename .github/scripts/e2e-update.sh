@@ -47,7 +47,8 @@ wait_healthy() {
 ver="$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' "$src")"
 [ -n "$ver" ] || fail "Image ohne Versionsangabe"
 docker tag "$src" "$repo:$ver"
-printf 'FROM %s\nLABEL org.opencontainers.image.version="9.9.9"\nHEALTHCHECK --interval=2s --timeout=2s --start-period=1s --retries=2 CMD false\n' "$src" \
+# "kaputte" neue Version: übernimmt die Datenbank (Programmversion 9.9.9), besteht aber den Gesundheitscheck nie
+printf 'FROM %s\nRUN sed -i "s/^VERSION = .*/VERSION = \\"9.9.9\\"/" /app/app/version.py\nLABEL org.opencontainers.image.version="9.9.9"\nHEALTHCHECK --interval=2s --timeout=2s --start-period=1s --start-interval=1s --retries=2 CMD false\n' "$src" \
   | docker build -q -t "$repo:9.9.9" - >/dev/null
 docker save "$repo:$ver" | gzip > "$work/samaudit-$ver-amd64.tar.gz"
 docker save "$repo:9.9.9" | gzip > "$work/samaudit-9.9.9-amd64.tar.gz"
@@ -74,6 +75,18 @@ wait_healthy || fail "Alte Installation startet nicht"
 # Datenbank wie von einer Version vor 2.0 (ohne Versionsangabe)
 db_py "import sqlite3; c = sqlite3.connect('/app/data/samaudit.db'); c.execute(\"DELETE FROM kv WHERE key='app_version'\"); c.commit()"
 
+# 1a) Umstieg scheitert (Port belegt) → die bisherige Installation muss wieder laufen
+python3 -m http.server 19400 >/dev/null 2>&1 &
+blocker=$!
+sleep 1
+if upd -y --load "$work/samaudit-$ver-amd64.tar.gz"; then kill "$blocker"; fail "Umstieg trotz belegtem Port als erfolgreich gemeldet"; fi
+kill "$blocker"; wait "$blocker" 2>/dev/null || true
+wait_healthy || fail "nach gescheitertem Umstieg läuft die bisherige Installation nicht"
+[ -z "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' samaudit)" ] || fail "gescheiterter Umstieg: nicht der bisherige Container"
+docker inspect samaudit-alt >/dev/null 2>&1 && fail "gescheiterter Umstieg: samaudit-alt bleibt liegen"
+grep -q "^SAMAUDIT_VERSION=$ver" "$dir/.env" && fail "gescheiterter Umstieg: SAMAUDIT_VERSION nicht zurückgesetzt"
+echo "1a) gescheiterter Umstieg: ok"
+
 upd -y --load "$work/samaudit-$ver-amd64.tar.gz" || fail "Umstieg mit update.sh fehlgeschlagen"
 [ -n "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' samaudit)" ] || fail "Container läuft nicht unter Compose"
 [ -f "$dir/docker-compose.yml" ] || fail "docker-compose.yml wurde nicht angelegt"
@@ -89,6 +102,9 @@ if upd -y --load "$work/samaudit-9.9.9-amd64.tar.gz"; then fail "kaputte Version
 wait_healthy || fail "nach dem Rückfall läuft SAMAUDIT nicht"
 [ "$(docker inspect -f '{{.Image}}' samaudit)" = "$(docker image inspect -f '{{.Id}}' "$repo:previous")" ] || fail "Rückfall: nicht die vorige Version"
 grep -q "^SAMAUDIT_VERSION=$ver\$" "$dir/.env" || fail "Rückfall: SAMAUDIT_VERSION nicht zurückgesetzt"
+[ "$(db_py "from app import datastate; from app.config import settings; print(datastate._read_meta(settings.db_path)['app_version'])")" = "$ver" ] \
+  || fail "Rückfall: Datenbank nicht auf den Stand vor 9.9.9 zurückgespielt"
+(cd "$dir" && docker compose up -d >/dev/null 2>&1); wait_healthy || fail "nach dem Rückfall startet docker compose up -d nicht die vorige Version"
 echo "2) Rückfall: ok"
 
 # --------------------------------------------------------------------------- 3) restore

@@ -69,35 +69,30 @@ def _restore(chosen: str) -> None:
     print(f"Zurückgespielt: {os.path.basename(chosen)}  ({_info(db)})")
 
 
-def rollback(version: str, since: float) -> int:
-    """Für update.sh: Rückfall nach einem fehlgeschlagenen Update. Nur wenn die neue Version die Datenbank
-    bereits übernommen hat, wird die dabei angelegte Sicherung „vor-<Version>“ zurückgespielt."""
-    db = settings.db_path
-    if not os.path.exists(db):
-        print("Keine Datenbank – nichts zurückzuspielen.")
-        return 0
-    meta = datastate._read_meta(db)
-    if meta.get("app_version") != version:
-        print(f"Datenbank wurde von {version} nicht verändert – nichts zurückzuspielen.")
-        return 0
+def rollback(since: float) -> int:
+    """Für update.sh: Rückfall nach einem fehlgeschlagenen Update. Hat die neue Version seit `since` eine
+    Sicherung „vor-…“ angelegt, hat sie die Datenbank übernommen – dann wird die ÄLTESTE davon (der Stand
+    vor dem Update) zurückgespielt. Sonst wurde nichts verändert (z. B. Sicherheitsupdate derselben Version)."""
     cands = [b for b in datastate.list_backups()
-             if os.path.basename(b).startswith(f"samaudit-vor-{version}-") and os.path.getmtime(b) >= since - 5]
+             if os.path.basename(b).startswith("samaudit-vor-") and os.path.getmtime(b) >= since - 5]
     if not cands:
-        print(f"Keine Sicherung „vor-{version}“ aus diesem Update gefunden – bitte von Hand wählen: sh update.sh --restore")
-        return 1
-    _restore(cands[0])
+        print("Die Datenbank wurde bei diesem Update nicht verändert – nichts zurückzuspielen.")
+        return 0
+    _restore(cands[-1])                       # list_backups: neueste zuerst → letzte = älteste
     return 0
 
 
 def main(argv: list[str]) -> int:
-    if datastate.is_locked_elsewhere():
+    try:
+        datastate.acquire_lock()             # für die ganze Dauer: kein Start während des Zurückspielens
+    except datastate.StartRefused:
         print("SAMAUDIT läuft noch auf diesem Datenordner. Bitte zuerst anhalten: docker compose stop samaudit")
         return 1
     if argv[:1] == ["--rollback"]:
-        if len(argv) != 3:
-            print("Aufruf: restore --rollback <Version> <Startzeit>")
+        if len(argv) != 2:
+            print("Aufruf: restore --rollback <Startzeit>")
             return 2
-        return rollback(argv[1], float(argv[2]))
+        return rollback(float(argv[1]))
     backups = datastate.list_backups()
     if not backups:
         print("Keine Sicherungen gefunden (data/backups/).")

@@ -21,6 +21,8 @@ def main() -> None:
     from app import datastate
     try:
         datastate.prepare()
+        from app import db
+        db.init()          # Schema anpassen und Version merken – sofort, nicht erst beim Start des Webservers
     except datastate.StartRefused as e:
         log.error("START ABGEBROCHEN: %s", e)
         raise SystemExit(78) from None

@@ -59,6 +59,8 @@ def fmt_container(s, name, fmt):
         return c.get("labels", {}).get(m.group(1), "")
     if ".State.Health" in fmt:
         return c.get("health", "healthy")
+    if '.Destination "/app/data"' in fmt:
+        return next((m for m in c.get("mounts", []) if m.rstrip("/").endswith("/data")), "")
     if ".Mounts" in fmt:
         return "".join(x + "\n" for x in c.get("mounts", []))
     return json.dumps(c)
@@ -155,15 +157,27 @@ def main(argv):
             return 0
         if sub == "rm":
             s["networks"].pop(name, None); save(s); return 0
+        if sub == "create":
+            s["networks"][name] = {"labels": {}}; save(s); return 0
         return 0
-    if cmd == "ps":
+    if cmd == "ps" and "-aq" in rest:
+        if os.environ.get("FAKE_PS_FAILS"):
+            return 1
         for n, c in s["containers"].items():
             if not c.get("created"):
                 print(n)
         return 0
     if cmd == "logs":
         print("(log of samaudit)"); return 0
-    if cmd in ("stop", "start", "rename", "update"):
+    if cmd == "rename":
+        old, new = rest[0], rest[1]
+        if old not in s["containers"]:
+            return 1
+        s["containers"][new] = s["containers"].pop(old); save(s); return 0
+    if cmd == "ps" or cmd in ("stop", "start", "update"):
+        if cmd == "start" and rest and rest[-1] in s["containers"]:
+            s["containers"][rest[-1]]["health"] = s["meta"].get(s["containers"][rest[-1]]["image"], {}).get("health", "healthy")
+            save(s)
         return 0
     print(f"fake docker: unknown command {argv}", file=sys.stderr)
     return 2
@@ -185,6 +199,8 @@ def compose(s, rest):
         iid = resolve(s, f"{repo}:{tag}")
         if not iid:
             print(f"image {repo}:{tag} not found", file=sys.stderr); save(s); return 1
+        if os.environ.get("FAKE_UP_FAILS"):
+            print("Bind for 0.0.0.0:9400 failed: port is already allocated", file=sys.stderr); save(s); return 1
         old = s["containers"].get("samaudit")
         if old and not old.get("labels", {}).get("com.docker.compose.project"):
             print('Conflict. The container name "/samaudit" is already in use', file=sys.stderr); save(s); return 1
@@ -193,7 +209,11 @@ def compose(s, rest):
             "labels": {"com.docker.compose.project": "samaudit", "com.docker.compose.project.working_dir": os.getcwd()},
             "mounts": [os.path.join(os.getcwd(), "data"), os.path.join(os.getcwd(), "certs")]}
         save(s); return 0
-    if sub in ("stop", "run", "pull", "down"):
+    if sub == "down":
+        if s["containers"].get("samaudit", {}).get("labels", {}).get("com.docker.compose.project"):
+            del s["containers"]["samaudit"]
+        s["networks"].pop("samaudit-net", None); save(s); return 0
+    if sub in ("stop", "run", "pull"):
         return 0
     return 0
 
