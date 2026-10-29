@@ -65,7 +65,7 @@ PORT=19400
 PUBLIC_HOSTNAME=localhost
 DOCKER_EXTRA_HOSTS=dc01.firma.local:10.0.10.10
 EOF
-echo 'VERSION = "1.9.8"' > "$dir/app/version.py"
+printf 'APP_NAME = "SAMAUDIT"\nVERSION = "1.9.8"\n' > "$dir/app/version.py"
 touch "$dir/Dockerfile" "$dir/base-image.lock" "$dir/.samaudit-manifest" "$dir/samaudit-v1.9.8.zip"
 echo "SICHERUNG" > "$dir/backups/samaudit-1.9.8-20261001.tgz"
 docker network create --driver bridge -o com.docker.network.bridge.name=br-samaudit samaudit-net >/dev/null
