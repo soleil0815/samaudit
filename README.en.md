@@ -6,6 +6,17 @@ Self-hosted web application that reads a Windows or Samba AD domain, runs **115 
 
 > **Status: beta – hobby project, no warranty.** SAMAUDIT was built for the author's own use and has mainly been tested with test data; results may be incomplete or wrong and do not replace expert review. Feedback is welcome, but no support or response times are promised. Please report security vulnerabilities privately (see [SECURITY.md](SECURITY.md)).
 
+![Overview: risk score, rating of the four areas and the most important findings](docs/images/en-overview.webp)
+*Overview after a scan – risk score, the four areas and the findings to address first*
+
+![Expanded finding with explanation, recommended action, affected objects and references](docs/images/en-finding.webp)
+*Finding in the report – what it is about, what to do, which objects are affected*
+
+![PDF report: cover page with summary and list of findings](docs/images/en-pdf.webp)
+*PDF export – cover page with summary and list of all findings*
+
+All images show demo mode with made-up sample data (`DEMO_MODE=true`).
+
 ## New in 2.1.0 – five new checks (now 115)
 
 - **ESC13 (PRV-38):** certificate templates whose issuance policy is linked to an AD group – whoever may enroll gets the group's rights without membership (critical if the group is privileged).

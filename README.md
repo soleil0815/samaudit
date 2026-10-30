@@ -6,6 +6,17 @@ Selbst gehostete Webanwendung, die eine Windows- oder Samba-AD-Domäne ausliest,
 
 > **Status: Beta – Hobbyprojekt, ohne Gewähr.** SAMAUDIT wurde für den eigenen Einsatz entwickelt und vor allem mit Testdaten geprüft; Ergebnisse können unvollständig oder falsch sein und ersetzen keine fachliche Prüfung. Rückmeldungen sind willkommen, Support oder Reaktionszeiten werden nicht zugesagt. Sicherheitslücken bitte vertraulich melden (siehe [SECURITY.md](SECURITY.md)).
 
+![Übersicht: Risikowert, Bewertung der vier Bereiche und die wichtigsten Befunde](docs/images/de-overview.webp)
+*Übersicht nach einem Scan – Risikowert, die vier Bereiche und „Zuerst angehen“*
+
+![Aufgeklappter Befund mit Erklärung, empfohlener Maßnahme, betroffenen Objekten und Quellen](docs/images/de-finding.webp)
+*Befund im Bericht – worum es geht, was zu tun ist, welche Objekte betroffen sind*
+
+![PDF-Bericht: Deckblatt mit Zusammenfassung und Befundliste](docs/images/de-pdf.webp)
+*PDF-Export – Deckblatt mit Zusammenfassung und Liste aller Befunde*
+
+Alle Bilder zeigen den Demo-Modus mit erfundenen Beispieldaten (`DEMO_MODE=true`).
+
 ## Neu in 2.1.0 – fünf neue Prüfungen (jetzt 115)
 
 - **ESC13 (PRV-38):** Zertifikatvorlagen, deren Ausstellungsrichtlinie mit einer AD-Gruppe verknüpft ist – wer das Zertifikat beantragen darf, bekommt die Gruppenrechte ohne Mitgliedschaft (kritisch, wenn die Gruppe privilegiert ist).
