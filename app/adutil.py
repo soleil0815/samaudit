@@ -358,8 +358,20 @@ def ace_grants_control(ace: dict) -> list[str]:
 # Betriebssysteme
 # ---------------------------------------------------------------------------
 
-def classify_os(os_name: str | None, os_version: str | None = None) -> str:
-    """Grobe Einordnung: 'obsolete', 'win10', 'expiring', 'supported', 'samba', 'other', 'unknown'."""
+# Ende des erweiterten Supports von Windows Server 2016 und Windows 10 Enterprise LTSC 2021
+EXPIRING_END = datetime(2027, 1, 12, tzinfo=timezone.utc)
+
+
+def classify_os(os_name: str | None, os_version: str | None = None, today: datetime | None = None) -> str:
+    """Grobe Einordnung: 'obsolete', 'win10', 'expiring', 'supported', 'samba', 'other', 'unknown'.
+    'expiring' wird nach EXPIRING_END automatisch zu 'obsolete'."""
+    c = _classify_os(os_name, os_version)
+    if c == "expiring" and (today or now_utc()) >= EXPIRING_END:
+        return "obsolete"
+    return c
+
+
+def _classify_os(os_name: str | None, os_version: str | None = None) -> str:
     if not os_name:
         return "unknown"
     s = os_name.lower()

@@ -1,6 +1,6 @@
 # SAMAUDIT – Handbuch
 
-SAMAUDIT prüft die Sicherheit Ihres Active Directory (Windows AD oder Samba AD). Es liest die Domäne mit den Rechten eines **normalen** Benutzerkontos aus, wendet 110 Prüfungen an und zeigt das Ergebnis als Risikowert, ausführlichen Bericht mit Maßnahmen und PDF.
+SAMAUDIT prüft die Sicherheit Ihres Active Directory (Windows AD oder Samba AD). Es liest die Domäne mit den Rechten eines **normalen** Benutzerkontos aus, wendet 115 Prüfungen an und zeigt das Ergebnis als Risikowert, ausführlichen Bericht mit Maßnahmen und PDF.
 
 Das Handbuch hat zwei Teile: **Teil A** für Prüferinnen und Prüfer, die SAMAUDIT im Browser benutzen, **Teil B** für den Betrieb auf dem Server.
 
@@ -68,7 +68,7 @@ Unter **Berichte** stehen alle Scans mit Datum, Werten und Anzahl der Befunde. E
 
 ### Prüfkatalog
 
-Alle 110 Prüfungen mit Kennung, Bereich, Schweregrad und Beschreibung. Die Kennungen beginnen mit `STL-` (veraltete Objekte), `PRV-` (privilegierte Konten), `TRS-` (Vertrauensstellungen) und `ANM-` (Anomalien).
+Alle 115 Prüfungen mit Kennung, Bereich, Schweregrad und Beschreibung. Die Kennungen beginnen mit `STL-` (veraltete Objekte), `PRV-` (privilegierte Konten), `TRS-` (Vertrauensstellungen) und `ANM-` (Anomalien).
 
 ### Verbindung
 

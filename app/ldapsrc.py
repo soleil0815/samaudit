@@ -492,7 +492,7 @@ USER_ATTRS = ["sAMAccountName", "userPrincipalName", "displayName", "userAccount
               "pwdLastSet", "whenCreated", "adminCount", "servicePrincipalName", "primaryGroupID", "sIDHistory",
               "objectSid", "msDS-SupportedEncryptionTypes", "msDS-AllowedToDelegateTo",
               "msDS-AllowedToActOnBehalfOfOtherIdentity", "userPassword", "unixUserPassword", "objectClass",
-              "msDS-KeyCredentialLink", "altSecurityIdentities"]
+              "msDS-KeyCredentialLink", "altSecurityIdentities", "msDS-GroupMSAMembership"]
 COMPUTER_ATTRS = ["sAMAccountName", "dNSHostName", "operatingSystem", "operatingSystemVersion",
                   "userAccountControl", "lastLogonTimestamp", "pwdLastSet", "whenCreated", "servicePrincipalName",
                   "msDS-AllowedToDelegateTo", "msDS-AllowedToActOnBehalfOfOtherIdentity",
@@ -548,6 +548,9 @@ def _account(e: Entry, computer: bool) -> dict:
             "is_gmsa": bool({"msds-groupmanagedserviceaccount", "msds-managedserviceaccount"} & set(d["classes"])),
             "admin_count": as_int(e.get("adminCount"), 0) or 0,
         })
+        if d["is_gmsa"]:
+            # wer das Kennwort des gMSA abrufen darf (Sicherheitsbeschreibung wie bei Berechtigungen)
+            d["gmsa_readers"] = parse_sd(e.get("msDS-GroupMSAMembership"))
     return d
 
 
@@ -699,6 +702,7 @@ def collect(conn, progress) -> dict:
     }
     config.update(safe("extras", lambda: _collect_extras(conn, dn, config_nc, dse), {}) or {})
     config["dmsa"] = safe("dmsa", lambda: _collect_dmsa(conn, dn, schema_nc))
+    config["kds"] = safe("kds", lambda: _collect_kds(conn, config_nc, schema_nc))
 
     psos = []
     for e in safe("psos", lambda: search(conn, f"CN=Password Settings Container,CN=System,{dn}",
@@ -735,7 +739,7 @@ def collect(conn, progress) -> dict:
                                                   ["name", "displayName", "msPKI-Certificate-Name-Flag",
                                                    "msPKI-Enrollment-Flag", "msPKI-RA-Signature",
                                                    "pKIExtendedKeyUsage", "msPKI-Certificate-Application-Policy",
-                                                   "msPKI-Template-Schema-Version",
+                                                   "msPKI-Template-Schema-Version", "msPKI-Certificate-Policy",
                                                    "nTSecurityDescriptor"], sd=True, paged=False), []) or []:
         name = as_str(e.get("name")) or ""
         templates.append({
@@ -746,8 +750,15 @@ def collect(conn, progress) -> dict:
             "ekus": as_strs(e.get("pKIExtendedKeyUsage")) + as_strs(e.get("msPKI-Certificate-Application-Policy")),
             "published": name.lower() in published,
             "schema_version": as_int(e.get("msPKI-Template-Schema-Version"), 0),
+            "policies": as_strs(e.get("msPKI-Certificate-Policy")),
             "sd": parse_sd(e.get("nTSecurityDescriptor")),
         })
+    # Ausstellungsrichtlinien, die mit einer Gruppe verknüpft sind (ESC13)
+    oids = [{"oid": as_str(e.get("msPKI-Cert-Template-OID")) or "", "name": as_str(e.get("displayName")) or "",
+             "group": as_str(e.get("msDS-OIDToGroupLink")) or ""}
+            for e in safe("pki_oids", lambda: search(conn, f"CN=OID,{pki_base}", "(msDS-OIDToGroupLink=*)",
+                                                     ["msPKI-Cert-Template-OID", "displayName", "msDS-OIDToGroupLink"],
+                                                     paged=False), []) or []]
 
     pki_objects = []
     for odn in (pki_base, f"CN=Certificate Templates,{pki_base}", f"CN=NTAuthCertificates,{pki_base}",
@@ -790,7 +801,7 @@ def collect(conn, progress) -> dict:
                  "dc_host": getattr(conn, "_samaudit_host", ""), "warnings": warnings, "demo": False,
                  "failed_sections": sorted(failed)},
         "rootdse": dse, "domain": domain, "users": users, "computers": computers, "groups": groups,
-        "trusts": trusts, "acl": acl, "config": config, "psos": psos, "pki": {"cas": cas, "templates": templates, "objects": pki_objects},
+        "trusts": trusts, "acl": acl, "config": config, "psos": psos, "pki": {"cas": cas, "templates": templates, "objects": pki_objects, "oids": oids},
         "gpos": gpos, "gpo_links": gpo_links,
     }
 
@@ -854,6 +865,23 @@ def _collect_dmsa(conn, dn: str, schema_nc: str) -> dict:
                          "preceded_by": as_strs(e.get("msDS-ManagedAccountPrecededByLink")),
                          "state": as_int(e.get("msDS-DelegatedMSAState"))})
     return {"schema": True, "guid": guid, "containers": containers, "accounts": accounts}
+
+
+def _collect_kds(conn, config_nc: str, schema_nc: str) -> dict:
+    """KDS-Stammschlüssel (Grundlage aller gMSA/dMSA-Kennwörter): wer darf ihn lesen?
+    Der Schlüssel selbst wird nie abgerufen – nur geprüft, ob der Filter darauf greift (dann ist er lesbar)."""
+    base = f"CN=Master Root Keys,CN=Group Key Distribution Service,CN=Services,{config_nc}"
+    cont = base_entry(conn, base, ["nTSecurityDescriptor"], sd=True)
+    keys = search(conn, base, "(objectClass=msKds-ProvRootKey)", ["cn", "nTSecurityDescriptor"], sd=True, paged=False)
+    if cont is None and not keys:
+        return {"present": False}
+    readable = bool(search(conn, base, "(&(objectClass=msKds-ProvRootKey)(msKds-RootKeyData=*))", ["cn"], paged=False))
+    attr = search(conn, schema_nc, "(lDAPDisplayName=msKds-RootKeyData)", ["schemaIDGUID"], paged=False)
+    raw = (attr[0].get("schemaIDGUID") or [None])[0] if attr else None
+    guid = str(uuid.UUID(bytes_le=bytes(raw))) if isinstance(raw, (bytes, bytearray)) and len(raw) == 16 else None
+    return {"present": True, "dn": base, "container_sd": parse_sd(cont.get("nTSecurityDescriptor")) if cont else None,
+            "keys": [{"dn": e.dn, "sd": parse_sd(e.get("nTSecurityDescriptor"))} for e in keys],
+            "readable": readable, "attr_guid": guid}
 
 
 def _collect_extras(conn, dn: str, config_nc: str, dse: dict) -> dict:

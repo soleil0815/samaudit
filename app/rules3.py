@@ -292,3 +292,7 @@ def _uniqueness(ctx: Ctx):
     if not items:
         return None
     return Hit(items) if serious else Hit(items, severity="medium", points=8)
+
+
+# Prüfkatalog Teil 4 (ab v2.1)
+from . import rules4  # noqa: E402,F401

@@ -1,5 +1,31 @@
 [
   {
+    "version": "2.1.0",
+    "date": "2026-10-30",
+    "items": [
+      {
+        "type": "security",
+        "de": "Fünf neue Prüfungen (jetzt 115): Zertifikatvorlagen mit Gruppenrechten (ESC13), Leserechte auf den Hauptschlüssel der verwalteten Dienstkonten (Golden gMSA/dMSA), gMSA-Kennwörter für zu viele abrufbar, Voraussetzungen für „Certighost“ (CVE-2026-54121) und Gruppenrichtlinien, die leere Kennwörter oder anonymen Zugriff erlauben.",
+        "en": "Five new checks (now 115): certificate templates granting group rights (ESC13), read access to the managed service account root key (Golden gMSA/dMSA), gMSA passwords retrievable by too many, preconditions for 'Certighost' (CVE-2026-54121) and Group Policies allowing blank passwords or anonymous access."
+      },
+      {
+        "type": "notice",
+        "de": "Windows Server 2016 erhält ab dem 13.01.2027 keine Sicherheitsupdates mehr. SAMAUDIT bewertet solche Server jetzt dringlicher (Domänencontroller besonders) und führt sie nach dem Termin als „ohne Herstellersupport“.",
+        "en": "Windows Server 2016 receives no security updates after 12 Jan 2027. SAMAUDIT now rates such servers more urgently (domain controllers in particular) and lists them as unsupported after that date."
+      },
+      {
+        "type": "notice",
+        "de": "Oktober 2026: Microsoft hat eine Lücke in den Active Directory-Domänendiensten geschlossen, über die Domänencontroller ohne Anmeldung aus dem Netz angreifbar waren (CVE-2026-70229). Alle DCs zeitnah patchen – den Patchstand kann SAMAUDIT nicht prüfen.",
+        "en": "October 2026: Microsoft fixed a flaw in Active Directory Domain Services that let unauthenticated network attackers target domain controllers (CVE-2026-70229). Patch all DCs promptly – SAMAUDIT cannot check patch levels."
+      },
+      {
+        "type": "notice",
+        "de": "Seit dem Oktober-Update 2026 blockiert Windows NTLMv1-Anmeldungen für Single Sign-on standardmäßig. Geräte, die noch NTLMv1 brauchen (z. B. WLAN/VPN mit PEAP-MSCHAPv2), können ausfallen.",
+        "en": "Since the October 2026 update Windows blocks NTLMv1-derived SSO credentials by default. Devices still needing NTLMv1 (e.g. Wi-Fi/VPN with PEAP-MSCHAPv2) may fail."
+      }
+    ]
+  },
+  {
     "version": "2.0.0",
     "date": "2026-10-29",
     "items": [
