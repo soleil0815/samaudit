@@ -545,7 +545,8 @@ def _account(e: Entry, computer: bool) -> dict:
             "display": as_str(e.get("displayName")) or "",
             "has_userpassword": bool(e.get("userPassword") or e.get("unixUserPassword")),
             # verwaltete Dienstkonten (gMSA und sMSA): zufällige, automatisch gewechselte Passwörter
-            "is_gmsa": bool({"msds-groupmanagedserviceaccount", "msds-managedserviceaccount"} & set(d["classes"])),
+            "is_gmsa": bool({"msds-groupmanagedserviceaccount", "msds-managedserviceaccount",
+                             "msds-delegatedmanagedserviceaccount"} & set(d["classes"])),
             "admin_count": as_int(e.get("adminCount"), 0) or 0,
         })
         if d["is_gmsa"]:
@@ -630,7 +631,8 @@ def collect(conn, progress) -> dict:
         USER_ATTRS)]
     # (Group) Managed Service Accounts
     users += safe("gmsa", lambda: [_account(e, False) for e in search(
-        conn, dn, "(|(objectClass=msDS-GroupManagedServiceAccount)(objectClass=msDS-ManagedServiceAccount))",
+        conn, dn, "(|(objectClass=msDS-GroupManagedServiceAccount)(objectClass=msDS-ManagedServiceAccount)"
+                  "(objectClass=msDS-DelegatedManagedServiceAccount))",
         USER_ATTRS)], []) or []
 
     progress(35, "phase_computers")
@@ -653,7 +655,8 @@ def collect(conn, progress) -> dict:
         sid = sid_to_str((e.get("objectSid") or [None])[0])
         groups.append({"dn": e.dn, "sam": as_str(e.get("sAMAccountName")) or "", "sid": sid,
                        "rid": sid_rid(sid), "members": _full_members(conn, e),
-                       "created": gentime_to_dt(e.get("whenCreated"))})
+                       "created": gentime_to_dt(e.get("whenCreated")),
+                       "group_type": as_int(e.get("groupType"))})
     if root_sid != domain_sid:
         # Enterprise/Schema Admins liegen in der Stammdomäne
         for e in safe("root_groups", lambda: search(

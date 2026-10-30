@@ -30,8 +30,10 @@ class ScanBusy(Exception):
 # fehlgeschlagen, gelten diese Regeln als „nicht prüfbar“ – leere Daten dürfen nie „bestanden“ ergeben.
 SECTION_RULES = {
     "trusts": ("T-",),
-    "pki_cas": ("P-ADCS-", "A-CAWeakCrypto"),
-    "pki_templates": ("P-ADCS-",),
+    "pki_cas": ("P-ADCS-", "A-CAWeakCrypto", "P-Certighost"),
+    "pki_templates": ("P-ADCS-", "P-Certighost"),
+    "pki_oids": ("P-ADCS-ESC13",),
+    "gmsa": ("P-GMSAReaders",),
     "pki_obj": ("P-ADCS-ESC5", "A-CAWeakCrypto"),
     "psos": ("A-WeakPSO",),
     "gpos": ("P-GPOWrite",),

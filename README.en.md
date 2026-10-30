@@ -9,9 +9,9 @@ Self-hosted web application that reads a Windows or Samba AD domain, runs **115 
 ## New in 2.1.0 – five new checks (now 115)
 
 - **ESC13 (PRV-38):** certificate templates whose issuance policy is linked to an AD group – whoever may enroll gets the group's rights without membership (critical if the group is privileged).
-- **Golden gMSA/dMSA (PRV-39):** anyone besides Domain/Enterprise Admins and DCs who may read the KDS root key can compute all gMSA and dMSA passwords forever. The key itself is never retrieved.
+- **Golden gMSA/dMSA (PRV-39):** anyone besides Domain/Enterprise Admins and DCs who may read the KDS root key (or grant themselves that right) can compute all gMSA and dMSA passwords forever. The key itself is never retrieved. With an ordinary account the key objects are usually invisible; SAMAUDIT then checks the inherited rights and reports the rest as "not checkable".
 - **gMSA password retrievable by too many (PRV-40):** broad groups such as Domain Users or Domain Computers in msDS-GroupMSAMembership; for privileged gMSAs also individual non-admins.
-- **Certighost, CVE-2026-54121 (PRV-41):** users may create computer accounts and domain computers may use an enterprise CA's machine template – domain takeover is possible as long as the CA lacks the July 2026 update (SAMAUDIT cannot see the patch level).
+- **Certighost, CVE-2026-54121 (PRV-41):** users may create computer accounts and an enterprise CA offers a logon template (e.g. "Machine") to domain computers or all users – domain takeover is possible as long as the CA lacks the July 2026 update. As SAMAUDIT cannot see the patch level and this is the default in many domains, the check is a low-weighted reminder.
 - **Group Policy weakens logon protection (ANM-45):** blank passwords for network logon, anonymous SAM enumeration, Everyone permissions for anonymous users, anonymous access to named pipes/shares (like PingCastle A-LimitBlankPasswordUse / A-AnonymousAuthorizedGPO).
 - **Windows Server 2016 (STL-11):** scored from 90 days before end of support (12 Jan 2027), more urgent for domain controllers; afterwards the systems automatically count as unsupported (previously they would have stayed "expiring" forever).
 - **NTLMv1 (ANM-17):** note on the October 2026 update that blocks NTLMv1-derived SSO credentials by default.

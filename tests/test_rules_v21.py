@@ -64,6 +64,23 @@ class ESC13(unittest.TestCase):
         hit = run("PRV-38", self.model(group_rid=512))
         self.assertEqual(hit.severity, "critical")
 
+    def test_group_nested_into_administrators_is_critical(self):
+        m = self.model()
+        dn = m["pki"]["oids"][0]["group"]
+        m["groups"].append({"dn": dn, "sam": "VPN-Nutzer", "sid": f"{SID}-1997", "rid": 1997, "members": [],
+                            "group_type": -2147483640})                 # universelle Sicherheitsgruppe
+        adm = next(g for g in m["groups"] if g.get("sid") == "S-1-5-32-544") if any(
+            g.get("sid") == "S-1-5-32-544" for g in m["groups"]) else next(g for g in m["groups"] if g.get("rid") == 512)
+        adm["members"] = list(adm.get("members") or []) + [dn]
+        self.assertEqual(run("PRV-38", m).severity, "critical")
+
+    def test_non_universal_group_is_ignored(self):
+        m = self.model()
+        dn = m["pki"]["oids"][0]["group"]
+        m["groups"].append({"dn": dn, "sam": "VPN-Nutzer", "sid": f"{SID}-1997", "rid": 1997, "members": [],
+                            "group_type": -2147483646})                 # globale Gruppe: Verknüpfung wirkt nicht
+        self.assertIsNone(run("PRV-38", m))
+
     def test_only_admins_may_enroll(self):
         self.assertIsNone(run("PRV-38", self.model(enroll_sid=f"{SID}-512")))
 
@@ -74,39 +91,59 @@ class ESC13(unittest.TestCase):
         self.assertIsNone(run("PRV-38", copy.deepcopy(BASE)))
 
 
+KDS_ATTR = "26627c27-08a2-0a40-a1b1-8dce85b42993"
+DEFAULT_KEY_SD = {"owner": None, "aces": [ace("S-1-5-18", 0x000F01FF), ace(f"{SID}-512", 0x000F01FF),
+                                          ace(f"{SID}-519", 0x000F01FF), ace("S-1-5-9", 0x10, flags=0)]}
+
+
 class KDSRootKey(unittest.TestCase):
-    def model(self, **kds):
+    def model(self, keys=None, **kds):
         m = copy.deepcopy(BASE)
-        m["config"]["kds"].update(kds)
+        m["config"]["kds"].update({"keys": keys if keys is not None else [{"dn": "CN=k1", "sd": DEFAULT_KEY_SD}],
+                                   "attr_guid": KDS_ATTR}, **kds)
         return m
 
-    def test_default_is_fine(self):
-        self.assertIsNone(run("PRV-39", copy.deepcopy(BASE)))
+    def test_default_key_is_fine(self):
+        self.assertIsNone(run("PRV-39", self.model()))
+
+    def test_invisible_keys_are_not_a_pass(self):
+        with self.assertRaises(NotApplicable):                       # Standard für normale Konten
+            run("PRV-39", self.model(keys=[]))
+        with self.assertRaises(NotApplicable):
+            run("PRV-39", self.model(keys=[{"dn": "CN=k1", "sd": None}]))
 
     def test_auditor_can_read_key(self):
         hit = run("PRV-39", self.model(readable=True))
         self.assertEqual(hit.items[0]["detail"], "@v_kds_readable")
 
-    def test_inheritable_read_on_container(self):
-        sd = {"owner": None, "aces": [ace(f"{SID}-1051", 0x10, flags=0x02)]}
+    def test_read_property_alone_is_not_enough(self):
+        # vertrauliches Attribut: "Alle Eigenschaften lesen" ohne erweitertes Recht liest den Schlüssel nicht
+        keys = [{"dn": "CN=k1", "sd": {"owner": None, "aces": DEFAULT_KEY_SD["aces"] + [ace(f"{SID}-1051", 0x20094)]}}]
+        self.assertIsNone(run("PRV-39", self.model(keys=keys)))
+
+    def test_read_property_and_control_access(self):
+        aces = DEFAULT_KEY_SD["aces"] + [ace(f"{SID}-1051", 0x10, KDS_ATTR), ace(f"{SID}-1051", 0x100, KDS_ATTR)]
+        hit = run("PRV-39", self.model(keys=[{"dn": "CN=k1", "sd": {"owner": None, "aces": aces}}]))
+        self.assertEqual(hit.items[0]["detail"], "@v_kds_ace|1")
+
+    def test_full_control_inherited_from_container(self):
+        sd = {"owner": None, "aces": [ace(f"{SID}-1051", 0x000F01FF, flags=0x02)]}
         hit = run("PRV-39", self.model(container_sd=sd))
         self.assertEqual(len(hit.items), 1)
 
-    def test_container_ace_without_inheritance_does_not_count(self):
-        sd = {"owner": None, "aces": [ace(f"{SID}-1051", 0x10)]}
-        self.assertIsNone(run("PRV-39", self.model(container_sd=sd)))
+    def test_container_ace_for_other_classes_does_not_count(self):
+        a = ace(f"{SID}-1051", 0x000F01FF, flags=0x0A)
+        a["inherited_object_type"] = "bf967aba-0de6-11d0-a285-00aa003049e2"   # nur für user-Objekte
+        self.assertIsNone(run("PRV-39", self.model(container_sd={"owner": None, "aces": [a]})))
+        b = ace(f"{SID}-1051", 0x000F01FF)                                      # nicht vererbbar
+        self.assertIsNone(run("PRV-39", self.model(container_sd={"owner": None, "aces": [b]})))
 
-    def test_read_on_key_object_and_other_attribute(self):
-        keys = [{"dn": "CN=k1", "sd": {"owner": None, "aces": [ace(f"{SID}-1051", 0x10)]}}]
-        self.assertIsNotNone(run("PRV-39", self.model(keys=keys)))
-        keys = [{"dn": "CN=k1", "sd": {"owner": None, "aces": [ace(f"{SID}-1051", 0x10, "bf967a68-0de6-11d0-a285-00aa003049e2")]}}]
-        self.assertIsNone(run("PRV-39", self.model(keys=keys, attr_guid="26627c27-08a2-0a40-a1b1-8dce85b42993")))
+    def test_write_dacl_is_reported(self):
+        aces = DEFAULT_KEY_SD["aces"] + [ace(f"{SID}-1051", 0x40000)]
+        hit = run("PRV-39", self.model(keys=[{"dn": "CN=k1", "sd": {"owner": None, "aces": aces}}]))
+        self.assertEqual(hit.items[0]["detail"], "@v_kds_control|1")
 
-    def test_admins_and_dcs_are_expected(self):
-        sd = {"owner": None, "aces": [ace(f"{SID}-512", 0x10000000, flags=0x02), ace(f"{SID}-516", 0x10, flags=0x02)]}
-        self.assertIsNone(run("PRV-39", self.model(container_sd=sd)))
-
-    def test_no_key_and_unknown(self):
+    def test_no_container_and_unknown(self):
         self.assertIsNone(run("PRV-39", self.model(present=False)))
         m = copy.deepcopy(BASE)
         m["config"]["kds"] = None
@@ -134,7 +171,8 @@ class KDSRootKey(unittest.TestCase):
             ldapsrc.search, ldapsrc.base_entry = orig
         self.assertTrue(out["present"])
         for flt, attrs in calls:
-            self.assertNotIn("msKds-RootKeyData", [a for a in attrs], "the key material must never be requested")
+            self.assertNotIn("msKds-RootKeyData", attrs, "the key material must never be requested")
+            self.assertNotIn("*", attrs)
 
 
 class GMSAReaders(unittest.TestCase):
@@ -155,6 +193,22 @@ class GMSAReaders(unittest.TestCase):
     def test_dedicated_server_group_is_fine(self):
         self.assertIsNone(run("PRV-40", self.model(f"{SID}-1999")))
 
+    def test_broad_group_nested(self):
+        m = self.model(f"{SID}-1999")
+        m["groups"].append({"dn": f"CN=SQL-Leser,OU=Gruppen,{m['domain']['dn']}", "sam": "SQL-Leser",
+                            "sid": f"{SID}-1999", "rid": 1999,
+                            "members": [next(g for g in m["groups"] if g.get("rid") == 513)["dn"]]})
+        hit = run("PRV-40", m)
+        self.assertEqual(hit.items[0]["detail"], "@v_gmsa_broad")
+
+    def test_privileged_gmsa_read_by_tier0_group_is_fine(self):
+        m = self.model(f"{SID}-1998", priv=True)
+        da = next(x for x in m["groups"] if x.get("rid") == 512)
+        m["groups"].append({"dn": f"CN=Tier0-Server,OU=Gruppen,{m['domain']['dn']}", "sam": "Tier0-Server",
+                            "sid": f"{SID}-1998", "rid": 1998, "members": []})
+        da["members"].append(f"CN=Tier0-Server,OU=Gruppen,{m['domain']['dn']}")
+        self.assertIsNone(run("PRV-40", m))
+
     def test_privileged_gmsa_with_ordinary_reader_is_high(self):
         hit = run("PRV-40", self.model(f"{SID}-1999", priv=True))
         self.assertEqual(hit.severity, "high")
@@ -162,24 +216,34 @@ class GMSAReaders(unittest.TestCase):
 
 
 class Certighost(unittest.TestCase):
-    def test_demo_meets_preconditions(self):
-        hit = run("PRV-41", copy.deepcopy(BASE))
-        self.assertEqual(hit.items[0]["detail"], "@v_certighost|10")
+    def only(self, *templates):
+        m = copy.deepcopy(BASE)
+        for ca in m["pki"]["cas"]:
+            ca["templates"] = list(templates)
+        return m
+
+    def test_default_machine_template(self):
+        hit = run("PRV-41", self.only("Machine"))
+        self.assertEqual(hit.items[0]["template"], "Computer")
+        self.assertIsNone(hit.severity)                                # niedrig (Patchstand unbekannt)
+
+    def test_copied_template_and_authenticated_users(self):
+        m = self.only("FIRMA-Computer")
+        m["pki"]["templates"].append({"name": "FIRMA-Computer", "display": "FIRMA-Computer", "name_flag": 0,
+                                      "enroll_flag": 0, "ra_signature": 0, "ekus": ["1.3.6.1.5.5.7.3.2"],
+                                      "published": True, "sd": {"owner": None, "aces": [ace("S-1-5-11", 0x100, ENROLL)]}})
+        self.assertIsNotNone(run("PRV-41", m))
 
     def test_quota_zero(self):
-        m = copy.deepcopy(BASE)
+        m = self.only("Machine")
         m["domain"]["maq"] = 0
         self.assertIsNone(run("PRV-41", m))
 
-    def test_machine_template_not_published_or_not_for_computers(self):
-        m = copy.deepcopy(BASE)
-        for ca in m["pki"]["cas"]:
-            ca["templates"] = [t for t in ca["templates"] if t != "Machine"]
+    def test_only_admins_or_no_logon_template(self):
+        m = self.only("Machine")
+        next(t for t in m["pki"]["templates"] if t["name"] == "Machine")["sd"]["aces"] = [ace(f"{SID}-512", 0x100, ENROLL)]
         self.assertIsNone(run("PRV-41", m))
-        m = copy.deepcopy(BASE)
-        t = next(t for t in m["pki"]["templates"] if t["name"] == "Machine")
-        t["sd"]["aces"] = [ace(f"{SID}-512", 0x100, ENROLL)]
-        self.assertIsNone(run("PRV-41", m))
+        self.assertIsNone(run("PRV-41", self.only("SubCA")))
 
 
 class GPOAnonymous(unittest.TestCase):
@@ -226,13 +290,48 @@ class ServerSupportEnd(unittest.TestCase):
         self.assertEqual(self.check("STL-11", self.ctx_at((2026, 10, 30))).severity, "low")
         hit = self.check("STL-11", self.ctx_at((2026, 10, 30), dc=True))
         self.assertEqual(hit.severity, "medium")
-        self.assertEqual(hit.note, "@n_days_left|74")
+        self.assertEqual(hit.note, "@n_days_left|75")             # bis einschließlich 12.01.2027
+
+    def test_last_patch_day_still_supported_and_iot_ltsc(self):
+        from datetime import datetime, timezone
+        from app.adutil import classify_os
+        self.assertEqual(classify_os("Windows Server 2016 Standard", None, datetime(2027, 1, 12, 20, tzinfo=timezone.utc)), "expiring")
+        self.assertEqual(classify_os("Windows 10 IoT Enterprise LTSC", "10.0 (19044)",
+                                     datetime(2027, 2, 1, tzinfo=timezone.utc)), "supported")
 
     def test_after_the_end_it_is_unsupported(self):
         ctx = self.ctx_at((2027, 1, 13))
         self.assertIsNone(self.check("STL-11", ctx))
         hit = self.check("STL-09", ctx)
         self.assertIn("Windows Server 2016 Standard", [i.get("os") for i in hit.items])
+
+
+class FailedSections(unittest.TestCase):
+    def test_failed_reads_are_not_a_pass(self):
+        from app import scanner
+        for section, rid in (("pki_oids", "PRV-38"), ("pki_cas", "PRV-41"), ("pki_templates", "PRV-41"),
+                             ("gmsa", "PRV-40")):
+            m = copy.deepcopy(BASE)
+            m["meta"]["failed_sections"] = [section]
+            f, _ = scanner.evaluate(m)
+            self.assertEqual(next(x for x in f if x["rule_id"] == rid)["state"], "na", section)
+
+
+class GPOOneUnreadable(unittest.TestCase):
+    def test_readable_gpo_still_reported(self):
+        from app import rules2
+        orig = rules2.check_gpos_readable
+
+        def fake(ctx, guids):
+            if "{8F2A4C1E-55B0-4F0E-9C11-2D3E4F5A6B7C}" in guids:
+                raise NotApplicable("na_gpo_unreadable")
+            return orig(ctx, guids)
+        rules2.check_gpos_readable = fake
+        try:
+            hit = run("ANM-45", copy.deepcopy(BASE))
+        finally:
+            rules2.check_gpos_readable = orig
+        self.assertIsNotNone(hit)
 
 
 if __name__ == "__main__":

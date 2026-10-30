@@ -63,8 +63,10 @@ def _esc13(ctx: Ctx):
             continue
         for o in groups:
             g = ctx.by_dn.get((o["group"] or "").lower())
-            priv = bool(g) and (g["dn"].lower() in ctx.priv_map or
-                                any(pg["group"]["dn"].lower() == g["dn"].lower() for pg in ctx.priv_groups))
+            gt = (g or {}).get("group_type")
+            if gt is not None and not gt & UNIVERSAL_GROUP:
+                continue                      # AD wertet die Verknüpfung nur für universelle Gruppen aus
+            priv = bool(g) and _group_is_priv(ctx, g)
             critical = critical or priv
             items.append({"template": t["display"], "principal": ", ".join(who),
                           "group": (g or {}).get("sam") or o["group"]})
@@ -73,11 +75,50 @@ def _esc13(ctx: Ctx):
     return Hit(items, severity="critical", points=25) if critical else Hit(items)
 
 
-def _reads(ace: dict, attr_guid: str | None) -> bool:
-    m, ot = ace.get("mask", 0), (ace.get("object_type") or "").lower()
-    if m & ADS_RIGHT_GENERIC_ALL or m & GENERIC_READ:
-        return True
-    return bool(m & ADS_RIGHT_DS_READ_PROP) and (not ot or (attr_guid and ot == attr_guid.lower()))
+def _group_is_priv(ctx: Ctx, g: dict) -> bool:
+    """Gruppe ist selbst privilegiert oder (verschachtelt) Mitglied einer privilegierten Gruppe."""
+    for pg in ctx.priv_groups:
+        pgg = pg["group"]
+        if pgg["dn"].lower() == g["dn"].lower() or (g.get("sid") and g["sid"] in ctx.nested_principals(pgg)):
+            return True
+    return False
+
+
+KDS_CLASS = "aa02fd41-17e0-4f18-8687-b2239649736b"        # schemaIDGUID von msKds-ProvRootKey
+
+
+def _kds_rights(aces: list[dict], attr_guid: str | None, container: bool) -> tuple[dict, dict]:
+    """Je SID: liest den Schlüssel? (vertrauliches Attribut: Eigenschaft lesen UND erweitertes Recht) /
+    darf sich Rechte verschaffen (WriteDACL, WriteOwner, GenericAll/GenericWrite)?"""
+    from .adutil import ADS_RIGHT_DS_CONTROL_ACCESS, ace_grants_control
+    rp: dict[str, bool] = {}
+    ca: dict[str, bool] = {}
+    ctl: dict[str, set] = {}
+    for ace in aces:
+        if not ace.get("allow") or not ace.get("sid"):
+            continue
+        fl = ace.get("flags", 0)
+        if container:
+            if not fl & (CONTAINER_INHERIT | OBJECT_INHERIT):
+                continue
+            iot = (ace.get("inherited_object_type") or "").lower()
+            if iot and iot != KDS_CLASS:
+                continue                      # wird nur an andere Objektklassen vererbt
+        elif fl & INHERIT_ONLY:
+            continue
+        sid, m, ot = ace["sid"], ace.get("mask", 0), (ace.get("object_type") or "").lower()
+        on_attr = not ot or (attr_guid and ot == attr_guid.lower())
+        if m & ADS_RIGHT_GENERIC_ALL:
+            rp[sid] = ca[sid] = True
+        if on_attr and m & (ADS_RIGHT_DS_READ_PROP | GENERIC_READ):
+            rp[sid] = True
+        if on_attr and m & ADS_RIGHT_DS_CONTROL_ACCESS:
+            ca[sid] = True
+        r = set(ace_grants_control(ace)) & {"GenericAll", "GenericWrite", "WriteDacl", "WriteOwner"}
+        if r:
+            ctl.setdefault(sid, set()).update(r)
+    readers = {s: True for s in rp if ca.get(s)}
+    return readers, ctl
 
 
 @rule(id="P-KDSRootKey", category="privileged", severity="critical", points=25,
@@ -105,26 +146,33 @@ def _kds(ctx: Ctx):
     if k is None:
         raise NotApplicable("na_unknown")
     if not k.get("present"):
-        return None                           # kein KDS-Stammschlüssel → keine gMSA/dMSA
+        return None                           # kein KDS-Container → keine gMSA/dMSA
+    safe = ctx.safe_sids()
+    guid = k.get("attr_guid")
     items = []
     if k.get("readable"):
         # SAMAUDIT läuft mit einem normalen Konto – kann es den Schlüssel lesen, können es viele
         items.append({"principal": "@v_kds_auditor", "dn": k.get("dn") or "", "detail": "@v_kds_readable"})
-    safe = ctx.safe_sids()
-    guid = k.get("attr_guid")
-    found: dict[str, set[str]] = {}
-    for ace in ((k.get("container_sd") or {}).get("aces") or []):
-        if (ace.get("allow") and ace.get("sid") not in safe and ace.get("flags", 0) & (CONTAINER_INHERIT | OBJECT_INHERIT)
-                and _reads(ace, guid)):
-            found.setdefault(ace["sid"], set()).add(k.get("dn") or "")
-    for key in k.get("keys") or []:
-        for ace in ((key.get("sd") or {}).get("aces") or []):
-            if ace.get("allow") and ace.get("sid") not in safe and not ace.get("flags", 0) & INHERIT_ONLY \
-                    and _reads(ace, guid):
-                found.setdefault(ace["sid"], set()).add(key.get("dn") or "")
-    for sid, dns in found.items():
-        items.append({"principal": ctx.name(sid), "dn": sorted(dns)[0], "detail": f"@v_kds_ace|{len(dns)}"})
-    return Hit(items) if items else None
+    found: dict[tuple[str, str], set[str]] = {}
+    sources = [(k.get("dn") or "", (k.get("container_sd") or {}).get("aces") or [], True)]
+    sources += [(key.get("dn") or "", (key.get("sd") or {}).get("aces") or [], False) for key in k.get("keys") or []]
+    for dn, aces, container in sources:
+        readers, ctl = _kds_rights(aces, guid, container)
+        for sid in readers:
+            if sid not in safe:
+                found.setdefault((sid, "@v_kds_ace"), set()).add(dn)
+        for sid in ctl:
+            if sid not in safe and sid not in readers:
+                found.setdefault((sid, "@v_kds_control"), set()).add(dn)
+    for (sid, detail), dns in found.items():
+        items.append({"principal": ctx.name(sid), "dn": sorted(dns)[0], "detail": f"{detail}|{len(dns)}"})
+    if items:
+        return Hit(items)
+    # Standard: die Schlüsselobjekte selbst sind für normale Konten unsichtbar – dann ist nur der Container prüfbar
+    managed = any(u.get("is_gmsa") for u in ctx.users)
+    if any(key.get("sd") is None for key in k.get("keys") or []) or (not k.get("keys") and managed):
+        raise NotApplicable("na_kds_hidden")
+    return None
 
 
 BROAD_RIDS = (513, 514, 515)
@@ -159,10 +207,12 @@ def _gmsa_readers(ctx: Ctx):
             sid = ace.get("sid")
             if not ace.get("allow") or not sid or sid in safe:
                 continue
-            if sid in broad:
+            o = ctx.by_sid.get(sid)
+            via = ({sid} | ctx.nested_principals(o)) if o and o.get("_kind") == "group" else {sid}
+            if via & broad:
                 items.append({"account": a["sam"], "principal": ctx.name(sid), "detail": "@v_gmsa_broad"})
                 high = high or priv
-            elif priv and not (ctx.by_sid.get(sid) and ctx.is_priv(ctx.by_sid[sid])):
+            elif priv and not (o and (ctx.is_priv(o) if o.get("_kind") != "group" else _group_is_priv(ctx, o))):
                 items.append({"account": a["sam"], "principal": ctx.name(sid), "detail": "@v_gmsa_priv"})
                 high = True
     if not items:
@@ -170,17 +220,15 @@ def _gmsa_readers(ctx: Ctx):
     return Hit(items, severity="high", points=15) if high else Hit(items)
 
 
-MACHINE_TEMPLATES = {"machine", "workstation", "computer"}
-
-
-@rule(id="P-Certighost", category="privileged", severity="medium", points=8,
+@rule(id="P-Certighost", category="privileged", severity="low", points=3,
       title={"de": "Voraussetzungen für Certighost (CVE-2026-54121) erfüllt",
              "en": "Preconditions for Certighost (CVE-2026-54121) met"},
       desc={"de": "Mit „Certighost“ (Juli 2026) kann jeder Domänenbenutzer ein Zertifikat für einen Domänencontroller "
                   "erhalten und damit per DCSync alle Kennwörter auslesen – wenn Benutzer Computerkonten anlegen dürfen, "
-                  "eine Unternehmens-Zertifizierungsstelle die Maschinenvorlage für Domänencomputer anbietet und die "
-                  "Zertifizierungsstelle das Update vom Juli 2026 noch nicht hat. Den Patchstand der "
-                  "Zertifizierungsstelle kann SAMAUDIT nicht sehen; die übrigen Voraussetzungen sind hier erfüllt.",
+                  "eine Unternehmens-Zertifizierungsstelle eine Anmeldevorlage (z. B. „Computer“) für Domänencomputer "
+                  "oder alle Benutzer anbietet und die Zertifizierungsstelle das Update vom Juli 2026 noch nicht hat. "
+                  "Das ist in vielen Domänen der Standard. Den Patchstand der Zertifizierungsstelle kann SAMAUDIT nicht "
+                  "sehen – die Prüfung ist deshalb als Erinnerung niedrig gewichtet; ungepatcht ist das Risiko kritisch.",
             "en": "With 'Certighost' (July 2026) any domain user can obtain a certificate for a domain controller and "
                   "dump all passwords via DCSync – if users may create computer accounts, an enterprise CA offers the "
                   "machine template to domain computers and the CA lacks the July 2026 update. SAMAUDIT cannot see the "
@@ -204,24 +252,16 @@ def _certighost(ctx: Ctx):
     for ca in _pki(ctx).get("cas", []):
         for name in ca.get("templates") or []:
             t = templates.get(name.lower())
-            if not t or name.lower() not in MACHINE_TEMPLATES:
+            if not t or t.get("enroll_flag", 0) & 0x2 or t.get("ra_signature", 0) > 0:
                 continue
-            if any(s == ctx.group_sid(515) for s in _enroll_sids(t)):
+            ekus = set(t.get("ekus") or [])
+            if ekus and not ekus & AUTH_EKUS:
+                continue
+            who = _lowpriv_enroll(ctx, t)
+            if who:
                 items.append({"ca": ca.get("name") or "", "template": t.get("display") or name,
-                              "detail": f"@v_certighost|{maq if maq is not None else 10}"})
+                              "detail": f"@v_certighost|{', '.join(who)}"})
     return Hit(items) if items else None
-
-
-def _enroll_sids(t: dict) -> list[str]:
-    from .rules import GUID_CERT_AUTOENROLL, GUID_CERT_ENROLL
-    from .adutil import ADS_RIGHT_DS_CONTROL_ACCESS
-    out = []
-    for ace in (t.get("sd") or {}).get("aces", []):
-        m, ot = ace.get("mask", 0), ace.get("object_type")
-        if ace.get("allow") and (m & ADS_RIGHT_GENERIC_ALL or
-                                 (m & ADS_RIGHT_DS_CONTROL_ACCESS and ot in (None, GUID_CERT_ENROLL, GUID_CERT_AUTOENROLL))):
-            out.append(ace.get("sid"))
-    return out
 
 
 # ===========================================================================
@@ -262,12 +302,21 @@ LOOSENING = [
              "network-access-do-not-allow-anonymous-enumeration-of-sam-accounts")])
 def _gpo_anonymous(ctx: Ctx):
     guids = ctx.gpo_guids("all")
-    items = []
-    for key, weak, detail in LOOSENING:
-        for g, v in gpo_values(ctx, guids, key):
-            if as_num(v) == weak:
-                items.append({"gpo": ctx.gpo_name(g), "detail": f"@{detail}", "value": f"{key.rsplit(chr(92), 1)[1]}={v}"})
+    items, unreadable = [], None
+    for g in guids:
+        for key, weak, detail in LOOSENING:
+            try:
+                vals = gpo_values(ctx, [g], key)
+            except NotApplicable as e:     # z. B. GPO mit Sicherheitsfilter – die übrigen trotzdem auswerten
+                unreadable = e
+                break
+            for _, v in vals:
+                if as_num(v) == weak:
+                    items.append({"gpo": ctx.gpo_name(g), "detail": f"@{detail}",
+                                  "value": f"{key.rsplit(chr(92), 1)[1]}={v}"})
     if not items:
+        if unreadable is not None:
+            raise unreadable
         return None
     blank_on_dc = False
     try:
