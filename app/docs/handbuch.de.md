@@ -127,7 +127,7 @@ nano .env            # mindestens DOMAIN_FQDN und PUBLIC_HOSTNAME eintragen
 docker compose up -d
 ```
 
-Beide Dateien liegen auch jedem GitHub-Release bei. Danach im Browser `https://<PUBLIC_HOSTNAME>:9400` öffnen. Beim ersten Aufruf warnt der Browser vor dem selbstsignierten Zertifikat – ein eigenes Zertifikat lädt man unter **Verbindung** hoch.
+Beide Dateien liegen auch den GitHub-Releases bei (`.env.example` dort als `env.example`). Danach im Browser `https://<PUBLIC_HOSTNAME>:9400` öffnen. Beim ersten Aufruf warnt der Browser vor dem selbstsignierten Zertifikat – ein eigenes Zertifikat lädt man unter **Verbindung** hoch.
 
 **Mit Dockhand, Portainer & Co.:** Inhalt der `docker-compose.yml` als Stack anlegen, die Einstellungen der `.env` beim Stack hinterlegen und die Pfade `./data` und `./certs` durch einen festen Ordner ersetzen (z. B. `/opt/samaudit/data`).
 

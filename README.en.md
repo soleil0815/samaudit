@@ -279,7 +279,7 @@ cp .env.example .env && nano .env        # enter at least DOMAIN_FQDN
 docker compose up -d
 ```
 
-`docker-compose.yml` and `.env.example` are also attached to every GitHub release. Then open `https://<server>:9400` in the browser. On first start a self-signed HTTPS certificate is generated (one-time browser warning); your own certificate: see [Your own HTTPS certificate](#your-own-https-certificate). Create the auditor group first – see [Who may sign in?](#who-may-sign-in).
+`docker-compose.yml` and `env.example` (save as `.env.example`) are also attached to every GitHub release from 2.0.1 or the first security update on. Then open `https://<server>:9400` in the browser. On first start a self-signed HTTPS certificate is generated (one-time browser warning); your own certificate: see [Your own HTTPS certificate](#your-own-https-certificate). Create the auditor group first – see [Who may sign in?](#who-may-sign-in).
 
 **With Dockhand, Portainer & co.:** create a stack from the content of `docker-compose.yml`, store the settings from `.env.example` as the stack's environment file and replace the paths `./data` and `./certs` with a fixed folder, e.g. `/opt/samaudit/data`.
 
@@ -470,7 +470,7 @@ With `update.sh` in one step: `sh update.sh --restore --version=2.0.0` (lists th
 
 ### Without internet
 
-1. On a computer with internet, download from the GitHub release: the image file for the server (`samaudit-<version>-amd64.tar.gz`; server/NAS with an ARM processor: `…-arm64.tar.gz`) and `SHA256SUMS`, for a new installation also `docker-compose.yml`, `.env.example` and `update.sh`.
+1. On a computer with internet, download from the GitHub release: the image file for the server (`samaudit-<version>-amd64.tar.gz`; server/NAS with an ARM processor: `…-arm64.tar.gz`) and `SHA256SUMS`, for a new installation also `docker-compose.yml`, `env.example` (save as `.env.example`) and `update.sh`.
 2. Copy the files into the SAMAUDIT folder on the server.
 3. `sh update.sh --load samaudit-<version>-amd64.tar.gz` – checks the checksum, loads the image (`docker load`), writes `SAMAUDIT_VERSION` into `.env`, starts and checks. Without `update.sh`: `docker load -i <file>`, `SAMAUDIT_VERSION=<version>` in `.env`, `docker compose up -d`.
 
@@ -593,7 +593,7 @@ The container image is built on GitHub and published to the GitHub Container Reg
 | Event | Result |
 |---|---|
 | pull request, push to `main` | self-tests, build from the pinned versions, tests inside the image, a real run of the update path with Docker Compose (switching, rollback, restore, cleanup), Trivy – nothing is published. Pull requests are merged by the owner, never automatically. |
-| manual start on `main` (*Actions → Container image → Run workflow*) | if `app/version.py` contains a new version: image `<version>` and `latest` (if it is the highest version), git tag `v<version>`, GitHub release (text from `app/docs/news.json`) with image files for amd64/arm64, `SHA256SUMS`, `docker-compose.yml`, `.env.example` and `update.sh`. A version that is already published is never rebuilt or overwritten. |
+| manual start on `main` (*Actions → Container image → Run workflow*) | if `app/version.py` contains a new version: image `<version>` and `latest` (if it is the highest version), git tag `v<version>`, GitHub release (text from `app/docs/news.json`) with image files for amd64/arm64, `SHA256SUMS`, `docker-compose.yml`, `env.example` and `update.sh`. A version that is already published is never rebuilt or overwritten. |
 | Mondays 03:17 UTC | security update `<version>-s<n>` (see above) |
 | daily 05:43 UTC | scan of the published `latest` |
 
