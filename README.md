@@ -26,6 +26,7 @@ Alle Bilder zeigen den Demo-Modus mit erfundenen Beispieldaten (`DEMO_MODE=true`
 - **Gruppenrichtlinie lockert Anmeldeschutz (ANM-45):** leere Kennwörter bei Netzwerkanmeldung, anonyme SAM-Aufzählung, „Jeder“-Rechte für Anonyme, anonymer Zugriff auf Named Pipes/Freigaben (wie PingCastle A-LimitBlankPasswordUse / A-AnonymousAuthorizedGPO).
 - **Windows Server 2016 (STL-11):** ab 90 Tagen vor dem Supportende (12.01.2027) mit Punkten, bei Domänencontrollern dringlicher; danach zählen die Systeme automatisch als „ohne Herstellersupport“ (bisher wären sie dauerhaft nur als „läuft bald aus“ geführt worden).
 - **NTLMv1 (ANM-17):** Hinweis auf das Oktober-Update 2026, das NTLMv1-Anmeldungen für Single Sign-on standardmäßig blockiert.
+- **Aktualisierte Pakete:** Python 3.13.18, pyasn1 0.6.5 (behebt vier als hoch eingestufte Lücken, die Trivy beim ersten Veröffentlichungsversuch gefunden hat), neue Zeitzonendaten.
 
 ## Neu in 2.0.0 – Installation und Updates wie bei Docker üblich
 

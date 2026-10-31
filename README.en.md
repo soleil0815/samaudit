@@ -26,6 +26,7 @@ All images show demo mode with made-up sample data (`DEMO_MODE=true`).
 - **Group Policy weakens logon protection (ANM-45):** blank passwords for network logon, anonymous SAM enumeration, Everyone permissions for anonymous users, anonymous access to named pipes/shares (like PingCastle A-LimitBlankPasswordUse / A-AnonymousAuthorizedGPO).
 - **Windows Server 2016 (STL-11):** scored from 90 days before end of support (12 Jan 2027), more urgent for domain controllers; afterwards the systems automatically count as unsupported (previously they would have stayed "expiring" forever).
 - **NTLMv1 (ANM-17):** note on the October 2026 update that blocks NTLMv1-derived SSO credentials by default.
+- **Updated packages:** Python 3.13.18, pyasn1 0.6.5 (fixes four high-severity flaws Trivy found on the first release attempt), new time zone data.
 
 ## New in 2.0.0 – installation and updates the usual Docker way
 
