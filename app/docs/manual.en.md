@@ -1,6 +1,6 @@
 # SAMAUDIT – Manual
 
-SAMAUDIT assesses the security of your Active Directory (Windows AD or Samba AD). It reads the domain with the rights of a **normal** user account, applies 110 checks and presents the result as a risk score, a detailed report with remediation advice, and a PDF.
+SAMAUDIT assesses the security of your Active Directory (Windows AD or Samba AD). It reads the domain with the rights of a **normal** user account, applies 115 checks and presents the result as a risk score, a detailed report with remediation advice, and a PDF.
 
 The manual has two parts: **Part A** for auditors who use SAMAUDIT in the browser, **Part B** for running it on the server.
 
@@ -68,7 +68,7 @@ In the report, top right: **Download PDF**. The PDF contains a cover page, summa
 
 ### Check catalogue
 
-All 110 checks with ID, area, severity and description. IDs start with `STL-` (stale objects), `PRV-` (privileged accounts), `TRS-` (trusts) and `ANM-` (anomalies).
+All 115 checks with ID, area, severity and description. IDs start with `STL-` (stale objects), `PRV-` (privileged accounts), `TRS-` (trusts) and `ANM-` (anomalies).
 
 ### Connection
 

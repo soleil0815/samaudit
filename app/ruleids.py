@@ -118,4 +118,10 @@ LEGACY_IDS = {
     "P-ADCS-ESC17": "PRV-36",
     "P-dMSA": "PRV-37",
     "A-UPNSPNUniqueness": "ANM-44",
+    # ab v2.1
+    "P-ADCS-ESC13": "PRV-38",
+    "P-KDSRootKey": "PRV-39",
+    "P-GMSAReaders": "PRV-40",
+    "P-Certighost": "PRV-41",
+    "A-GPOAnonymous": "ANM-45",
 }

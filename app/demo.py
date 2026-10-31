@@ -98,7 +98,10 @@ def build() -> dict:
     user("ex.mitarbeiter2", last=200, pwd=600, admin_count=1)
     gmsa = user("gmsa_sql$", ou="CN=Managed Service Accounts", uac=UAC_WORKSTATION_TRUST_ACCOUNT, last=1, pwd=20,
                 spns=["MSSQLSvc/srv-sql02.firma.local:1433"], pgid=515, is_gmsa=True,
-                classes=["top", "computer", "msds-groupmanagedserviceaccount"])
+                classes=["top", "computer", "msds-groupmanagedserviceaccount"],
+                gmsa_readers={"owner": None, "aces": [{"type": 0, "flags": 0, "inherited": False, "allow": True,
+                                                        "mask": 0x000F01FF, "sid": f"{DOM_SID}-515",
+                                                        "object_type": None, "inherited_object_type": None}]})
 
     # --- normale Benutzer -------------------------------------------------
     seen = {u["sam"] for u in users}
@@ -291,6 +294,10 @@ def build() -> dict:
          "ra_signature": 0, "ekus": ["1.3.6.1.5.5.7.3.1"], "published": True, "schema_version": 2,
          "sd": {"owner": f"{DOM_SID}-512", "aces": [ace(f"{DOM_SID}-515", ADS_RIGHT_DS_CONTROL_ACCESS,
                                                          GUID_CERT_ENROLL)]}},
+        {"name": "Machine", "display": "Computer", "name_flag": 0x18000000, "enroll_flag": 0x20, "ra_signature": 0,
+         "ekus": ["1.3.6.1.5.5.7.3.2", "1.3.6.1.5.5.7.3.1"], "published": True,
+         "sd": {"owner": f"{DOM_SID}-519", "aces": [ace(f"{DOM_SID}-515", ADS_RIGHT_DS_CONTROL_ACCESS,
+                                                          GUID_CERT_ENROLL)]}},
         {"name": "SubCA", "display": "Untergeordnete Zertifizierungsstelle", "name_flag": 0x1, "enroll_flag": 0,
          "ra_signature": 0, "ekus": [], "published": False,
          "sd": {"owner": f"{DOM_SID}-519", "aces": [ace(f"{DOM_SID}-512", ADS_RIGHT_DS_CONTROL_ACCESS,
@@ -344,6 +351,9 @@ def build() -> dict:
                        {"name": "_msdcs.firma.local", "dn": "", "allow_update": 2, "sd": {"owner": None, "aces": []}},
                    ],
                    "last_backup": ago(52), "sysvol_repl": "dfsr",
+                   "kds": {"present": True, "readable": False, "dn": "CN=Master Root Keys,CN=Group Key Distribution "
+                           "Service,CN=Services,CN=Configuration," + DN, "attr_guid": None, "keys": [],
+                           "container_sd": {"owner": f"{DOM_SID}-519", "aces": [ace(f"{DOM_SID}-512", 0x000F01FF)]}},
                    "dmsa": {"schema": True, "guid": DMSA_GUID, "containers": [
                        {"dn": f"OU=Server,{DN}", "sd": {"owner": f"{DOM_SID}-512", "aces": [
                            ace(f"{DOM_SID}-1051", 0x1), ace(f"{DOM_SID}-512", 0x000F01FF)]}},
@@ -354,7 +364,7 @@ def build() -> dict:
         "psos": [{"name": "PSO-Admins", "min_length": 14, "complexity": True, "reversible": False,
                   "lockout_threshold": 5, "applies_to": [it_admins], "precedence": 10}],
         "pki": {"cas": [{"name": "FIRMA-CA", "host": "srv-ca01.firma.local", "dn": "CN=FIRMA-CA,CN=Enrollment Services",
-                         "templates": ["User", "WebServer-Export", "VPN-Alt", "EnrollmentAgent-Alt", "Webserver-Intern"],
+                         "templates": ["User", "Machine", "WebServer-Export", "VPN-Alt", "EnrollmentAgent-Alt", "Webserver-Intern"],
                          "certs": [_demo_ca_cert()], "sd": None,
                          "enroll_servers": ["1\n4\n0\nhttp://srv-ca01.firma.local/FIRMA-CA_CES_Kerberos/service.svc/CES\n0"]}],
                 "templates": templates, "objects": [
@@ -387,6 +397,8 @@ def build() -> dict:
                     r"MACHINE\System\CurrentControlSet\Services\LanManServer\Parameters\RequireSecuritySignature": "4,1",
                 }},
                 "{31B2F340-016D-11D2-945F-00C04FB984F9}": {"System Access": {"MinimumPasswordLength": "7"}},
+                "{0B7E3A55-3C1D-4E8B-A0D2-6F4C2B1E9D80}": {"Registry Values": {
+                    r"MACHINE\System\CurrentControlSet\Control\Lsa\RestrictAnonymousSAM": "4,0"}},
             },
             "regpol": {"{0B7E3A55-3C1D-4E8B-A0D2-6F4C2B1E9D80}": {"machine": {
                 "software\\policies\\microsoft\\windows\\windowsupdate\\wuserver": "http://wsus.firma.local:8530",

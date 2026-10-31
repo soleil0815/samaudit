@@ -1,10 +1,31 @@
-# SAMAUDIT v2.0.0 – Active Directory security assessment
+# SAMAUDIT v2.1.0 – Active Directory security assessment
 
 *Deutsche Version: [README.md](README.md)* · **Manual:** [app/docs/manual.en.md](app/docs/manual.en.md) (also in the web interface under **Help**)
 
-Self-hosted web application that reads a Windows or Samba AD domain, runs **110 security checks** and presents the result as a risk score (0–100), a detailed report with remediation advice, and a PDF export – in German or English.
+Self-hosted web application that reads a Windows or Samba AD domain, runs **115 security checks** and presents the result as a risk score (0–100), a detailed report with remediation advice, and a PDF export – in German or English.
 
 > **Status: beta – hobby project, no warranty.** SAMAUDIT was built for the author's own use and has mainly been tested with test data; results may be incomplete or wrong and do not replace expert review. Feedback is welcome, but no support or response times are promised. Please report security vulnerabilities privately (see [SECURITY.md](SECURITY.md)).
+
+![Overview: risk score, rating of the four areas and the most important findings](docs/images/en-overview.webp)
+*Overview after a scan – risk score, the four areas and the findings to address first*
+
+![Expanded finding with explanation, recommended action, affected objects and references](docs/images/en-finding.webp)
+*Finding in the report – what it is about, what to do, which objects are affected*
+
+![PDF report: cover page with summary and list of findings](docs/images/en-pdf.webp)
+*PDF export – cover page with summary and list of all findings*
+
+All images show demo mode with made-up sample data (`DEMO_MODE=true`).
+
+## New in 2.1.0 – five new checks (now 115)
+
+- **ESC13 (PRV-38):** certificate templates whose issuance policy is linked to an AD group – whoever may enroll gets the group's rights without membership (critical if the group is privileged).
+- **Golden gMSA/dMSA (PRV-39):** anyone besides Domain/Enterprise Admins and DCs who may read the KDS root key (or grant themselves that right) can compute all gMSA and dMSA passwords forever. The key itself is never retrieved. With an ordinary account the key objects are usually invisible; SAMAUDIT then checks the inherited rights and reports the rest as "not checkable".
+- **gMSA password retrievable by too many (PRV-40):** broad groups such as Domain Users or Domain Computers in msDS-GroupMSAMembership; for privileged gMSAs also individual non-admins.
+- **Certighost, CVE-2026-54121 (PRV-41):** users may create computer accounts and an enterprise CA offers a logon template (e.g. "Machine") to domain computers or all users – domain takeover is possible as long as the CA lacks the July 2026 update. As SAMAUDIT cannot see the patch level and this is the default in many domains, the check is a low-weighted reminder.
+- **Group Policy weakens logon protection (ANM-45):** blank passwords for network logon, anonymous SAM enumeration, Everyone permissions for anonymous users, anonymous access to named pipes/shares (like PingCastle A-LimitBlankPasswordUse / A-AnonymousAuthorizedGPO).
+- **Windows Server 2016 (STL-11):** scored from 90 days before end of support (12 Jan 2027), more urgent for domain controllers; afterwards the systems automatically count as unsupported (previously they would have stayed "expiring" forever).
+- **NTLMv1 (ANM-17):** note on the October 2026 update that blocks NTLMv1-derived SSO credentials by default.
 
 ## New in 2.0.0 – installation and updates the usual Docker way
 
@@ -384,17 +405,17 @@ With `DOMAIN_TYPE=auto` (default), SAMAUDIT reads the DC's rootDSE when connecti
 
 `DC_HOSTS` is optional: without it the domain name is used, which resolves to all DCs in both AD and Samba. With **several Samba DCs**, each with its own self-signed certificate, set `DC_HOSTS` to the individual DC names so that automatic LDAPS trust works per DC.
 
-## Check catalogue (110 checks)
+## Check catalogue (115 checks)
 
 The full catalogue with descriptions and points is available in the application under **Check catalogue**.
 
 **Stale objects (22):** inactive users and computers, "password never expires", PASSWD_NOTREQD, reversible encryption, DES (flag and encryption types), AS-REP roasting, Kerberoasting, unsupported operating systems (including Windows 10 since 14 Oct 2025, Server 2016 from 01/2027), SID history, hidden membership via primary group, userPassword attributes, LAPS coverage, orphaned adminCount flags, machine passwords not rotated, replication conflicts (CNF), missing AD subnets, accounts still depending on Kerberos RC4, weak certificate mappings (altSecurityIdentities).
 
-**Privileged accounts (37):** number of admins, Schema/Enterprise Admins, operator groups, Key Admins / GPO creators, broad groups (Everyone, Domain Users …) in admin groups, admins with SPN or without pre-authentication, delegation protection / Protected Users, inactive, disabled and old admin accounts, shadow credentials, DCSync rights, write permissions on the domain object, AdminSDHolder, the "Domain Controllers" OU and critical GPOs, owner of DC objects, RODC password replication, DnsAdmins, unconstrained / constrained / resource-based delegation, "Pre-Windows 2000" group, Entra ID Seamless SSO, AD CS: ESC1, ESC2, ESC3, ESC4, ESC5, ESC8, ESC9, ESC15, ESC17, delegated managed service accounts (dMSA, "BadSuccessor").
+**Privileged accounts (41):** number of admins, Schema/Enterprise Admins, operator groups, Key Admins / GPO creators, broad groups (Everyone, Domain Users …) in admin groups, admins with SPN or without pre-authentication, delegation protection / Protected Users, inactive, disabled and old admin accounts, shadow credentials, DCSync rights, write permissions on the domain object, AdminSDHolder, the "Domain Controllers" OU and critical GPOs, owner of DC objects, RODC password replication, DnsAdmins, unconstrained / constrained / resource-based delegation, "Pre-Windows 2000" group, Entra ID Seamless SSO, AD CS: ESC1, ESC2, ESC3, ESC4, ESC5, ESC8, ESC9, ESC13, ESC15, ESC17, Certighost (CVE-2026-54121), delegated managed service accounts (dMSA, "BadSuccessor"), read access to the KDS root key (Golden gMSA/dMSA), gMSA password retrieval by too many.
 
 **Trusts (7):** SID filtering, TGT delegation, inactive/broken trusts, downlevel trusts, missing AES, foreign principals in admin groups, missing selective authentication.
 
-**Anomalies (44):** password policy (length, lockout, complexity, history, minimum age, reversible) and PSOs, krbtgt password age (including RODC krbtgt), guest account, MachineAccountQuota, AD Recycle Bin, functional level, DC operating systems, number/state/location of DCs, AD backup, tombstone lifetime, SYSVOL replication (FRS), dSHeuristics (anonymous access, AdminSDHolder exclusions), DNS (insecure updates, ADIDNS permissions), CA certificates (SHA-1/MD5, key length, expiry), GPP passwords and autologon, passwords in logon scripts, and based on group policies: LDAP signing and channel binding, NTLMv1/LM hashes, SMB signing (server and client), print spooler on DCs, audit policy on DCs, dangerous user rights on DCs, ZeroLogon exceptions, RefusePasswordChange, Kerberos encryption types, WDigest, AlwaysInstallElevated, WSUS over HTTP, LLMNR, PowerShell logging, LSA protection; manipulable UPN/SPN (invisible characters, name collisions, duplicates, uniqueness checks).
+**Anomalies (45):** password policy (length, lockout, complexity, history, minimum age, reversible) and PSOs, krbtgt password age (including RODC krbtgt), guest account, MachineAccountQuota, AD Recycle Bin, functional level, DC operating systems, number/state/location of DCs, AD backup, tombstone lifetime, SYSVOL replication (FRS), dSHeuristics (anonymous access, AdminSDHolder exclusions), DNS (insecure updates, ADIDNS permissions), CA certificates (SHA-1/MD5, key length, expiry), GPP passwords and autologon, passwords in logon scripts, and based on group policies: LDAP signing and channel binding, NTLMv1/LM hashes, SMB signing (server and client), print spooler on DCs, audit policy on DCs, dangerous user rights on DCs, ZeroLogon exceptions, RefusePasswordChange, Kerberos encryption types, WDigest, AlwaysInstallElevated, WSUS over HTTP, LLMNR, PowerShell logging, LSA protection, blank passwords and anonymous access via GPO; manipulable UPN/SPN (invisible characters, name collisions, duplicates, uniqueness checks).
 
 Checks that cannot be performed in an environment (e.g. Windows-specific items on Samba, or SYSVOL without SMB access) are listed under "Not checkable" and do not count towards the risk score.
 

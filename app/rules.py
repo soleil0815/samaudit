@@ -299,7 +299,7 @@ def _kerberoast(ctx: Ctx):
       refs=[("Microsoft Lifecycle", f"{MS}/lifecycle/products/")])
 def _os_obsolete(ctx: Ctx):
     hits = [c for c in enabled_computers(ctx, include_dc=False)
-            if classify_os(c.get("os"), c.get("os_version")) == "obsolete"]
+            if classify_os(c.get("os"), c.get("os_version"), ctx.now) == "obsolete"]
     if not hits:
         return None
     active = [c for c in hits if not ctx.inactive(c, 45)]
@@ -317,20 +317,36 @@ def _os_obsolete(ctx: Ctx):
       columns=["account", "os", "last_logon"])
 def _os_win10(ctx: Ctx):
     hits = [c for c in enabled_computers(ctx, include_dc=False)
-            if classify_os(c.get("os"), c.get("os_version")) == "win10" and not ctx.inactive(c, ctx.cfg.inactive_days)]
+            if classify_os(c.get("os"), c.get("os_version"), ctx.now) == "win10" and not ctx.inactive(c, ctx.cfg.inactive_days)]
     return Hit([acc(c, os=c.get("os")) for c in hits]) if hits else None
 
 
 @rule(id="S-OS-Expiring", category="stale", severity="info", points=0,
       title={"de": "Windows Server 2016 – Support endet am 12.01.2027",
              "en": "Windows Server 2016 – support ends 12 Jan 2027"},
-      desc={"de": "Diese Server laufen bald aus dem erweiterten Support.",
-            "en": "These servers will soon leave extended support."},
-      fix={"de": "Ablösung bzw. In-Place-Upgrade zeitnah einplanen.", "en": "Plan replacement or in-place upgrade."},
+      desc={"de": "Diese Systeme (Windows Server 2016, Windows 10 Enterprise LTSC 2021) bekommen ab dem 13.01.2027 "
+                  "keine Sicherheitsupdates mehr. Ab 90 Tagen vor dem Termin wird die Prüfung dringlicher, für "
+                  "Domänencontroller besonders; nach dem Termin zählen die Systeme als „ohne Herstellersupport“.",
+            "en": "These systems (Windows Server 2016, Windows 10 Enterprise LTSC 2021) receive no security updates "
+                  "after 12 Jan 2027. From 90 days before, the finding becomes more urgent, especially for DCs; "
+                  "afterwards they count as unsupported."},
+      fix={"de": "Ablösung bzw. In-Place-Upgrade jetzt durchführen – Domänencontroller zuerst; wo das nicht rechtzeitig "
+                 "geht, Extended Security Updates (ESU) prüfen.",
+           "en": "Replace or upgrade now – domain controllers first; where that is not possible in time, consider "
+                 "Extended Security Updates (ESU)."},
       columns=["account", "os", "last_logon"])
 def _os_expiring(ctx: Ctx):
-    hits = [c for c in enabled_computers(ctx) if classify_os(c.get("os"), c.get("os_version")) == "expiring"]
-    return Hit([acc(c, os=c.get("os")) for c in hits]) if hits else None
+    hits = [c for c in enabled_computers(ctx)
+            if classify_os(c.get("os"), c.get("os_version"), ctx.now) == "expiring"]
+    if not hits:
+        return None
+    items = [acc(c, os=c.get("os")) for c in hits]
+    from .adutil import EXPIRING_END
+    if (EXPIRING_END - ctx.now).days > 90:
+        return Hit(items)
+    if any(c.get("is_dc") or c.get("is_rodc") for c in hits):
+        return Hit(items, severity="medium", points=8, note=f"@n_days_left|{(EXPIRING_END - ctx.now).days}")
+    return Hit(items, severity="low", points=3, note=f"@n_days_left|{(EXPIRING_END - ctx.now).days}")
 
 
 @rule(id="S-SIDHistory", category="stale", severity="medium", points=5,
@@ -1183,7 +1199,7 @@ def _level(ctx: Ctx):
 def _dc_os(ctx: Ctx):
     items, crit = [], False
     for dc in ctx.dcs:
-        cls = classify_os(dc.get("os"))
+        cls = classify_os(dc.get("os"), dc.get("os_version"), ctx.now)
         if cls == "obsolete":
             crit = True
             items.append({"account": dc["sam"], "os": dc.get("os")})
@@ -1267,11 +1283,17 @@ def _ldap_signing(ctx: Ctx):
 @rule(id="A-NTLMv1", category="anomalies", severity="high", points=15,
       title={"de": "NTLMv1/LM auf Domänencontrollern zugelassen", "en": "NTLMv1/LM allowed on domain controllers"},
       desc={"de": "NTLMv1-Antworten lassen sich in Minuten knacken und auf den NT-Hash zurückführen. "
-                  "LmCompatibilityLevel sollte 5 sein („Nur NTLMv2-Antworten senden, LM & NTLM verweigern“).",
-            "en": "NTLMv1 responses can be cracked within minutes. LmCompatibilityLevel should be 5."},
+                  "LmCompatibilityLevel sollte 5 sein („Nur NTLMv2-Antworten senden, LM & NTLM verweigern“). "
+                  "Seit dem Windows-Update vom Oktober 2026 blockiert Windows NTLMv1-abgeleitete Anmeldungen für "
+                  "Single Sign-on standardmäßig (BlockNtlmSSO) – Geräte, die noch NTLMv1 brauchen (z. B. WLAN/VPN mit "
+                  "PEAP-MSCHAPv2), fallen dann ohnehin aus; die DC-Einstellung sollte dem folgen.",
+            "en": "NTLMv1 responses can be cracked within minutes. LmCompatibilityLevel should be 5. Since the October "
+                  "2026 update Windows blocks NTLMv1-derived SSO credentials by default (BlockNtlmSSO); the DC setting "
+                  "should follow."},
       fix={"de": "„Netzwerksicherheit: LAN Manager-Authentifizierungsebene“ auf Stufe 5 setzen; vorher NTLMv1-Nutzung "
-                 "über Ereignis 4624 (Paketname NTLM V1) prüfen.",
-           "en": "Set LAN Manager authentication level to 5 after auditing NTLMv1 usage (event 4624)."},
+                 "über Ereignis 4624 (Paketname NTLM V1) prüfen. BlockNtlmSSO=0 nur als befristete Ausnahme nutzen.",
+           "en": "Set LAN Manager authentication level to 5 after auditing NTLMv1 usage (event 4624). Use "
+                 "BlockNtlmSSO=0 only as a temporary exception."},
       columns=["value", "recommended"], platforms=("windows",))
 def _ntlmv1(ctx: Ctx):
     v = effective_dc_registry(ctx, r"Control\Lsa\LmCompatibilityLevel")

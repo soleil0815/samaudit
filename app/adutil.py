@@ -358,8 +358,21 @@ def ace_grants_control(ace: dict) -> list[str]:
 # Betriebssysteme
 # ---------------------------------------------------------------------------
 
-def classify_os(os_name: str | None, os_version: str | None = None) -> str:
-    """Grobe Einordnung: 'obsolete', 'win10', 'expiring', 'supported', 'samba', 'other', 'unknown'."""
+# Ende des erweiterten Supports von Windows Server 2016 und Windows 10 Enterprise LTSC 2021:
+# letzter Patchtag 12.01.2027 – ab dem 13.01.2027 ohne Sicherheitsupdates
+EXPIRING_END = datetime(2027, 1, 13, tzinfo=timezone.utc)
+
+
+def classify_os(os_name: str | None, os_version: str | None = None, today: datetime | None = None) -> str:
+    """Grobe Einordnung: 'obsolete', 'win10', 'expiring', 'supported', 'samba', 'other', 'unknown'.
+    'expiring' wird nach EXPIRING_END automatisch zu 'obsolete'."""
+    c = _classify_os(os_name, os_version)
+    if c == "expiring" and (today or now_utc()) >= EXPIRING_END:
+        return "obsolete"
+    return c
+
+
+def _classify_os(os_name: str | None, os_version: str | None = None) -> str:
     if not os_name:
         return "unknown"
     s = os_name.lower()
@@ -372,6 +385,8 @@ def classify_os(os_name: str | None, os_version: str | None = None) -> str:
     if any(o in s for o in obsolete):
         return "obsolete"
     if "windows 10" in s:
+        if "iot" in s and ("ltsc" in s or "ltsb" in s):
+            return "supported"            # IoT Enterprise LTSC 2021: Support bis 01/2032
         if "ltsc" in s or "ltsb" in s:
             # Langzeitversionen: Support je nach Build (2015/2016 beendet, 2019 bis 01/2029, 2021 bis 01/2027)
             m = re.search(r"\((\d{5})\)", os_version or "")

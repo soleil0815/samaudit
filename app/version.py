@@ -9,7 +9,7 @@ import os
 import re
 
 APP_NAME = "SAMAUDIT"
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 _img = os.environ.get("SAMAUDIT_IMAGE_VERSION", "").strip()
 IMAGE_VERSION = _img if re.fullmatch(re.escape(VERSION) + r"(-s\d+)?", _img) else VERSION
