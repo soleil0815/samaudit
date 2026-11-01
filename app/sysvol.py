@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import re
 import struct
+from typing import Any
 
 from .config import settings
 
@@ -175,7 +176,7 @@ def _scan_script(data: bytes, path: str, found: list) -> None:
 
 
 def scan(server: str, fqdn: str, username: str, password: str, gpos: list[dict], gpo_links: dict) -> dict:
-    result = {"status": "ok", "error": None, "gpp_passwords": [], "secedit": {}, "regpol": {}, "audit": {},
+    result: dict[str, Any] = {"status": "ok", "error": None, "gpp_passwords": [], "secedit": {}, "regpol": {}, "audit": {},
               "script_secrets": [], "files_scanned": 0, "unreadable_gpos": [], "limits": []}
     if not settings.smb_checks:
         result["status"] = "disabled"

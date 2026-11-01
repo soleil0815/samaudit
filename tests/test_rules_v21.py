@@ -170,7 +170,7 @@ class KDSRootKey(unittest.TestCase):
         finally:
             ldapsrc.search, ldapsrc.base_entry = orig
         self.assertTrue(out["present"])
-        for flt, attrs in calls:
+        for _flt, attrs in calls:
             self.assertNotIn("msKds-RootKeyData", attrs, "the key material must never be requested")
             self.assertNotIn("*", attrs)
 

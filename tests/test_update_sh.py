@@ -298,7 +298,7 @@ class UpdateFlow(unittest.TestCase):
         e.state["images"][f"{REPO}:previous"] = "img1"
         (e.dir / "docker-compose.yml").write_text(compose_text(1), encoding="utf-8")
         e.running("img2")
-        r = e.run("-y")
+        e.run("-y")
         self.assertIn("nichts zu tun", e.out)
         self.assertEqual(e.state["images"][f"{REPO}:previous"], "img1")
 
@@ -318,7 +318,7 @@ class UpdateFlow(unittest.TestCase):
         own = compose_text(1).replace("- ./data:/app/data", "- /volume1/samaudit/data:/app/data")
         (e.dir / "docker-compose.yml").write_text(own, encoding="utf-8")
         e.running("img1")
-        r = e.run("-y")
+        e.run("-y")
         self.assertEqual((e.dir / "docker-compose.yml").read_text(), own)
         self.assertTrue((e.dir / "docker-compose.yml.neu").exists())
         self.assertIn("NICHT ersetzt", e.out)
@@ -498,7 +498,7 @@ class Cleanup(unittest.TestCase):
 
     def test_asks_and_does_nothing_without_yes(self):
         e = self.make()
-        r = e.run("--cleanup", inp="n\n")
+        e.run("--cleanup", inp="n\n")
         self.assertTrue((e.dir / "Dockerfile").exists())
         self.assertNotIn("entfernt:", e.out)
 
@@ -520,7 +520,7 @@ class Cleanup(unittest.TestCase):
         e.save()
         os.chmod(d / "data", 0)                          # wie data/ (UID 10001, 0700) für einen Nicht-root-Benutzer
         self.addCleanup(os.chmod, d / "data", 0o755)
-        r = e.run("--cleanup", "-y")
+        e.run("--cleanup", "-y")
         os.chmod(d / "data", 0o755)
         self.assertTrue((d / "tools" / "wichtig.txt").exists(), e.out)
         self.assertEqual((d / "data" / "samaudit.db").read_text(), "DATEN")
@@ -542,7 +542,7 @@ class Cleanup(unittest.TestCase):
         (d / "locks" / "nas" / "datei").write_text("NAS", encoding="utf-8")
         mp = str(d / "locks" / "nas").replace(" ", "\\040")
         (e.rootfs / "proc" / "mounts").write_text(f"//nas/share {mp} cifs rw 0 0\n", encoding="utf-8")
-        r = e.run("--cleanup", "-y")
+        e.run("--cleanup", "-y")
         self.assertEqual((d / "locks" / "nas" / "datei").read_text(), "NAS", e.out)
 
     def test_refuses_outside_a_samaudit_folder(self):

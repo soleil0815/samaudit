@@ -124,7 +124,7 @@ class Settings:
         self.demo_mode = _bool("DEMO_MODE", False)
 
     def validate(self) -> list[str]:
-        problems = []
+        problems: list[str] = []
         if self.demo_mode:
             return problems
         if not self.domain_fqdn:

@@ -13,6 +13,7 @@ import logging
 import socket
 import threading
 import time
+from typing import Any
 
 from .config import settings
 
@@ -20,7 +21,7 @@ log = logging.getLogger("samaudit.egress")
 
 ALLOWED_PORTS = {389, 636, 445, 3268, 3269}
 _lock = threading.Lock()
-_cache: dict[str, object] = {"ips": set(), "ts": 0.0}
+_cache: dict[str, Any] = {"ips": set(), "ts": 0.0}
 _last_log: dict[str, float] = {}
 _installed = False
 
@@ -29,12 +30,12 @@ def _allowed_ips() -> set[str]:
     now = time.time()
     with _lock:
         if now - float(_cache["ts"]) < 300 and _cache["ips"]:
-            return set(_cache["ips"])  # type: ignore[arg-type]
+            return set(_cache["ips"])
     ips: set[str] = set()
     for host in set(settings.dc_hosts) | ({settings.domain_fqdn} if settings.domain_fqdn else set()):
         try:
             for info in _orig_getaddrinfo(host, None):
-                ips.add(info[4][0])
+                ips.add(str(info[4][0]))
         except OSError:
             pass
     for extra in settings.egress_allow:
@@ -44,7 +45,7 @@ def _allowed_ips() -> set[str]:
         except ValueError:
             try:
                 for info in _orig_getaddrinfo(extra, None):
-                    ips.add(info[4][0])
+                    ips.add(str(info[4][0]))
             except OSError:
                 pass
     with _lock:
@@ -58,7 +59,7 @@ def is_allowed(host: str, port: int) -> bool:
     except ValueError:
         # Hostname statt IP: auflösen und jede Adresse prüfen
         try:
-            addrs = {i[4][0] for i in _orig_getaddrinfo(host, port)}
+            addrs = {str(i[4][0]) for i in _orig_getaddrinfo(host, port)}
         except OSError:
             return False
         return bool(addrs) and all(is_allowed(a, port) for a in addrs)

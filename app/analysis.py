@@ -64,7 +64,7 @@ class Ctx:
             return "?"
         o = self.by_sid.get(sid)
         if o:
-            return o.get("sam") or o.get("dn")
+            return o.get("sam") or o.get("dn") or sid
         if sid in WELL_KNOWN_SIDS:
             return WELL_KNOWN_SIDS[sid]
         rid = sid_rid(sid)

@@ -27,7 +27,7 @@ from .i18n import level_key, t, tv
 from .rules import CATEGORIES, SEVERITIES
 
 FONT_DIR = os.path.join(os.path.dirname(__file__), "pdf_fonts")
-_fonts_ready = False
+_fonts_ready: bool | None = False   # None: eigene Schriften fehlen, eingebaute verwenden
 
 
 def _fonts() -> tuple[str, str, str, str]:

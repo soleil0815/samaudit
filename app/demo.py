@@ -71,9 +71,9 @@ def build() -> dict:
     svc_backup = user("svc_backup", ou="OU=Dienstkonten,OU=IT", uac=UAC_NORMAL_ACCOUNT | UAC_DONT_EXPIRE_PASSWORD,
                       last=1, pwd=1850, spns=["MSSQLSvc/srv-backup01.firma.local:1433"])
     t_becker = user("t.becker", last=3, pwd=40)
-    hilfe = user("hilfe.it", ou="OU=IT", last=12, pwd=200, pgid=512)
-    svc_sql = user("svc_sql", ou="OU=Dienstkonten,OU=IT", uac=UAC_NORMAL_ACCOUNT | UAC_DONT_EXPIRE_PASSWORD,
-                   last=1, pwd=2400, spns=["MSSQLSvc/srv-sql01.firma.local:1433", "MSSQLSvc/srv-sql01.firma.local"])
+    user("hilfe.it", ou="OU=IT", last=12, pwd=200, pgid=512)
+    user("svc_sql", ou="OU=Dienstkonten,OU=IT", uac=UAC_NORMAL_ACCOUNT | UAC_DONT_EXPIRE_PASSWORD,
+         last=1, pwd=2400, spns=["MSSQLSvc/srv-sql01.firma.local:1433", "MSSQLSvc/srv-sql01.firma.local"])
     user("svc_web", ou="OU=Dienstkonten,OU=IT", uac=UAC_NORMAL_ACCOUNT | UAC_DONT_EXPIRE_PASSWORD, last=2,
          pwd=1300, spns=["HTTP/intranet.firma.local"], enc_types=0x1F)
     user("svc_sap", ou="OU=Dienstkonten,OU=IT", uac=UAC_NORMAL_ACCOUNT | UAC_DONT_EXPIRE_PASSWORD, last=1,
@@ -96,12 +96,12 @@ def build() -> dict:
     user("j.migration", last=7, pwd=100, sid_history=["S-1-5-21-555111222-333444555-666777888-1150"])
     user("ex.mitarbeiter1", last=40, pwd=500, admin_count=1)
     user("ex.mitarbeiter2", last=200, pwd=600, admin_count=1)
-    gmsa = user("gmsa_sql$", ou="CN=Managed Service Accounts", uac=UAC_WORKSTATION_TRUST_ACCOUNT, last=1, pwd=20,
-                spns=["MSSQLSvc/srv-sql02.firma.local:1433"], pgid=515, is_gmsa=True,
-                classes=["top", "computer", "msds-groupmanagedserviceaccount"],
-                gmsa_readers={"owner": None, "aces": [{"type": 0, "flags": 0, "inherited": False, "allow": True,
-                                                        "mask": 0x000F01FF, "sid": f"{DOM_SID}-515",
-                                                        "object_type": None, "inherited_object_type": None}]})
+    user("gmsa_sql$", ou="CN=Managed Service Accounts", uac=UAC_WORKSTATION_TRUST_ACCOUNT, last=1, pwd=20,
+         spns=["MSSQLSvc/srv-sql02.firma.local:1433"], pgid=515, is_gmsa=True,
+         classes=["top", "computer", "msds-groupmanagedserviceaccount"],
+         gmsa_readers={"owner": None, "aces": [{"type": 0, "flags": 0, "inherited": False, "allow": True,
+                                                 "mask": 0x000F01FF, "sid": f"{DOM_SID}-515",
+                                                 "object_type": None, "inherited_object_type": None}]})
 
     # --- normale Benutzer -------------------------------------------------
     seen = {u["sam"] for u in users}
@@ -113,7 +113,7 @@ def build() -> dict:
         seen.add(sam)
         r = rnd.random()
         uac = UAC_NORMAL_ACCOUNT
-        last = rnd.randint(0, 25)
+        last: int | None = rnd.randint(0, 25)
         if r < 0.09:
             uac |= UAC_DONT_EXPIRE_PASSWORD
         if 0.09 <= r < 0.22:

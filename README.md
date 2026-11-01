@@ -1,4 +1,4 @@
-# SAMAUDIT v2.1.0 – Sicherheitsprüfung für Active Directory
+# SAMAUDIT v2.1.1 – Sicherheitsprüfung für Active Directory
 
 *English version: [README.en.md](README.en.md)* · **Handbuch:** [app/docs/handbuch.de.md](app/docs/handbuch.de.md) (auch in der Weboberfläche unter **Hilfe**)
 
@@ -16,6 +16,12 @@ Selbst gehostete Webanwendung, die eine Windows- oder Samba-AD-Domäne ausliest,
 *PDF-Export – Deckblatt mit Zusammenfassung und Liste aller Befunde*
 
 Alle Bilder zeigen den Demo-Modus mit erfundenen Beispieldaten (`DEMO_MODE=true`).
+
+## Neu in 2.1.1 – automatische Code-Prüfung
+
+- **Statische Prüfungen bei jedem Pull Request:** ruff (Programmierfehler und die Sicherheitsregeln von Bandit) und mypy (Typprüfung) laufen in GitHub vor den Selbsttests. Ein Fund färbt den Lauf rot – dann wird nichts veröffentlicht. Bewusst zugelassene Stellen sind im Code mit Begründung markiert, die Regeln stehen in `pyproject.toml`.
+- **Dabei gefundene und behobene Fehler:** Bei einer Anmeldung mit einer nicht lesbaren Gruppen-SID im Token konnte die Anmeldung mit einem internen Fehler abbrechen statt sauber geprüft zu werden. Die Übersicht stürzte ab, wenn der neueste Bericht gerade gelöscht wurde. Ein Übersetzungseintrag ohne deutschen Text führte zu einem Fehler statt zur Anzeige des Schlüssels. Der Zertifikats-Upload verstand Feldnamen in RFC-2231-Schreibweise nicht.
+- Sonst keine Änderungen am Verhalten; die Prüfungen und Berichte sind unverändert.
 
 ## Neu in 2.1.0 – fünf neue Prüfungen (jetzt 115)
 

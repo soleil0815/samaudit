@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from typing import Any
 from collections import Counter
 
 from . import db
@@ -69,7 +70,7 @@ def evaluate(model: dict) -> tuple[list[dict], dict]:
     failed = set((model.get("meta") or {}).get("failed_sections") or [])
     results = []
     for r in RULES:
-        res = {"rule_id": r.id, "category": r.category, "state": "pass", "severity": r.severity,
+        res: dict[str, Any] = {"rule_id": r.id, "category": r.category, "state": "pass", "severity": r.severity,
                "points": 0, "count": 0, "items": [], "note": None}
         if dtype not in r.platforms:
             res.update(state="na", note="na_platform")
