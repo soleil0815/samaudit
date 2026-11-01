@@ -23,6 +23,10 @@ fail() {
   printf '### Update-Weg fehlgeschlagen\n%s\n' "$1" >> "$summary"
   docker ps -a || true
   docker logs --tail 60 samaudit 2>&1 || true
+  # the container log also as an annotation (job logs cannot always be opened); demo data only, no secrets
+  docker logs --tail 40 samaudit 2>&1 | python3 -c "import sys; t=sys.stdin.read()[-3500:] or '(leer)'; print('::error title=Container-Log::' + t.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))" || true
+  docker inspect -f '{{.State.Status}} {{.State.ExitCode}} {{json .State.Health}}' samaudit 2>&1 | head -c 3000 \
+    | sed 's/^/::error title=Container-Zustand::/' || true
   exit 1
 }
 cleanup() {
