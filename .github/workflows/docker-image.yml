@@ -46,9 +46,13 @@ jobs:
           python -m pip check
       - id: lint
         name: Static checks (ruff incl. security rules, mypy)
+        shell: bash
         run: |
-          ruff check --output-format=github app tests tools run.py
-          mypy
+          set -o pipefail
+          # findings appear as annotations on the pull request; the exit code stays the tool's
+          ruff check --output-format=github app tests tools run.py 2>&1 | sed -E -e '/^All checks passed/d' -e '/^::/!s/^(.+)$/::error title=ruff::\1/'
+          mypy --no-error-summary 2>&1 | sed -E -e 's/: note: /: notice: /' \
+            -e 's/^([^:]+):([0-9]+): (error|notice): (.*)$/::\3 file=\1,line=\2::\4/' -e '/^::/!s/^(.+)$/::error title=mypy::\1/'
       - name: Self-tests (schedule, step order, version bounds, Trivy flow)
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Smoke test
