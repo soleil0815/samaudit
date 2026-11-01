@@ -167,6 +167,7 @@ async def multipart_of(request: Request, limit: int = 1_000_000) -> tuple[dict[s
     """Kleiner multipart/form-data-Leser (nur Standardbibliothek) für den Zertifikats-Upload."""
     from email import policy
     from email.parser import BytesParser
+    from email.utils import collapse_rfc2231_value
     ctype = request.headers.get("content-type", "")
     if not ctype.startswith("multipart/form-data"):
         return {}, []
@@ -180,9 +181,13 @@ async def multipart_of(request: Request, limit: int = 1_000_000) -> tuple[dict[s
         return {}, []
     for part in msg.iter_parts():
         name = part.get_param("name", header="content-disposition")
+        if isinstance(name, tuple):                 # RFC 2231 (name*=utf-8''…)
+            name = collapse_rfc2231_value(name)
         if not name:
             continue
         payload = part.get_payload(decode=True) or b""
+        if not isinstance(payload, bytes):          # verschachtelter Teil – im Formular nicht vorgesehen
+            continue
         filename = part.get_filename()
         if filename is not None:
             if payload:
@@ -226,10 +231,11 @@ async def login_submit(request: Request):
         return RedirectResponse("/login?e=locked", status_code=303)
 
     if settings.demo_mode:
-        if username.lower() in ("admin", "administrator") and password == "demo":
+        # demo mode only (fake data, no domain): the documented demo password is not a secret
+        if username.lower() in ("admin", "administrator") and password == "demo":  # noqa: S105
             db.audit("act_login_failed", username[:80], ip, "privileged_denied")
             return RedirectResponse("/login?e=privileged_denied", status_code=303)
-        ok = username.lower() == "demo" and password == "demo"
+        ok = username.lower() == "demo" and password == "demo"  # noqa: S105
         if not ok:
             db.audit("act_login_failed", username[:80], ip, "demo")
             return RedirectResponse("/login?e=bad_credentials", status_code=303)
@@ -301,7 +307,7 @@ async def dashboard(request: Request):
     fails = [f for f in findings if f["state"] == "fail"]
     sev_counts = {sv: sum(1 for f in fails if f["severity"] == sv) for sv in SEVERITIES}
     top = sorted(fails, key=lambda f: (-f["points"], SEVERITIES.index(f["severity"] or "info")))[:5]
-    overview = db.get_scan(latest["id"])["overview"] if latest else {}
+    overview = ((db.get_scan(latest["id"]) or {}).get("overview") or {}) if latest else {}
     return render(request, "dashboard.html", {
         "scans": scans[:8], "latest": latest, "trend_svg": trend(pts, lang), "sev_counts": sev_counts,
         "top": top, "rules": RULE_BY_ID, "overview": overview, "running": db.running_scan(),

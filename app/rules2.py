@@ -54,7 +54,7 @@ def as_num(v):
         return None
 
 
-def acl_hits(ctx: Ctx, sd: dict | None, extra_safe: set[str] = frozenset()) -> dict[str, set]:
+def acl_hits(ctx: Ctx, sd: dict | None, extra_safe: set[str] | frozenset[str] = frozenset()) -> dict[str, set]:
     if not sd:
         return {}
     safe = ctx.safe_sids() | set(extra_safe)
@@ -200,6 +200,8 @@ def _other_priv(ctx: Ctx):
     items = []
     for rid in (526, 527, 520):
         g = ctx.group(rid)
+        if not g:
+            continue
         for a in ctx.members(g):
             if rid == 520 and a.get("rid") == 500:
                 continue
@@ -474,7 +476,7 @@ def _ca_crypto(ctx: Ctx):
         except Exception:  # noqa: BLE001
             continue
     # Nach einer CA-Erneuerung bleiben alte Zertifikate in AD stehen – bewertet wird je CA nur das neueste
-    newest: dict[str, object] = {}
+    newest: dict[str, x509.Certificate] = {}
     for cert in loaded:
         key_ = cert.subject.rfc4514_string()
         if key_ not in newest or not_after(cert) > not_after(newest[key_]):

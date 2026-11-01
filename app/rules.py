@@ -50,6 +50,7 @@ class Rule:
     code: str = ""
     refs: list[tuple[str, str]] = field(default_factory=list)
     platforms: tuple = ("windows", "samba")
+    legacy_id: str = ""            # interner Name vor der Umstellung auf STL-/PRV-…-Nummern
 
 
 RULES: list[Rule] = []
@@ -496,8 +497,10 @@ def _admin_count(ctx: Ctx):
       columns=["account", "group", "last_logon"])
 def _schema_ea(ctx: Ctx):
     items = []
-    for rid, allow_builtin in ((518, False), (519, True)):
+    for rid in (518, 519):
         g = ctx.group(rid)
+        if not g:
+            continue
         for a in ctx.members(g):
             if a.get("rid") == 500:
                 continue                  # das eingebaute Administrator-Konto ist hier standardmäßig Mitglied
@@ -517,6 +520,8 @@ def _operators(ctx: Ctx):
     items = []
     for rid in (548, 549, 550, 551):
         g = ctx.group(rid)
+        if not g:
+            continue
         for a in ctx.members(g):
             items.append(acc(a, group=g.get("sam")))
     return Hit(items) if items else None
@@ -617,7 +622,7 @@ def _acl_findings(ctx: Ctx, sd: dict | None, check_dcsync: bool):
     if not sd:
         return None
     safe = ctx.safe_sids()
-    out = {}
+    out: dict[str, set[str]] = {}
     for ace in sd.get("aces", []):
         if not ace.get("allow") or ace.get("flags", 0) & 0x08:  # INHERIT_ONLY
             continue
@@ -914,7 +919,7 @@ def _esc2(ctx: Ctx):
 # ===========================================================================
 # VERTRAUENSSTELLUNGEN
 # ===========================================================================
-TRUST_DIR = {0: "@dir_0", 1: "@dir_1", 2: "@dir_2", 3: "@dir_3"}
+TRUST_DIR: dict[int | None, str] = {0: "@dir_0", 1: "@dir_1", 2: "@dir_2", 3: "@dir_3"}
 
 
 def trust_item(t: dict, **extra):

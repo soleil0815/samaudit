@@ -1,2 +1,5 @@
 # Test-only dependencies (CI self-tests; never part of the image). Lock: requirements-dev.txt
 pyyaml>=6.0
+# Static checks in CI (ruff: lint + bandit security rules, mypy: types). Config: pyproject.toml
+ruff>=0.16
+mypy>=2.3

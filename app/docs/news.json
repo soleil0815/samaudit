@@ -1,5 +1,21 @@
 [
   {
+    "version": "2.1.1",
+    "date": "2026-11-01",
+    "items": [
+      {
+        "type": "feature",
+        "de": "Automatische Code-Prüfung bei jeder Änderung: ruff mit den Sicherheitsregeln von Bandit und die Typprüfung mypy. Ein Fund verhindert die Veröffentlichung.",
+        "en": "Automatic code checks on every change: ruff with Bandit's security rules and the mypy type checker. A finding blocks publishing."
+      },
+      {
+        "type": "fix",
+        "de": "Dabei gefundene Fehler behoben: Anmeldung mit nicht lesbarer Gruppen-SID im Token, Absturz der Übersicht beim gleichzeitigen Löschen des neuesten Berichts, Übersetzungen ohne deutschen Text, Feldnamen in RFC-2231-Schreibweise beim Zertifikats-Upload.",
+        "en": "Fixed bugs found along the way: sign-in with an unreadable group SID in the token, overview crash while the latest report was being deleted, translations without German text, RFC 2231 field names in the certificate upload."
+      }
+    ]
+  },
+  {
     "version": "2.1.0",
     "date": "2026-10-30",
     "items": [

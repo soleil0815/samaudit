@@ -10,9 +10,9 @@
 ARG PYTHON_IMAGE=python:3.13.18-slim-trixie@sha256:76baad6037690d6e8c4397fbcaef17bca6f19eecef822b708fe8fa3417d30bb5
 FROM ${PYTHON_IMAGE}
 
-ARG DEBIAN_SNAPSHOT=20261031T000000Z
+ARG DEBIAN_SNAPSHOT=20261101T000000Z
 ARG DEBIAN_CODENAME=trixie
-ARG APP_VERSION=2.1.0
+ARG APP_VERSION=2.1.1
 # version of this image: program version, or "<program version>-s<n>" for a security update
 ARG IMAGE_VERSION=
 LABEL org.opencontainers.image.title="SAMAUDIT" \

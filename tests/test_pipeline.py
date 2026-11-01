@@ -151,6 +151,21 @@ class Workflows(unittest.TestCase):
         self.assertIn("e2e-update.sh", b["steps"][step_index(b, "e2e")]["run"])
         self.assertEqual(sorted(jobs["publish"]["needs"]), ["build", "test"])
 
+    def test_static_checks_run_before_the_tests(self):
+        t = workflow("docker-image.yml")["jobs"]["test"]
+        lint = t["steps"][step_index(t, "lint")]["run"]
+        self.assertIn("ruff check", lint)
+        self.assertIn("mypy", lint)
+        self.assertNotIn("--exit-zero", lint, "a finding must turn the run red")
+        self.assertNotIn("|| true", lint)
+        unit = next(i for i, s in enumerate(t["steps"]) if "unittest" in s.get("run", ""))
+        self.assertLess(step_index(t, "lint"), unit)
+        cfg = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        self.assertRegex(cfg, r'select = \[[^]]*"S"', "the bandit security rules (S) are active")
+        dev = (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
+        for pkg in ("ruff==", "mypy=="):
+            self.assertIn(pkg, dev, f"{pkg} pinned with hashes in the dev lock")
+
     def test_owner_merges_and_publishing_needs_a_manual_start(self):
         wf = workflow("docker-image.yml")
         self.assertNotIn("automerge", wf["jobs"], "pull requests are merged by the owner, never automatically")

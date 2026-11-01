@@ -65,7 +65,7 @@ def trend(points: list[tuple[str, int, int]], lang: str, width: int = 560, heigh
     path = " ".join(("M" if i == 0 else "L") + f"{xy(i, v)[0]:.1f},{xy(i, v)[1]:.1f}" for i, (_, v, _) in enumerate(points))
     dots, labels = [], []
     every = max(1, math.ceil(len(points) / 6))
-    for i, (lab, v, sid) in enumerate(points):
+    for i, (lab, v, _sid) in enumerate(points):
         x, y = xy(i, v)
         dots.append(f'<g class="pt" data-tip="{escape(lab)}: {v}"><circle class="hit" cx="{x:.1f}" cy="{y:.1f}" r="12"/>'
                     f'<circle class="dot {level_class(v)}" cx="{x:.1f}" cy="{y:.1f}" r="4.5"/></g>')

@@ -320,8 +320,9 @@ def purge_expired(report_days: int, audit_days: int) -> dict:
         if report_days and report_days > 0:
             cutoff = (now - timedelta(days=report_days)).isoformat(timespec="seconds")
             old = "SELECT id FROM scans WHERE started_at < ? AND status != 'running'"
-            c.execute(f"DELETE FROM findings WHERE scan_id IN ({old})", (cutoff,))
-            out["scans"] = c.execute(f"DELETE FROM scans WHERE id IN ({old})", (cutoff,)).rowcount
+            # "old" is the fixed subquery above, not user input; the cutoff is passed as a parameter
+            c.execute(f"DELETE FROM findings WHERE scan_id IN ({old})", (cutoff,))  # noqa: S608
+            out["scans"] = c.execute(f"DELETE FROM scans WHERE id IN ({old})", (cutoff,)).rowcount  # noqa: S608
         if audit_days and audit_days > 0:
             cutoff = (now - timedelta(days=audit_days)).isoformat(timespec="seconds")
             out["audit"] = c.execute("DELETE FROM audit_log WHERE ts < ?", (cutoff,)).rowcount
@@ -335,5 +336,6 @@ def compact() -> None:
     with _lock:
         with conn():
             pass  # stellt die Verbindung her
+        assert _con is not None  # noqa: S101 – conn() hat sie eben angelegt
         _con.execute("VACUUM")
         _con.execute("PRAGMA wal_checkpoint(TRUNCATE)")

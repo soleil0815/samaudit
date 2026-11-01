@@ -10,6 +10,7 @@ import re
 import ssl
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 from .adutil import (
     UAC_ACCOUNTDISABLE, UAC_PARTIAL_SECRETS_ACCOUNT, UAC_SERVER_TRUST_ACCOUNT,
@@ -49,7 +50,7 @@ def _ldap3():
         import ldap3  # noqa: F401
         return ldap3
     except ImportError as e:  # pragma: no cover - im Container immer vorhanden
-        raise AuthError("ldap_missing", str(e))
+        raise AuthError("ldap_missing", str(e)) from e
 
 
 def _tls():
@@ -82,7 +83,7 @@ def _targets() -> list[tuple[str, str, str]]:
         addrs: list[str] = []
         if settings.ldap_cert_mode == "auto":
             try:
-                addrs = sorted({i[4][0] for i in socket.getaddrinfo(host, settings.ldap_port, socket.AF_INET,
+                addrs = sorted({str(i[4][0]) for i in socket.getaddrinfo(host, settings.ldap_port, socket.AF_INET,
                                                                     socket.SOCK_STREAM)})
             except OSError:
                 addrs = []
@@ -108,7 +109,7 @@ def _check_pin(host: str, conn) -> None:
             conn.unbind()
         except Exception:  # noqa: BLE001
             pass
-        raise AuthError("cert_changed", str(e))
+        raise AuthError("cert_changed", str(e)) from e
 
 
 def _remember_type(dtype: str, vendor: str | None) -> None:
@@ -173,7 +174,7 @@ def open_connection(bind_name: str, password: str):
                 if desc in ("strongerauthrequired", "confidentialityrequired"):
                     raise AuthError("tls_required", msg)
                 raise AuthError("bind_failed", f"{desc} {msg}".strip())
-            conn._samaudit_host = host  # type: ignore[attr-defined]
+            conn._samaudit_host = host
             return conn
         except AuthError as e:
             if e.code in ("bad_credentials", "account_locked", "account_unusable", "cert_changed"):
@@ -203,7 +204,7 @@ class Entry(dict):
         super().__init__({k.lower(): v for k, v in (raw or {}).items()})
         self.dn = dn
 
-    def get(self, key, default=None):  # type: ignore[override]
+    def get(self, key, default=None):
         return super().get(key.lower(), default)
 
 
@@ -309,7 +310,7 @@ def root_dse(conn) -> dict:
 
 def _object_sid(conn, dn: str) -> str | None:
     e = base_entry(conn, dn, ["objectSid"])
-    return sid_to_str((e or {}).get("objectsid", [None])[0]) if e else None
+    return sid_to_str((e.get("objectSid") or [None])[0]) if e else None
 
 
 BUILTIN = {544, 545, 546, 548, 549, 550, 551, 552, 554, 557, 560, 561}
@@ -440,7 +441,7 @@ def authenticate(username: str, password: str) -> AuthResult:
 
         # Effektive Gruppen (rekursiv, inkl. primärer Gruppe) über tokenGroups
         tg = base_entry(conn, me.dn, ["tokenGroups"])
-        token_sids = {sid_to_str(x) for x in (tg.get("tokenGroups") or [] if tg else [])}
+        token_sids = {s for s in (sid_to_str(x) for x in (tg.get("tokenGroups") or [] if tg else [])) if s}
         token_sids.discard(None)
         if not token_sids:
             raise AuthError("no_token_groups")
@@ -505,7 +506,7 @@ COMPUTER_ATTRS = ["sAMAccountName", "dNSHostName", "operatingSystem", "operating
 def _account(e: Entry, computer: bool) -> dict:
     sid = sid_to_str((e.get("objectSid") or [None])[0])
     uac = as_int(e.get("userAccountControl"), 0) or 0
-    d = {
+    d: dict[str, Any] = {
         "dn": e.dn,
         "sam": as_str(e.get("sAMAccountName")) or "",
         "sid": sid,

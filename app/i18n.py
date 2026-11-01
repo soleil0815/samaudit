@@ -382,7 +382,7 @@ T: dict[str, dict[str, str]] = {
 
 def t(key: str, lang: str = "de", **kw) -> str:
     entry = T.get(key)
-    s = entry.get(lang) or entry.get("de") if entry else key
+    s = (entry.get(lang) or entry.get("de") or key) if entry else key
     if kw:
         try:
             s = s.format(**kw)

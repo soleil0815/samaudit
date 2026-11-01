@@ -66,7 +66,7 @@ def _esc13(ctx: Ctx):
             gt = (g or {}).get("group_type")
             if gt is not None and not gt & UNIVERSAL_GROUP:
                 continue                      # AD wertet die Verknüpfung nur für universelle Gruppen aus
-            priv = bool(g) and _group_is_priv(ctx, g)
+            priv = g is not None and _group_is_priv(ctx, g)
             critical = critical or priv
             items.append({"template": t["display"], "principal": ", ".join(who),
                           "group": (g or {}).get("sam") or o["group"]})

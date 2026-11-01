@@ -279,7 +279,7 @@ def fmt_date(dt: datetime | None) -> str:
 # Security Descriptor (self-relative) – minimaler DACL-Parser
 # ---------------------------------------------------------------------------
 
-def _guid(b: bytes) -> str:
+def _guid(b: bytes | bytearray) -> str:
     return str(uuid.UUID(bytes_le=bytes(b)))
 
 
@@ -328,7 +328,7 @@ def parse_sd(raw) -> dict | None:
         return None
 
 
-def _sid_at(raw: bytes, off: int) -> str | None:
+def _sid_at(raw: bytes | bytearray, off: int) -> str | None:
     if off + 8 > len(raw):
         return None
     sub_count = raw[off + 1]
@@ -337,7 +337,7 @@ def _sid_at(raw: bytes, off: int) -> str | None:
 
 def ace_grants_control(ace: dict) -> list[str]:
     """Welche gefährlichen Rechte gewährt eine ACE? (für Berichte)"""
-    out = []
+    out: list[str] = []
     m = ace.get("mask", 0)
     if not ace.get("allow"):
         return out

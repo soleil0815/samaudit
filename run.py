@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
 
 import uvicorn
 
@@ -26,8 +27,10 @@ def main() -> None:
     except datastate.StartRefused as e:
         log.error("START ABGEBROCHEN: %s", e)
         raise SystemExit(78) from None
-    kwargs = {"host": "0.0.0.0", "port": settings.port, "log_level": "info", "access_log": False,
-              "proxy_headers": bool(settings.trusted_proxies), "server_header": False}
+    # inside the container: listen on all interfaces; the host decides via the port mapping what is reachable
+    kwargs: dict[str, Any] = {"host": "0.0.0.0",  # noqa: S104
+                              "port": settings.port, "log_level": "info", "access_log": False,
+                              "proxy_headers": bool(settings.trusted_proxies), "server_header": False}
     if settings.trusted_proxies:
         kwargs["forwarded_allow_ips"] = settings.trusted_proxies
     from app import webcert
@@ -42,7 +45,7 @@ def main() -> None:
              " – DEMO" if settings.demo_mode else "")
     config = uvicorn.Config("app.main:app", **kwargs)
     config.load()
-    if settings.tls_enabled:
+    if settings.tls_enabled and config.ssl is not None:   # mit ssl_certfile immer gesetzt
         # Kontext merken: ein über die Weboberfläche hochgeladenes Zertifikat wird ohne Neustart aktiv
         webcert.attach(config.ssl)
     uvicorn.Server(config).run()
