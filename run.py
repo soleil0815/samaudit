@@ -44,7 +44,7 @@ def main() -> None:
              " – DEMO" if settings.demo_mode else "")
     config = uvicorn.Config("app.main:app", **kwargs)
     config.load()
-    if settings.tls_enabled:
+    if settings.tls_enabled and config.ssl is not None:   # mit ssl_certfile immer gesetzt
         # Kontext merken: ein über die Weboberfläche hochgeladenes Zertifikat wird ohne Neustart aktiv
         webcert.attach(config.ssl)
     uvicorn.Server(config).run()
