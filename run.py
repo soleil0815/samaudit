@@ -28,8 +28,9 @@ def main() -> None:
         log.error("START ABGEBROCHEN: %s", e)
         raise SystemExit(78) from None
     # inside the container: listen on all interfaces; the host decides via the port mapping what is reachable
-    kwargs: dict[str, Any] = {"host": "0.0.0.0",  # noqa: S104 "port": settings.port, "log_level": "info", "access_log": False,
-              "proxy_headers": bool(settings.trusted_proxies), "server_header": False}
+    kwargs: dict[str, Any] = {"host": "0.0.0.0",  # noqa: S104
+                              "port": settings.port, "log_level": "info", "access_log": False,
+                              "proxy_headers": bool(settings.trusted_proxies), "server_header": False}
     if settings.trusted_proxies:
         kwargs["forwarded_allow_ips"] = settings.trusted_proxies
     from app import webcert

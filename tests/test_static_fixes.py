@@ -2,6 +2,7 @@
 """Selbsttests für die Stellen, die die statischen Prüfungen (mypy) in 2.1.1 aufgedeckt haben."""
 from __future__ import annotations
 
+import ast
 import asyncio
 import os
 import sys
@@ -31,6 +32,20 @@ class TranslationFallback(unittest.TestCase):
 
     def test_unknown_key(self):
         self.assertEqual(i18n.t("__gibt_es_nicht"), "__gibt_es_nicht")
+
+
+class ServerSettings(unittest.TestCase):
+    def test_uvicorn_gets_port_and_all_settings(self):
+        # Regression: ein Kommentar mitten in der Zeile hatte "port" und weitere Einstellungen auskommentiert –
+        # uvicorn lief dann auf 8000 statt 9400 und der Gesundheitscheck schlug fehl.
+        tree = ast.parse((ROOT / "run.py").read_text(encoding="utf-8"))
+        keys = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "kwargs":
+                keys = {k.value for k in node.value.keys}  # type: ignore[union-attr]
+        self.assertIsNotNone(keys, "kwargs für uvicorn nicht gefunden")
+        for k in ("host", "port", "log_level", "access_log", "proxy_headers", "server_header"):
+            self.assertIn(k, keys)
 
 
 @unittest.skipUnless(HAVE_WEB, "starlette fehlt")
