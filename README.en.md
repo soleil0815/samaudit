@@ -21,6 +21,7 @@ All images show demo mode with made-up sample data (`DEMO_MODE=true`).
 
 - **Static checks on every pull request:** ruff (programming errors and Bandit's security rules) and mypy (type checking) run on GitHub before the self-tests. A finding turns the run red – then nothing is published. Deliberately accepted spots are marked in the code with a reason; the rules are in `pyproject.toml`.
 - **Bugs found and fixed along the way:** a sign-in with an unreadable group SID in the token could abort with an internal error instead of being checked properly. The overview crashed if the latest report was being deleted at that moment. A translation entry without German text caused an error instead of showing the key. The certificate upload did not understand field names in RFC 2231 notation.
+- **Updated packages:** anyio 4.16.0 and Debian package state of 1 Nov 2026 (within the base Debian 13 / Python 3.13).
 - Otherwise no change in behaviour; checks and reports are unchanged.
 
 ## New in 2.1.0 – five new checks (now 115)

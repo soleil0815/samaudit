@@ -21,6 +21,7 @@ Alle Bilder zeigen den Demo-Modus mit erfundenen Beispieldaten (`DEMO_MODE=true`
 
 - **Statische Prüfungen bei jedem Pull Request:** ruff (Programmierfehler und die Sicherheitsregeln von Bandit) und mypy (Typprüfung) laufen in GitHub vor den Selbsttests. Ein Fund färbt den Lauf rot – dann wird nichts veröffentlicht. Bewusst zugelassene Stellen sind im Code mit Begründung markiert, die Regeln stehen in `pyproject.toml`.
 - **Dabei gefundene und behobene Fehler:** Bei einer Anmeldung mit einer nicht lesbaren Gruppen-SID im Token konnte die Anmeldung mit einem internen Fehler abbrechen statt sauber geprüft zu werden. Die Übersicht stürzte ab, wenn der neueste Bericht gerade gelöscht wurde. Ein Übersetzungseintrag ohne deutschen Text führte zu einem Fehler statt zur Anzeige des Schlüssels. Der Zertifikats-Upload verstand Feldnamen in RFC-2231-Schreibweise nicht.
+- **Aktualisierte Pakete:** anyio 4.16.0 und Debian-Paketstand vom 01.11.2026 (innerhalb der Basis Debian 13 / Python 3.13).
 - Sonst keine Änderungen am Verhalten; die Prüfungen und Berichte sind unverändert.
 
 ## Neu in 2.1.0 – fünf neue Prüfungen (jetzt 115)
