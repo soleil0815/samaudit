@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import random
 from datetime import timedelta
+from typing import Any
 
 from .adutil import (
     ADS_RIGHT_DS_CONTROL_ACCESS, ADS_RIGHT_GENERIC_ALL, ADS_RIGHT_WRITE_DAC, GUID_CERT_ENROLL,
@@ -429,7 +430,7 @@ def _demo_ca_cert() -> bytes:
                       x509.NameAttribute(NameOID.DOMAIN_COMPONENT, "local")])
     now = dt.datetime.now(dt.timezone.utc)
     try:
-        algo = hashes.SHA1()
+        algo: Any = hashes.SHA1()   # bewusst schwach: die Demo soll den Fund „SHA-1-CA“ zeigen
         cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
                 .serial_number(1).not_valid_before(now - dt.timedelta(days=3000))
                 .not_valid_after(now + dt.timedelta(days=120))
