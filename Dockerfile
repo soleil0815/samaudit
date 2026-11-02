@@ -7,10 +7,10 @@
 #   requirements.txt every Python package incl. sub-dependencies, exact version + SHA-256 hashes
 # The resulting package lists are written to /app/os-packages.txt and /app/package-versions.txt
 # and checked against locks/os-packages.txt in CI. Package managers (pip, apt) are removed.
-ARG PYTHON_IMAGE=python:3.13.18-slim-trixie@sha256:76baad6037690d6e8c4397fbcaef17bca6f19eecef822b708fe8fa3417d30bb5
+ARG PYTHON_IMAGE=python:3.13.18-slim-trixie@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
 FROM ${PYTHON_IMAGE}
 
-ARG DEBIAN_SNAPSHOT=20261101T000000Z
+ARG DEBIAN_SNAPSHOT=20261102T000000Z
 ARG DEBIAN_CODENAME=trixie
 ARG APP_VERSION=2.1.1
 # version of this image: program version, or "<program version>-s<n>" for a security update
