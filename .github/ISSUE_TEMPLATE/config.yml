@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability in SAMAUDIT / Sicherheitslücke in SAMAUDIT
+    url: https://github.com/soleil0815/samaudit/security/advisories/new
+    about: Please report privately, not as a public issue. / Bitte vertraulich melden, nicht als öffentliches Issue.

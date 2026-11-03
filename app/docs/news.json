@@ -1,5 +1,21 @@
 [
   {
+    "version": "2.1.2",
+    "date": "2026-11-03",
+    "items": [
+      {
+        "type": "feature",
+        "de": "Vorbereitung auf die Veröffentlichung als Open Source: Die Hilfe-Seite zeigt jetzt Lizenz, Link zum Quellcode und eine freiwillige Möglichkeit, das Projekt zu unterstützen; die Anmeldeseite verlinkt den Quellcode.",
+        "en": "Getting ready to be published as open source: the Help page now shows the licence, a link to the source code and a voluntary way to support the project; the sign-in page links to the source code."
+      },
+      {
+        "type": "notice",
+        "de": "Die Projektseite auf GitHub ist jetzt englisch (deutsche Fassung verlinkt), mit einer Kurzanleitung in drei Schritten. Die Versionsgeschichte steht in CHANGELOG.md / CHANGELOG.de.md.",
+        "en": "The GitHub project page is now in English (German version linked), with a three-step quick start. The version history moved to CHANGELOG.md / CHANGELOG.de.md."
+      }
+    ]
+  },
+  {
     "version": "2.1.1",
     "date": "2026-11-01",
     "items": [

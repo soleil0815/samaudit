@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Weekly security update – same program, newer packages, published as "<version>-s<n>".
 #
 #   Mondays 03:17 UTC (and manually: Actions -> Security update -> Run workflow)

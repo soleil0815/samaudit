@@ -1,5 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Keeps the GitHub Actions used by the workflow up to date (security fixes of actions).
-# Dependabot pull requests are NOT merged automatically (only branches claude/... are).
+# Dependabot pull requests are never merged automatically – the owner reviews and merges them.
 version: 2
 updates:
   - package-ecosystem: github-actions

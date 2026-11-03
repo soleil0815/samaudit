@@ -1,4 +1,5 @@
 # SAMAUDIT – docker-compose.yml
+# SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Installation:  diese Datei und .env.example in einen leeren Ordner legen (z. B. /opt/samaudit),
 #                cp .env.example .env, .env ausfüllen (mindestens DOMAIN_FQDN), docker compose up -d

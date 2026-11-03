@@ -119,15 +119,13 @@ The server only holds `docker-compose.yml`, `.env` and the data folder – the p
 
 ```bash
 mkdir -p /opt/samaudit && cd /opt/samaudit
-IMG=ghcr.io/soleil0815/samaudit:latest
-docker run --rm --entrypoint cat $IMG /app/dist/docker-compose.yml > docker-compose.yml
-docker run --rm --entrypoint cat $IMG /app/dist/.env.example       > .env.example
-cp .env.example .env
-nano .env            # enter at least DOMAIN_FQDN and PUBLIC_HOSTNAME
+curl -fsSLO https://github.com/soleil0815/samaudit/releases/latest/download/docker-compose.yml
+curl -fsSL -o .env https://github.com/soleil0815/samaudit/releases/latest/download/env.example
+nano .env            # enter at least DOMAIN_FQDN (English UI: DEFAULT_LANG=en)
 docker compose up -d
 ```
 
-Both files are also attached to the GitHub releases (`.env.example` there as `env.example`). Then open `https://<PUBLIC_HOSTNAME>:9400` in the browser. On first access the browser warns about the self-signed certificate – upload your own certificate under **Connection**.
+Without `curl`, copy the files out of the image: `docker run --rm --entrypoint cat ghcr.io/soleil0815/samaudit:latest /app/dist/docker-compose.yml > docker-compose.yml` (and `/app/dist/.env.example > .env`). Then open `https://<PUBLIC_HOSTNAME>:9400` in the browser. On first access the browser warns about the self-signed certificate – upload your own certificate under **Connection**.
 
 **With Dockhand, Portainer & co.:** create a stack from the content of `docker-compose.yml`, store the settings of `.env` with the stack and replace the paths `./data` and `./certs` with a fixed folder (e.g. `/opt/samaudit/data`).
 

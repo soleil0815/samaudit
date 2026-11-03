@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
 {% block title %}{{ t('login_title', lang) }} – {{ APP_NAME }} v{{ IMAGE_VERSION }}{% endblock %}
 {% block body %}
 {% set fqdn_ = settings.domain_fqdn or ('firma.local' if settings.demo_mode else '') %}
@@ -43,7 +44,7 @@
       <button class="btn btn-primary" type="submit" data-busy="{{ t('login_btn', lang) }} …">{{ t('login_btn', lang) }}</button>
       <div class="login-foot">
         <span>{{ t('login_footer', lang) }}</span>
-        <span>{{ 'Open Source unter' if lang == 'de' else 'Open source under' }} AGPL-3.0-or-later · <a href="/help" style="color:inherit;text-decoration:underline">{{ t('nav_help', lang) }}</a> · <a href="/privacy" style="color:inherit;text-decoration:underline">{{ t('nav_privacy', lang) }}</a> · <a href="https://helfi.space" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline">helfi.space</a></span>
+        <span>{{ 'Open Source unter' if lang == 'de' else 'Open source under' }} AGPL-3.0-or-later (<a href="{{ SOURCE_URL }}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline">{{ 'Quellcode' if lang == 'de' else 'source code' }}</a>) · <a href="/help" style="color:inherit;text-decoration:underline">{{ t('nav_help', lang) }}</a> · <a href="/privacy" style="color:inherit;text-decoration:underline">{{ t('nav_privacy', lang) }}</a> · <a href="https://helfi.space" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline">helfi.space</a></span>
         <span class="langs"><a href="/lang/de?next=/login" class="{{ 'on' if lang == 'de' }}">DE</a><a href="/lang/en?next=/login" class="{{ 'on' if lang == 'en' }}">EN</a></span>
       </div>
     </form>

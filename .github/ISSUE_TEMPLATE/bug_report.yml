@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Bug report / Fehlermeldung
+description: Something does not work as expected. / Etwas funktioniert nicht wie erwartet.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Please do not post real data from your domain** – no account or server names, IP addresses, passwords, report screenshots or PDFs. Demo mode (`DEMO_MODE=true`) is ideal for showing a problem.
+        **Bitte keine echten Daten aus Ihrer Domäne** – keine Konto- oder Servernamen, IP-Adressen, Kennwörter, Bildschirmfotos echter Berichte oder PDFs.
+  - type: input
+    id: version
+    attributes:
+      label: SAMAUDIT version / Version
+      description: Shown under Help / steht unter Hilfe (e.g. 2.1.2 or 2.1.2-s1)
+    validations:
+      required: true
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Domain type / Domänentyp
+      options: [Windows AD, Samba AD, Demo mode, not relevant / nicht relevant]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, what did you expect? / Was ist passiert, was haben Sie erwartet?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / Schritte zum Nachvollziehen
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log excerpt / Protokollauszug (docker compose logs)
+      description: Remove names and addresses first. / Namen und Adressen vorher entfernen.
+      render: text

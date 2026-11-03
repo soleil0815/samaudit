@@ -81,7 +81,7 @@ def build() -> dict:
          pwd=700, spns=["SAP/sap-prod.firma.local"], enc_types=0x4)
     user("m.praktikant", last=3, pwd=50, spns=["HTTP/intranet.firma.local\u200b"])
     user("p.weiss", last=6, pwd=80, upn="Administrator")
-    user("vertrieb.zert", last=9, pwd=120, alt_sec_ids=["X509:<RFC822>vertrieb@firma.de"])
+    user("vertrieb.zert", last=9, pwd=120, alt_sec_ids=["X509:<RFC822>vertrieb@firma.example"])
     user("krbtgt_18842", ou=None, uac=UAC_NORMAL_ACCOUNT | UAC_ACCOUNTDISABLE, last=None, pwd=1200, created=1300)
     svc_sync = user("svc_sync", ou="OU=Dienstkonten,OU=IT", uac=UAC_NORMAL_ACCOUNT | UAC_DONT_EXPIRE_PASSWORD,
                     last=1, pwd=900)
@@ -335,7 +335,7 @@ def build() -> dict:
         },
         "users": users, "computers": computers, "groups": groups,
         "trusts": [
-            {"name": "partner-gmbh.de", "flat": "PARTNER", "direction": 3, "type": 2, "attributes": 0x0,
+            {"name": "partner-gmbh.example", "flat": "PARTNER", "direction": 3, "type": 2, "attributes": 0x0,
              "sid": "S-1-5-21-9988776655-1122334455-6677889900", "created": ago(1500), "changed": ago(160),
              "enc_types": None},
             {"name": "konzern.local", "flat": "KONZERN", "direction": 2, "type": 2, "attributes": 0x8,

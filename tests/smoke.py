@@ -55,11 +55,15 @@ for lang in ("de", "en"):
 from app.main import app  # noqa: E402
 
 
-async def get(path: str) -> int:
+async def get(path: str, cookie: str = "") -> int:
+    return (await fetch(path, cookie))[0]
+
+
+async def fetch(path: str, cookie: str = "") -> tuple[int, str]:
     scope = {"type": "http", "method": "GET", "path": path, "raw_path": path.encode(), "query_string": b"",
-             "headers": [], "client": ("127.0.0.1", 1), "server": ("t", 80), "scheme": "http",
+             "headers": [(b"cookie", cookie.encode())] if cookie else [], "client": ("127.0.0.1", 1), "server": ("t", 80), "scheme": "http",
              "http_version": "1.1", "root_path": ""}
-    status = {}
+    status: dict = {"body": b""}
 
     async def receive():
         return {"type": "http.request", "body": b"", "more_body": False}
@@ -67,13 +71,26 @@ async def get(path: str) -> int:
     async def send(msg):
         if msg["type"] == "http.response.start":
             status["s"] = msg["status"]
+        elif msg["type"] == "http.response.body":
+            status["body"] += msg.get("body", b"")
 
     await app(scope, receive, send)
-    return status.get("s", 0)
+    return status.get("s", 0), status["body"].decode("utf-8", "replace")
 
 
 for p in ("/login", "/help", "/news", "/privacy", "/healthz"):
     check(asyncio.run(get(p)) == 200, f"GET {p}")
+
+# Spendenlink nur auf der Hilfe-Seite, Quellcode-Link (AGPL) auf Anmeldung und Hilfe
+from app.version import DONATE_URL, SOURCE_URL  # noqa: E402
+
+_help = asyncio.run(fetch("/help"))[1]
+_login = asyncio.run(fetch("/login"))[1]
+check(DONATE_URL in _help and SOURCE_URL in _help, "Hilfe: Quellcode- und Spendenlink")
+check(SOURCE_URL in _login and DONATE_URL not in _login, "Anmeldung: Quellcode-Link, kein Spendenlink")
+for _tpl in ("base.html", "dashboard.html", "login.html"):
+    _src = open(os.path.join(ROOT, "app", "templates", _tpl), encoding="utf-8").read()
+    check("DONATE_URL" not in _src and "buymeacoffee" not in _src, f"kein Spendenlink in {_tpl}")
 
 # --- Parser und Schutzfunktionen ----------------------------------------------
 from app import webcert  # noqa: E402

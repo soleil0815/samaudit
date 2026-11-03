@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Idea or new check / Idee oder neue Prüfung
+description: Suggest an improvement or a new security check. / Verbesserung oder neue Prüfung vorschlagen.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What should SAMAUDIT do? / Was soll SAMAUDIT tun?
+    validations:
+      required: true
+  - type: textarea
+    id: refs
+    attributes:
+      label: Public references / Öffentliche Quellen
+      description: For new checks – Microsoft documentation, MITRE ATT&CK, research articles. / Für neue Prüfungen – Microsoft-Doku, MITRE ATT&CK, Fachartikel.

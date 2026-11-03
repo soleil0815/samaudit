@@ -9,7 +9,9 @@ import os
 import re
 
 APP_NAME = "SAMAUDIT"
-VERSION = "2.1.1"
+VERSION = "2.1.2"
+SOURCE_URL = "https://github.com/soleil0815/samaudit"   # Quellcode (AGPL §13)
+DONATE_URL = "https://buymeacoffee.com/soleil0815v"   # freiwillige Unterstützung, nur auf der Hilfe-Seite
 
 _img = os.environ.get("SAMAUDIT_IMAGE_VERSION", "").strip()
 IMAGE_VERSION = _img if re.fullmatch(re.escape(VERSION) + r"(-s\d+)?", _img) else VERSION
