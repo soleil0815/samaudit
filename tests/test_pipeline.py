@@ -166,6 +166,11 @@ class Workflows(unittest.TestCase):
         for pkg in ("ruff==", "mypy=="):
             self.assertIn(pkg, dev, f"{pkg} pinned with hashes in the dev lock")
 
+    def test_automatic_commits_are_in_english(self):
+        text = (WF / "security-update.yml").read_text(encoding="utf-8")
+        self.assertIn('git commit -q -m "Security update $VERSION: updated packages"', text)
+        self.assertNotIn("Sicherheitsupdate $VERSION", text)
+
     def test_owner_merges_and_publishing_needs_a_manual_start(self):
         wf = workflow("docker-image.yml")
         self.assertNotIn("automerge", wf["jobs"], "pull requests are merged by the owner, never automatically")
