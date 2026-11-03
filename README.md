@@ -440,7 +440,7 @@ docker-compose.yml                start with Docker Compose (ships with the imag
 .env.example                      template for your settings (.env)
 update.sh                         update by hand: previous, rollback, --load, --restore, --cleanup
 requirements.in / requirements.txt  Python dependencies (wish list / pinned versions with hashes)
-tools/clean-history.sh  rewrite the Git history without personal names/e-mail addresses (before going public)
+tools/clean-history.sh  rewrite the Git history without personal names/e-mail addresses (in place or into a new repository)
 DATENSCHUTZ.md                    privacy documentation (German)
 ```
 
