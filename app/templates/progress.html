@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
 {% block content %}
 <section class="panel panel-pad progress-card" data-scan-status="/api/scan/{{ scan.id }}" data-report="/report/{{ scan.id }}">
   <h1>{{ t('scan_running', lang) }}</h1>

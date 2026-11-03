@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
 {% block title %}{{ t('nav_help', lang) }} – {{ APP_NAME }}{% endblock %}
 {% block body %}
 {% if sess %}{{ super() }}{% else %}
@@ -10,6 +11,14 @@
 {% block content %}
 <div class="page-head"><div><h1>{{ t('nav_help', lang) }}</h1>
 <p>{{ 'Handbuch für Prüfer und Betrieb' if lang == 'de' else 'Manual for auditors and operators' }} · SAMAUDIT v{{ IMAGE_VERSION }}</p></div></div>
+<div class="panel panel-pad about-box" style="margin-bottom:16px">
+  <b>{{ 'Über SAMAUDIT' if lang == 'de' else 'About SAMAUDIT' }}</b>
+  <p style="margin:6px 0 0">{% if lang == 'de' %}Freie Software unter der AGPL-3.0-or-later, ohne Gewähr.
+    Quellcode, Fehlermeldungen und Ideen: <a href="{{ SOURCE_URL }}" target="_blank" rel="noopener noreferrer">{{ SOURCE_URL|replace('https://', '') }}</a>.{% else %}Free software under the AGPL-3.0-or-later, without warranty.
+    Source code, bug reports and ideas: <a href="{{ SOURCE_URL }}" target="_blank" rel="noopener noreferrer">{{ SOURCE_URL|replace('https://', '') }}</a>.{% endif %}</p>
+  <p style="margin:6px 0 0">{% if lang == 'de' %}SAMAUDIT ist kostenlos. Wenn es Ihnen hilft und Sie Danke sagen möchten:{% else %}SAMAUDIT is free. If it helps you and you would like to say thanks:{% endif %}
+    <a href="{{ DONATE_URL }}" target="_blank" rel="noopener noreferrer">☕ {{ 'Einen Kaffee spendieren' if lang == 'de' else 'Buy me a coffee' }}</a></p>
+</div>
 <div class="help-layout">
   <nav class="help-toc panel" aria-label="{{ 'Inhalt' if lang == 'de' else 'Contents' }}">
     <b>{{ 'Inhalt' if lang == 'de' else 'Contents' }}</b>

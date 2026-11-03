@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Daily vulnerability scan of the published image ghcr.io/<owner>/<repo>:latest.
 # Reports vulnerabilities that became known only after the release (fixable HIGH/CRITICAL ->
 # red run with the list at the run). Nothing is built or published here – the next weekly

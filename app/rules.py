@@ -936,7 +936,7 @@ def trust_item(t: dict, **extra):
             "en": "Without SID filtering an admin in the trusted domain can gain admin rights here via forged SID history."},
       fix={"de": "SID-Filterung (Quarantäne) aktivieren, sofern keine Migration mit SID-Verlauf mehr läuft.",
            "en": "Enable SID filtering (quarantine) unless a SID-history migration is ongoing."},
-      code="netdom trust firma.local /domain:partner-gmbh.de /quarantine:yes",
+      code="netdom trust firma.local /domain:partner-gmbh.example /quarantine:yes",
       columns=["trust", "direction", "detail"],
       refs=[("Microsoft: SID filtering", f"{MS}/openspecs/windows_protocols/ms-pac/55fc19f2-55ba-4251-8a6a-103dd7c66280")])
 def _sid_filtering(ctx: Ctx):

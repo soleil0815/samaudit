@@ -28,7 +28,7 @@ from .config import settings
 from .adutil import LOCAL_TZ
 from .i18n import T, level_key, t, tv
 from .rules import CATEGORIES, RULE_ALIASES, RULES, SEVERITIES, canonical_id
-from .version import APP_NAME, IMAGE_VERSION, VERSION
+from .version import APP_NAME, DONATE_URL, IMAGE_VERSION, SOURCE_URL, VERSION
 
 log = logging.getLogger("samaudit")
 BASE = os.path.dirname(__file__)
@@ -42,7 +42,7 @@ templates = Jinja2Templates(directory=os.path.join(BASE, "templates"))
 templates.env.globals.update(t=t, tv=tv, settings=settings, CATEGORIES=CATEGORIES, SEVERITIES=SEVERITIES,
                              level_class=level_class, level_key=level_key, seal=seal,
                              login_dial=login_dial, APP_NAME=APP_NAME, VERSION=VERSION,
-                             IMAGE_VERSION=IMAGE_VERSION)
+                             IMAGE_VERSION=IMAGE_VERSION, SOURCE_URL=SOURCE_URL, DONATE_URL=DONATE_URL)
 
 
 def effective_domain_type() -> str | None:

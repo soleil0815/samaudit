@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Program releases: builds, checks and publishes the container image ghcr.io/<owner>/<repo>.
 #
 #   pull request / push to main -> self-tests, reproducible build, tests inside the image (incl. a real

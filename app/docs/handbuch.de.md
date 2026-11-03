@@ -119,15 +119,13 @@ Auf dem Server liegen nur `docker-compose.yml`, `.env` und der Datenordner – d
 
 ```bash
 mkdir -p /opt/samaudit && cd /opt/samaudit
-IMG=ghcr.io/soleil0815/samaudit:latest
-docker run --rm --entrypoint cat $IMG /app/dist/docker-compose.yml > docker-compose.yml
-docker run --rm --entrypoint cat $IMG /app/dist/.env.example       > .env.example
-cp .env.example .env
-nano .env            # mindestens DOMAIN_FQDN und PUBLIC_HOSTNAME eintragen
+curl -fsSLO https://github.com/soleil0815/samaudit/releases/latest/download/docker-compose.yml
+curl -fsSL -o .env https://github.com/soleil0815/samaudit/releases/latest/download/env.example
+nano .env            # mindestens DOMAIN_FQDN eintragen
 docker compose up -d
 ```
 
-Beide Dateien liegen auch den GitHub-Releases bei (`.env.example` dort als `env.example`). Danach im Browser `https://<PUBLIC_HOSTNAME>:9400` öffnen. Beim ersten Aufruf warnt der Browser vor dem selbstsignierten Zertifikat – ein eigenes Zertifikat lädt man unter **Verbindung** hoch.
+Ohne `curl` die Dateien aus dem Image kopieren: `docker run --rm --entrypoint cat ghcr.io/soleil0815/samaudit:latest /app/dist/docker-compose.yml > docker-compose.yml` (und `/app/dist/.env.example > .env`). Danach im Browser `https://<PUBLIC_HOSTNAME>:9400` öffnen. Beim ersten Aufruf warnt der Browser vor dem selbstsignierten Zertifikat – ein eigenes Zertifikat lädt man unter **Verbindung** hoch.
 
 **Mit Dockhand, Portainer & Co.:** Inhalt der `docker-compose.yml` als Stack anlegen, die Einstellungen der `.env` beim Stack hinterlegen und die Pfade `./data` und `./certs` durch einen festen Ordner ersetzen (z. B. `/opt/samaudit/data`).
 
