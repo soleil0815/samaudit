@@ -434,7 +434,7 @@ docker-compose.yml                Start mit Docker Compose (wird mit dem Image a
 .env.example                      Vorlage für Ihre Einstellungen (.env)
 update.sh                         Update von Hand: previous, Rückfall, --load, --restore, --cleanup
 requirements.in / requirements.txt  Python-Abhängigkeiten (Wunschliste / feste Versionen mit Prüfsummen)
-tools/clean-history.sh  Git-Historie ohne persönliche Namen/E-Mail-Adressen neu schreiben (vor einer Veröffentlichung)
+tools/clean-history.sh  Git-Historie ohne persönliche Namen/E-Mail-Adressen neu schreiben (im Repository selbst oder in ein neues)
 DATENSCHUTZ.md                    Datenschutz-Unterlagen
 ```
 
