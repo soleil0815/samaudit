@@ -172,7 +172,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Dockerfile requirements.txt requirements-dev.txt locks/os-packages.txt CHANGELOG-SECURITY.md
-          git commit -q -m "Sicherheitsupdate $VERSION: aktualisierte Pakete" -m "Gleiches Programm, neue Paketstände (siehe CHANGELOG-SECURITY.md)."
+          git commit -q -m "Security update $VERSION: updated packages" -m "Same program, newer package versions (see CHANGELOG-SECURITY.md)."
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Set up QEMU (arm64)
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
