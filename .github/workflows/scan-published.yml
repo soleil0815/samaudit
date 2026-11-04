@@ -1,9 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Daily vulnerability scan of the published image ghcr.io/<owner>/<repo>:latest.
+# Daily checks of what has been published:
+#   public-access: can anyone pull ghcr.io/<owner>/<repo>:latest and download the quick-start files of the
+#                  latest release without a GitHub account? (red run + notification if not)
+#   scan-latest:   vulnerability scan of the published image.
 # Reports vulnerabilities that became known only after the release (fixable HIGH/CRITICAL ->
 # red run with the list at the run). Nothing is built or published here – the next weekly
 # security update (or a manual start of "Security update") brings the fix if one is available.
-name: Daily scan
+name: Daily checks
 
 on:
   schedule:
@@ -13,6 +16,18 @@ on:
 permissions: {}
 
 jobs:
+  public-access:
+    runs-on: ubuntu-latest
+    permissions: {}          # deliberately no token: the check must work like a stranger without an account
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: public
+        name: Image and release files publicly reachable
+        run: .github/scripts/public-check.sh "$GITHUB_REPOSITORY"
+
   scan-latest:
     runs-on: ubuntu-latest
     permissions:

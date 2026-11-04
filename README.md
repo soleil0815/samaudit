@@ -367,7 +367,7 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 
 **Trivy** is downloaded as a fixed version with a verified SHA-256 checksum (no Trivy GitHub Action – its tags were compromised in March 2026, CVE-2026-33634). Only **CRITICAL/HIGH findings with an available fix** stop a release; everything else is listed in the report (summary and artifact `trivy-report`). Deliberately accepted findings are listed in `.trivyignore`, each with a reason and an expiry date (`CVE-… exp:YYYY-MM-DD  # reason`); after that date Trivy reports them again.
 
-**Daily scan** (`scan-published.yml`, 05:43 UTC): checks the published `latest` again, because vulnerabilities often become known after the build.
+**Daily checks** (`scan-published.yml`, 05:43 UTC): scans the published `latest` again, because vulnerabilities often become known after the build, and checks like an anonymous user that the image can be pulled (amd64 and arm64) and the quick-start files can be downloaded from the latest release.
 
 **Base warning** (every Monday, part of the security update): asks endoflife.date until when Python 3.13 and Debian 13 receive security updates. Less than 12 months: a notice at the run. Less than 6 months: the run turns red.
 
@@ -380,7 +380,8 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 | Tests inside the image failed | A new package version behaves differently. Nothing published; check the package and limit it in `requirements.in` if needed. |
 | *Lift the base soon* (notice) | Plan the move to the next Python or Debian release. |
 | *Lift the base* (red) | Lift the base deliberately: change `tools/lock-policy.env`, run `tools/update-locks.sh --major`, test and publish as a new program version. |
-| Daily scan red | A new vulnerability became known in the published image. If a fix exists, start the security update manually; otherwise as for Trivy above. |
+| Daily checks red: *Trivy …* | A new vulnerability became known in the published image. If a fix exists, start the security update manually; otherwise as for Trivy above. |
+| Daily checks red: *Image not publicly reachable* / *Release file missing* | The package or a release file is no longer public. Check *Packages → samaudit → Package settings → visibility* and the latest release; then start *Daily checks* manually. |
 
 ## GitHub: repository and container image
 
@@ -391,7 +392,7 @@ The container image is built on GitHub and published to the GitHub Container Reg
 | pull request, push to `main` | self-tests, build from the pinned versions, tests inside the image, a real run of the update path with Docker Compose (switching, rollback, restore, cleanup), Trivy – nothing is published. Pull requests are merged by the owner, never automatically. |
 | manual start on `main` (*Actions → Container image → Run workflow*) | if `app/version.py` contains a new version: image `<version>` and `latest` (if it is the highest version), git tag `v<version>`, GitHub release (text from `app/docs/news.json`) with image files for amd64/arm64, `SHA256SUMS`, `docker-compose.yml`, `env.example` and `update.sh`. A version that is already published is never rebuilt or overwritten. |
 | Mondays 03:17 UTC | security update `<version>-s<n>` (see above) |
-| daily 05:43 UTC | scan of the published `latest` |
+| daily 05:43 UTC | public access check and scan of the published `latest` |
 
 It builds for `linux/amd64` and `linux/arm64` without cache; the built image is first uploaded without a tag, exactly that image is checked (package list, tests, Trivy) and only then tagged. It carries SBOM and provenance attestations.
 

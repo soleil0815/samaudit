@@ -171,6 +171,21 @@ class Workflows(unittest.TestCase):
         self.assertIn('git commit -q -m "Security update $VERSION: updated packages"', text)
         self.assertNotIn("Sicherheitsupdate $VERSION", text)
 
+    def test_daily_public_access_check(self):
+        wf = workflow("scan-published.yml")
+        self.assertIn("schedule", wf["on"])
+        job = wf["jobs"]["public-access"]
+        self.assertEqual(job["permissions"], {}, "no token: the check has to work like an anonymous user")
+        run = job["steps"][step_index(job, "public")]["run"]
+        self.assertIn("public-check.sh", run)
+        script = (ROOT / ".github/scripts/public-check.sh").read_text(encoding="utf-8")
+        self.assertNotIn("docker login", script)
+        self.assertIn('DOCKER_CONFIG="$work/docker"', script, "empty Docker config, no stored credentials")
+        for f in ("docker-compose.yml", "env.example", "update.sh", "SHA256SUMS"):
+            self.assertIn(f, script)
+        self.assertIn("releases/latest/download", script)
+        self.assertIn('exit "$fail"', script)
+
     def test_owner_merges_and_publishing_needs_a_manual_start(self):
         wf = workflow("docker-image.yml")
         self.assertNotIn("automerge", wf["jobs"], "pull requests are merged by the owner, never automatically")
