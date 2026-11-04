@@ -78,7 +78,13 @@ async def fetch(path: str, cookie: str = "") -> tuple[int, str]:
              "http_version": "1.1", "root_path": ""}
     status: dict = {"body": b""}
 
-    async def receive():
+    sent = {"request": False}
+
+    async def receive():   # first the (empty) request body, then a disconnect – like a real client
+        if sent["request"]:
+            await asyncio.sleep(0.05)
+            return {"type": "http.disconnect"}
+        sent["request"] = True
         return {"type": "http.request", "body": b"", "more_body": False}
 
     async def send(msg):
