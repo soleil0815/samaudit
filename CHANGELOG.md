@@ -4,6 +4,12 @@
 
 Program versions. Weekly security updates (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.1.3 – first public version
+
+- **SAMAUDIT is now open source** at [github.com/soleil0815/samaudit](https://github.com/soleil0815/samaudit).
+- **English for operators and developers:** the server log, the messages of `update.sh` and of `restore`, the automatic texts on GitHub (security update entries, release notes, workflow messages) and all code comments are now in English. Example: `START REFUSED` instead of `START ABGEBROCHEN`. `update.sh` and `restore` still accept German answers (`j`/`ja`). The web interface, PDF and manual stay bilingual.
+- **Fix:** notes about missing settings (e.g. `DOMAIN_FQDN`) now follow the chosen interface language.
+
 ## 2.1.2 – ready for open source
 
 - **GitHub page in English** with a three-step quick start (two files, one setting, `docker compose up -d`); German version in [README.de.md](README.de.md). The version history moved into this file.

@@ -374,10 +374,10 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 | Message | What to do |
 |---|---|
 | *Trivy found CRITICAL/HIGH vulnerabilities* | Debian or the package often ships the fix within days – wait for next Monday or start the run manually later. If it stays red: raise the affected package specifically (new program version) or, after assessing it, add the finding to `.trivyignore` with a reason and an expiry date. |
-| *Sicherheitsupdate: Versionen nicht ermittelbar* / build failed | Usually a source was briefly unreachable – rerun. If it stays red, a new package version does not fit; check it specifically. |
+| *Security update: versions not determinable* / build failed | Usually a source was briefly unreachable – rerun. If it stays red, a new package version does not fit; check it specifically. |
 | Tests inside the image failed | A new package version behaves differently. Nothing published; check the package and limit it in `requirements.in` if needed. |
-| *Unterbau bald anheben* (notice) | Plan the move to the next Python or Debian release. |
-| *Unterbau anheben* (red) | Lift the base deliberately: change `tools/lock-policy.env`, run `tools/update-locks.sh --major`, test and publish as a new program version. |
+| *Lift the base soon* (notice) | Plan the move to the next Python or Debian release. |
+| *Lift the base* (red) | Lift the base deliberately: change `tools/lock-policy.env`, run `tools/update-locks.sh --major`, test and publish as a new program version. |
 | Daily scan red | A new vulnerability became known in the published image. If a fix exists, start the security update manually; otherwise as for Trivy above. |
 
 ## GitHub: repository and container image

@@ -4,7 +4,7 @@
 #   pull request / push to main -> self-tests, reproducible build, tests inside the image (incl. a real
 #                        run of update.sh with Docker Compose), Trivy – nothing is published.
 #                        Pull requests are merged by the repository owner, never automatically.
-#   manual start on main ("Run workflow", after the owner said "veröffentlichen") -> if app/version.py
+#   manual start on main ("Run workflow", after the owner said "publish") -> if app/version.py
 #                        contains a NEW version: publish <version> (and latest if it is the highest
 #                        version), git tag + GitHub release with the image files for installations
 #                        without internet. An existing version is never published again.
@@ -118,7 +118,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
             echo "new=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Nichts veröffentlicht::Version $version ist bereits veröffentlicht. Für ein neues Release app/version.py anheben."
+            echo "::notice title=Nothing published::Version $version is already published. Raise app/version.py for a new release."
           else
             echo "new=true" >> "$GITHUB_OUTPUT"
           fi
@@ -152,12 +152,19 @@ jobs:
           python3 - "$VERSION" "${GITHUB_REPOSITORY,,}" > notes.md <<'PY'
           import json, sys
           v, repo = sys.argv[1], sys.argv[2]
-          label = {"feature": "Funktion", "security": "Sicherheit", "fix": "Fehlerbehebung", "notice": "Hinweis"}
+          labels = {"en": {"feature": "Feature", "security": "Security", "fix": "Fix", "notice": "Notice"},
+                    "de": {"feature": "Funktion", "security": "Sicherheit", "fix": "Fehlerbehebung", "notice": "Hinweis"}}
           entry = next((e for e in json.load(open("app/docs/news.json", encoding="utf-8")) if e.get("version") == v), None)
-          for i in (entry or {}).get("items", []):
-              print(f"- **{label.get(i.get('type'), 'Info')}:** {i.get('de') or i.get('en')}")
-          print(f"\nImage: `ghcr.io/{repo}:{v}` – Update: Container-Verwaltung oder `docker compose pull && docker compose up -d`")
-          print("\nOhne Internet: passende Image-Datei (amd64/arm64) und SHA256SUMS herunterladen, dann `sh update.sh --load <Datei>`.")
+          items = (entry or {}).get("items", [])
+          for i in items:
+              print(f"- **{labels['en'].get(i.get('type'), 'Info')}:** {i.get('en') or i.get('de')}")
+          print(f"\nImage: `ghcr.io/{repo}:{v}` – update: container manager or `docker compose pull && docker compose up -d`")
+          print("\nWithout internet: download the matching image file (amd64/arm64) and SHA256SUMS, then `sh update.sh --load <file>`.")
+          if any(i.get("de") for i in items):
+              print("\n<details><summary>Deutsch</summary>\n")
+              for i in items:
+                  print(f"- **{labels['de'].get(i.get('type'), 'Info')}:** {i.get('de') or i.get('en')}")
+              print("\n</details>")
           PY
           gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "SAMAUDIT $VERSION" --notes-file notes.md \

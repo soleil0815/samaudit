@@ -67,17 +67,17 @@ jobs:
           mkdir -p "$RUNNER_TEMP/old" && git archive HEAD | tar -x -C "$RUNNER_TEMP/old"
           if ! tools/update-locks.sh > "$RUNNER_TEMP/locks.log" 2>&1; then
             tail -30 "$RUNNER_TEMP/locks.log"
-            echo "::error title=Sicherheitsupdate: Versionen nicht ermittelbar::tools/update-locks.sh ist fehlgeschlagen (Details im Log dieses Schritts)."
+            echo "::error title=Security update: versions not determinable::tools/update-locks.sh failed (details in the log of this step)."
             exit 1
           fi
           cat "$RUNNER_TEMP/locks.log"
           python3 tools/lockutil.py diff "$RUNNER_TEMP/old" . > "$RUNNER_TEMP/changes.md"
           if [ -s "$RUNNER_TEMP/changes.md" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            { echo "## Geänderte Pakete"; cat "$RUNNER_TEMP/changes.md"; } >> "$GITHUB_STEP_SUMMARY"
+            { echo "## Changed packages"; cat "$RUNNER_TEMP/changes.md"; } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Keine neuen Pakete innerhalb des Unterbaus – nichts zu tun." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "No new packages within the base – nothing to do." | tee -a "$GITHUB_STEP_SUMMARY"
           fi
       - id: verify
         name: Tests inside the image
@@ -150,12 +150,12 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/old" && git archive HEAD | tar -x -C "$RUNNER_TEMP/old"
           python3 tools/lockutil.py diff "$RUNNER_TEMP/old" . > "$RUNNER_TEMP/changes.md"
-          [ -s "$RUNNER_TEMP/changes.md" ] || { echo "::error title=Sicherheitsupdate::Keine Änderungen gegenüber main."; exit 1; }
+          [ -s "$RUNNER_TEMP/changes.md" ] || { echo "::error title=Security update::No changes compared to main."; exit 1; }
           app="${VERSION%-s*}"
           {
             echo "## $VERSION – $(date -u +%Y-%m-%d)"
             echo
-            echo "Gleiches Programm ($app), nur aktualisierte Pakete."
+            echo "Same program ($app), updated packages only."
             echo
             cat "$RUNNER_TEMP/changes.md"
             echo
@@ -204,8 +204,8 @@ jobs:
           push() { git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push -q origin "$@"; }
           push "$SHA:refs/tags/v$VERSION"
           push "$SHA:refs/heads/main" \
-            || echo "::warning title=main nicht aktualisiert::main hat sich inzwischen geändert. Das Release v$VERSION ist veröffentlicht; die Paketstände übernimmt der nächste Lauf."
-          { tail -n +2 "$RUNNER_TEMP/entry.md"; echo; echo "Image: \`ghcr.io/${GITHUB_REPOSITORY,,}:$VERSION\` – Update: Container-Verwaltung oder \`docker compose pull && docker compose up -d\`"; echo; echo "Ohne Internet: passende Image-Datei und SHA256SUMS herunterladen, dann \`sh update.sh --load <Datei>\`."; } > notes.md
+            || echo "::warning title=main not updated::main has changed in the meantime. Release v$VERSION is published; the next run takes over the package versions."
+          { tail -n +2 "$RUNNER_TEMP/entry.md"; echo; echo "Image: \`ghcr.io/${GITHUB_REPOSITORY,,}:$VERSION\` – update: container manager or \`docker compose pull && docker compose up -d\`"; echo; echo "Without internet: download the matching image file and SHA256SUMS, then \`sh update.sh --load <file>\`."; } > notes.md
           gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --verify-tag \
-            --title "SAMAUDIT $VERSION (Sicherheitsupdate)" --notes-file notes.md \
+            --title "SAMAUDIT $VERSION (security update)" --notes-file notes.md \
             "$RUNNER_TEMP"/release-assets/*
