@@ -4,6 +4,10 @@
 
 Program versions. Weekly security updates (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.1.6 – compact coffee button
+
+- Compact "Buy me a coffee" button (yellow pill with the official cup icon, stored locally) at the bottom of the sidebar on every page, including the overview, and on the Help page.
+
 ## 2.1.5 – coffee button
 
 - The official "Buy me a coffee" button sits at the bottom of the sidebar (every page except the overview) and on the Help page, stored locally (no request to their servers; the Content Security Policy stays `img-src 'self'`).

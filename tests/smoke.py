@@ -106,15 +106,15 @@ from app.version import DONATE_URL, SOURCE_URL  # noqa: E402
 _help = asyncio.run(fetch("/help"))[1]
 _login = asyncio.run(fetch("/login"))[1]
 check(DONATE_URL in _help and SOURCE_URL in _help, "help: source code and donation link")
-check("/static/img/bmc-button.svg" in _help and "buymeacoffee.com/buttons" not in _help,
+check("/static/img/bmc-cup.svg" in _help and "buymeacoffee.com/buttons" not in _help,
       "help: local coffee button, nothing loaded from outside")
-check(asyncio.run(get("/static/img/bmc-button.svg")) == 200, "coffee button is served locally")
+check(asyncio.run(get("/static/img/bmc-cup.svg")) == 200, "coffee button icon is served locally")
 check(SOURCE_URL in _login and DONATE_URL not in _login, "sign-in: source code link, no donation link")
 for _tpl in ("dashboard.html", "login.html"):
     _src = open(os.path.join(ROOT, "app", "templates", _tpl), encoding="utf-8").read()
     check("DONATE_URL" not in _src and "buymeacoffee" not in _src, f"no donation link in {_tpl}")
 
-# sidebar: coffee button on every signed-in page except the overview "/"
+# sidebar: coffee button on every signed-in page, including the overview "/"
 from types import SimpleNamespace  # noqa: E402
 
 from app.main import templates  # noqa: E402
@@ -129,8 +129,8 @@ def _rail(path: str) -> str:
 
 from app.config import settings  # noqa: E402
 
-check(DONATE_URL in _rail("/scans") and "/static/img/bmc-button.svg" in _rail("/scans"), "sidebar: coffee button on /scans")
-check(DONATE_URL not in _rail("/"), "sidebar: no coffee button on the overview")
+check(DONATE_URL in _rail("/scans") and "/static/img/bmc-cup.svg" in _rail("/scans"), "sidebar: coffee button on /scans")
+check(DONATE_URL in _rail("/"), "sidebar: coffee button on the overview")
 
 # --- Parsers and protections -------------------------------------------------
 from app import webcert  # noqa: E402

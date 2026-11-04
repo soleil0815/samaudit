@@ -18,9 +18,7 @@
     Source code, bug reports and ideas: <a href="{{ SOURCE_URL }}" target="_blank" rel="noopener noreferrer">{{ SOURCE_URL|replace('https://', '') }}</a>.{% endif %}</p>
   <p style="margin:6px 0 0">{% if lang == 'de' %}SAMAUDIT ist kostenlos. Wenn es Ihnen hilft und Sie Danke sagen möchten:{% else %}SAMAUDIT is free. If it helps you and you would like to say thanks:{% endif %}
   </p>
-  <p style="margin:10px 0 0"><a href="{{ DONATE_URL }}" target="_blank" rel="noopener noreferrer" class="bmc-button"
-     title="{{ 'Einen Kaffee spendieren' if lang == 'de' else 'Buy me a coffee' }}"><img src="/static/img/bmc-button.svg"
-     alt="{{ 'Einen Kaffee spendieren' if lang == 'de' else 'Buy me a coffee' }}" width="180" height="51"></a></p>
+  <p style="margin:10px 0 0"><a href="{{ DONATE_URL }}" target="_blank" rel="noopener noreferrer" class="bmc-btn" title="{{ 'Einen Kaffee spendieren' if lang == 'de' else 'Buy me a coffee' }}"><img src="/static/img/bmc-cup.svg" alt="" width="14" height="16">Buy me a coffee</a></p>
 </div>
 <div class="help-layout">
   <nav class="help-toc panel" aria-label="{{ 'Inhalt' if lang == 'de' else 'Contents' }}">
