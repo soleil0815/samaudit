@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""PDF-Export des Berichts (ReportLab, ohne externe Abhängigkeiten zur Laufzeit)."""
+"""PDF export of the report (ReportLab, no external runtime dependencies)."""
 from __future__ import annotations
 
 import io
@@ -27,7 +27,7 @@ from .i18n import level_key, t, tv
 from .rules import CATEGORIES, SEVERITIES
 
 FONT_DIR = os.path.join(os.path.dirname(__file__), "pdf_fonts")
-_fonts_ready: bool | None = False   # None: eigene Schriften fehlen, eingebaute verwenden
+_fonts_ready: bool | None = False   # None: bundled fonts missing, use the built-in ones
 
 
 def _fonts() -> tuple[str, str, str, str]:
@@ -43,14 +43,14 @@ def _fonts() -> tuple[str, str, str, str]:
             from reportlab.pdfbase.pdfmetrics import registerFontFamily
             registerFontFamily("Body", normal="Body", bold="Body-Bold", italic="Body-Italic", boldItalic="Body-Bold")
             _fonts_ready = True
-        except Exception:  # noqa: BLE001 – Fallback auf eingebaute Schriften
+        except Exception:  # noqa: BLE001 – fall back to the built-in fonts
             _fonts_ready = None
     if _fonts_ready:
         return "Body", "Body-Bold", "Body-Italic", "Mono"
     return "Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Courier"
 
 
-# Farben (heller Druck)
+# Colours (light print)
 INK = colors.HexColor("#16202b")
 INK2 = colors.HexColor("#485667")
 INK3 = colors.HexColor("#758293")
@@ -84,7 +84,7 @@ def lv_color(score: int | None):
 
 
 # ---------------------------------------------------------------------------
-# Zeichenhilfen
+# Drawing helpers
 # ---------------------------------------------------------------------------
 
 def draw_seal(c, cx, cy, radius, score, lang, fonts, dark_bg=False):
@@ -114,7 +114,7 @@ def draw_seal(c, cx, cy, radius, score, lang, fonts, dark_bg=False):
 
 
 def draw_logo(c, x, y, size):
-    """Violette Kachel mit weißem Schild (wie in der Weboberfläche)."""
+    """Violet tile with a white shield (as in the web interface)."""
     c.saveState()
     c.setFillColor(colors.HexColor("#6f72ee"))
     c.roundRect(x, y, size, size, size * 0.28, stroke=0, fill=1)
@@ -138,7 +138,7 @@ def draw_logo(c, x, y, size):
 
 
 class Bars(Flowable):
-    """Horizontale Balken (eine Farbe) mit direkter Beschriftung."""
+    """Horizontal bars (one colour) with direct labels."""
 
     def __init__(self, rows, width, fonts, label_w=70 * mm):
         super().__init__()
@@ -183,7 +183,7 @@ class ScoreMeter(Flowable):
 
 
 # ---------------------------------------------------------------------------
-# Dokument
+# Document
 # ---------------------------------------------------------------------------
 
 def build_pdf(data: dict, lang: str = "de") -> bytes:
@@ -214,12 +214,12 @@ def build_pdf(data: dict, lang: str = "de") -> bytes:
     }
     content_w = PAGE_W - 2 * MARGIN
 
-    # --- Seitenvorlagen ---------------------------------------------------
+    # --- Page templates ---------------------------------------------------
     def on_cover(c, doc):
         c.saveState()
         c.setFillColor(NAVY)
         c.rect(0, PAGE_H - 118 * mm, PAGE_W, 118 * mm, stroke=0, fill=1)
-        for i, a in enumerate((0.10, 0.07, 0.05, 0.03)):  # weicher Lichtschein oben links
+        for i, a in enumerate((0.10, 0.07, 0.05, 0.03)):  # soft glow at the top left
             c.setFillColor(colors.Color(0.35, 0.38, 0.75, alpha=a))
             c.circle(0, PAGE_H, (90 - i * 18) * mm, stroke=0, fill=1)
         draw_logo(c, MARGIN, PAGE_H - MARGIN - 11 * mm, 11 * mm)
@@ -249,13 +249,13 @@ def build_pdf(data: dict, lang: str = "de") -> bytes:
         c.drawString(MARGIN, PAGE_H - 103 * mm,
                      f"{ov.get('netbios') or ''}  {'Samba AD' if ov.get('domain_type') == 'samba' else 'Windows AD'}  "
                      f"{t('func_level', lang)} {ov.get('domain_level') or '–'}  {t('dc', lang)} {ov.get('dc_host') or '–'}")
-        # Siegel
+        # Seal
         draw_seal(c, PAGE_W - MARGIN - 34 * mm, PAGE_H - 70 * mm, 30 * mm, scan.get("score_global"), lang, fonts,
                   dark_bg=True)
         c.setFont(body, 9)
         c.setFillColor(colors.HexColor("#c7d1dc"))
         c.drawCentredString(PAGE_W - MARGIN - 34 * mm, PAGE_H - 108 * mm, t("risk_score", lang))
-        # Bereiche
+        # Areas
         y = PAGE_H - 140 * mm
         c.setFillColor(INK)
         c.setFont(head_font(), 13)
@@ -280,7 +280,7 @@ def build_pdf(data: dict, lang: str = "de") -> bytes:
             c.setFillColor(lv_color(v))
             c.roundRect(bx, y - 2.2 * mm, max(1.5 * mm, bw * v / 100), 2.4 * mm, 1.2 * mm, stroke=0, fill=1)
             y -= 17 * mm
-        # Schweregrade
+        # Severities
         y -= 2 * mm
         x = MARGIN
         for sv in SEVERITIES[:4]:
@@ -336,7 +336,7 @@ def build_pdf(data: dict, lang: str = "de") -> bytes:
                 style = st["th"] if header and ri == 0 else (st["cellmono"] if ci in mono_cols else st["cell"])
                 v = "" if v is None else str(v)
                 if len(v) > MAX_CELL:
-                    v = v[:MAX_CELL] + " …"    # eine Zelle darf nie höher als eine Seite werden
+                    v = v[:MAX_CELL] + " …"    # a cell must never become taller than a page
                 cells.append(Paragraph(X(v), style))
             out.append(cells)
         tb = Table(out, colWidths=widths, repeatRows=1 if header else 0, hAlign="LEFT")
@@ -348,7 +348,7 @@ def build_pdf(data: dict, lang: str = "de") -> bytes:
         tb.setStyle(TableStyle(ts))
         return tb
 
-    # --- 1. Zusammenfassung ----------------------------------------------
+    # --- 1. Summary -------------------------------------------------------
     fails = data["fails"]
     S.append(Paragraph(X(t("summary", lang)), st["h1"]))
     n_cat = sum(1 for c in CATEGORIES if data["by_cat"][c])
@@ -372,7 +372,7 @@ def build_pdf(data: dict, lang: str = "de") -> bytes:
                      f"+{f['points']}", str(f["count"])])
     S.append(tbl(rows, [46 * mm, 80 * mm, 22 * mm, 14 * mm, 12 * mm], mono_cols=(0,)))
 
-    # --- 2. Domänenüberblick -------------------------------------------
+    # --- 2. Domain overview --------------------------------------------
     S.append(PageBreak())
     S.append(Paragraph(X(t("overview", lang)), st["h1"]))
     u, cpt, pol = ov.get("users", {}), ov.get("computers", {}), ov.get("policy", {})
@@ -419,7 +419,7 @@ def build_pdf(data: dict, lang: str = "de") -> bytes:
         rows += [[tr["name"], t(f"dir_{tr['direction']}", lang), tr.get("changed")] for tr in ov["trusts"]]
         S.append(KeepTogether([Paragraph(X(t("trusts", lang)), st["h2"]), tbl(rows, [80 * mm, 50 * mm, 44 * mm])]))
 
-    # --- 3. Befunde im Detail -----------------------------------------
+    # --- 3. Findings in detail -----------------------------------------
     for cat in CATEGORIES:
         S.append(PageBreak())
         score = data["scores"][cat]
@@ -438,7 +438,7 @@ def build_pdf(data: dict, lang: str = "de") -> bytes:
         for f in data["by_cat"][cat]:
             S += finding_block(f, lang, st, content_w, tbl)
 
-    # --- 4. Anhang ------------------------------------------------------
+    # --- 4. Appendix ----------------------------------------------------
     S.append(PageBreak())
     S.append(Paragraph(X(t("passed", lang)) + f" ({len(data['passed'])})", st["h1"]))
     rows = [[t("rule_id", lang), t("findings", lang)]] + [[f["rule_id"], f["rule"].title[lang]] for f in data["passed"]]
@@ -462,7 +462,7 @@ def build_pdf(data: dict, lang: str = "de") -> bytes:
 
 
 MAX_PDF_ROWS = 40
-MAX_CELL = 400   # Zeichen je Tabellenzelle im PDF
+MAX_CELL = 400   # characters per table cell in the PDF
 
 
 def finding_block(f: dict, lang: str, st: dict, content_w: float, tbl) -> list:
@@ -510,7 +510,7 @@ def finding_block(f: dict, lang: str, st: dict, content_w: float, tbl) -> list:
 
 
 class NumberedDoc(BaseDocTemplate):
-    """Zweiter Durchlauf für „Seite X von Y“."""
+    """Second pass for "page X of Y"."""
 
     def __init__(self, *a, lang="de", body_font="Helvetica", **kw):
         self._lang, self._font = lang, body_font

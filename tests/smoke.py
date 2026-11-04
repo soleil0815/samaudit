@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Rauchtest für CI (ohne Docker, ohne Domäne): Regeln mit Demo-Daten, PDF, Seiten, Parser, Pinning.
-Aufruf: python tests/smoke.py   – Rückgabewert ≠ 0 bei Fehlern."""
+"""Smoke test for CI (no Docker, no domain): rules with demo data, PDF, pages, parsers, pinning.
+Usage: python tests/smoke.py   – exit code ≠ 0 on errors."""
 from __future__ import annotations
 
 import asyncio
@@ -22,22 +22,22 @@ def check(cond: bool, msg: str) -> None:
         failures.append(msg)
 
 
-# --- Regeln -------------------------------------------------------------------
+# --- Rules --------------------------------------------------------------------
 from app import db, demo, scanner  # noqa: E402
 from app.rules import RULES  # noqa: E402
 
 db.init()
 findings, scores = scanner.evaluate(demo.build())
-check(len(RULES) == len(findings) and len(RULES) >= 110, f"{len(RULES)} Regeln ausgewertet")
+check(len(RULES) == len(findings) and len(RULES) >= 110, f"{len(RULES)} rules evaluated")
 errors = [f["rule_id"] for f in findings if f["note"] == "na_error"]
-check(not errors, f"keine Regel mit Auswertungsfehler {errors}")
-check(len({r.id for r in RULES}) == len(RULES), "Regel-IDs eindeutig")
+check(not errors, f"no rule with an evaluation error {errors}")
+check(len({r.id for r in RULES}) == len(RULES), "rule IDs unique")
 
-# fehlgeschlagener Datenabschnitt → nicht prüfbar statt bestanden
+# failed data section → not checkable instead of passed
 m = demo.build()
 m["meta"]["failed_sections"] = ["trusts"]
 f2, _ = scanner.evaluate(m)
-check(all(f["state"] == "na" for f in f2 if f["rule_id"].startswith("TRS-")), "Abschnittsfehler → nicht prüfbar")
+check(all(f["state"] == "na" for f in f2 if f["rule_id"].startswith("TRS-")), "section failure → not checkable")
 
 # --- PDF ----------------------------------------------------------------------
 from app import pdfreport  # noqa: E402
@@ -49,9 +49,9 @@ db.finish_scan(sid, scores, scanner.build_overview(model), findings, 1.0, "firma
 data = report_data(sid)
 for lang in ("de", "en"):
     pdf = pdfreport.build_pdf(data, lang)
-    check(pdf[:4] == b"%PDF", f"PDF erzeugt ({lang})")
+    check(pdf[:4] == b"%PDF", f"PDF generated ({lang})")
 
-# --- Seiten (ASGI direkt, ohne HTTP-Client) -------------------------------------
+# --- Pages (ASGI directly, no HTTP client) --------------------------------------
 from app.main import app  # noqa: E402
 
 
@@ -81,27 +81,27 @@ async def fetch(path: str, cookie: str = "") -> tuple[int, str]:
 for p in ("/login", "/help", "/news", "/privacy", "/healthz"):
     check(asyncio.run(get(p)) == 200, f"GET {p}")
 
-# Spendenlink nur auf der Hilfe-Seite, Quellcode-Link (AGPL) auf Anmeldung und Hilfe
+# Donation link only on the help page, source code link (AGPL) on sign-in and help
 from app.version import DONATE_URL, SOURCE_URL  # noqa: E402
 
 _help = asyncio.run(fetch("/help"))[1]
 _login = asyncio.run(fetch("/login"))[1]
-check(DONATE_URL in _help and SOURCE_URL in _help, "Hilfe: Quellcode- und Spendenlink")
-check(SOURCE_URL in _login and DONATE_URL not in _login, "Anmeldung: Quellcode-Link, kein Spendenlink")
+check(DONATE_URL in _help and SOURCE_URL in _help, "help: source code and donation link")
+check(SOURCE_URL in _login and DONATE_URL not in _login, "sign-in: source code link, no donation link")
 for _tpl in ("base.html", "dashboard.html", "login.html"):
     _src = open(os.path.join(ROOT, "app", "templates", _tpl), encoding="utf-8").read()
-    check("DONATE_URL" not in _src and "buymeacoffee" not in _src, f"kein Spendenlink in {_tpl}")
+    check("DONATE_URL" not in _src and "buymeacoffee" not in _src, f"no donation link in {_tpl}")
 
-# --- Parser und Schutzfunktionen ----------------------------------------------
+# --- Parsers and protections -------------------------------------------------
 from app import webcert  # noqa: E402
 from app.sysvol import parse_gpttmpl  # noqa: E402
 
 inf = parse_gpttmpl('[Service General Setting]\n"Spooler",4,""\n[privilege rights]\nSeDebugPrivilege = *S-1-1-0\njunk\n')
-check(inf.get("Service General Setting", {}).get('"Spooler"', "").startswith("4"), "GptTmpl: Zeilen ohne '='")
-check(inf.get("Privilege Rights", {}).get("sedebugprivilege") == "*S-1-1-0", "GptTmpl: ohne Groß-/Kleinschreibung")
-check(webcert._pem_key(b"xxxxxxxx-----BEGIN PRIVATE", None, "t") is None, "PEM: keine Endlosschleife")
+check(inf.get("Service General Setting", {}).get('"Spooler"', "").startswith("4"), "GptTmpl: lines without '='")
+check(inf.get("Privilege Rights", {}).get("sedebugprivilege") == "*S-1-1-0", "GptTmpl: case-insensitive")
+check(webcert._pem_key(b"xxxxxxxx-----BEGIN PRIVATE", None, "t") is None, "PEM: no endless loop")
 
-# --- LDAPS-Pinning ---------------------------------------------------------------
+# --- LDAPS pinning ---------------------------------------------------------------
 import datetime as _dt  # noqa: E402
 
 from cryptography import x509  # noqa: E402
@@ -131,8 +131,8 @@ def leaf(name: str, eku) -> bytes:
 
 ca_der = ca.public_bytes(serialization.Encoding.DER)
 SA, CA_ = ExtendedKeyUsageOID.SERVER_AUTH, ExtendedKeyUsageOID.CLIENT_AUTH
-check(pins.check("firma.local [10.0.0.1]", [leaf("dc01.firma.local", SA), ca_der])["first_use"], "Pin: erster Kontakt")
-check(not pins.check("firma.local [10.0.0.1]", [leaf("dc01.firma.local", SA), ca_der])["first_use"], "Pin: Erneuerung ok")
+check(pins.check("firma.local [10.0.0.1]", [leaf("dc01.firma.local", SA), ca_der])["first_use"], "pin: first contact")
+check(not pins.check("firma.local [10.0.0.1]", [leaf("dc01.firma.local", SA), ca_der])["first_use"], "pin: renewal ok")
 
 
 def rejected(host, chain) -> bool:
@@ -143,14 +143,14 @@ def rejected(host, chain) -> bool:
         return True
 
 
-check(rejected("firma.local [10.0.0.1]", [leaf("eve.firma.local", SA), ca_der]), "Pin: fremder Name derselben CA abgewiesen")
-check(rejected("firma.local [10.0.0.1]", [leaf("dc01.firma.local", CA_), ca_der]), "Pin: Client-Zertifikat abgewiesen")
-db.set_kv("dc_names", "dc01.firma.local,dc02.firma.local")     # aus dem letzten Scan bekannt
-check(rejected("firma.local [10.0.0.9]", [leaf("eve.firma.local", SA), ca_der]), "Pin: neue Adresse, kein DC → abgewiesen")
+check(rejected("firma.local [10.0.0.1]", [leaf("eve.firma.local", SA), ca_der]), "pin: foreign name from the same CA rejected")
+check(rejected("firma.local [10.0.0.1]", [leaf("dc01.firma.local", CA_), ca_der]), "pin: client certificate rejected")
+db.set_kv("dc_names", "dc01.firma.local,dc02.firma.local")     # known from the last scan
+check(rejected("firma.local [10.0.0.9]", [leaf("eve.firma.local", SA), ca_der]), "pin: new address, not a DC → rejected")
 check(not pins.check("firma.local [10.0.0.2]", [leaf("dc02.firma.local", SA), ca_der])["first_use"],
-      "Pin: zweiter DC (Ausfall des ersten) übernommen")
-check(pins.check("samba.lan [10.0.1.1]", [leaf("dc1.samba.lan", SA)])["first_use"] is not None, "Pin: Samba ohne CA-Kette")
-check(db.delete_pins("firma.local") >= 2, "Pin: Zurücksetzen per Name entfernt alle Adressen")
+      "pin: second DC (first one down) adopted")
+check(pins.check("samba.lan [10.0.1.1]", [leaf("dc1.samba.lan", SA)])["first_use"] is not None, "pin: Samba without a CA chain")
+check(db.delete_pins("firma.local") >= 2, "pin: reset by name removes all addresses")
 
-print(f"\n{len(failures)} Fehler")
+print(f"\n{len(failures)} errors")
 sys.exit(1 if failures else 0)

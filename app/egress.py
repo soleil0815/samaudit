@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Ausgangs-Wächter: SAMAUDIT darf nur zu den eigenen Domänencontrollern verbinden.
+"""Egress guard: SAMAUDIT may only connect to its own domain controllers.
 
-Jeder ausgehende Verbindungsversuch des Programms wird
-geprüft: erlaubt sind nur die IP-Adressen der DCs (DC_HOSTS bzw. DOMAIN_FQDN)
-auf den LDAP-/SMB-Ports sowie Verbindungen innerhalb des Containers (localhost).
-Alles andere wird abgewiesen und protokolliert."""
+Every outbound connection attempt of the program is
+checked: only the IP addresses of the DCs (DC_HOSTS or DOMAIN_FQDN) on the
+LDAP/SMB ports are allowed, plus connections inside the container (localhost).
+Everything else is rejected and logged."""
 from __future__ import annotations
 
 import ipaddress
@@ -57,7 +57,7 @@ def is_allowed(host: str, port: int) -> bool:
     try:
         ip = ipaddress.ip_address(host.split("%")[0])
     except ValueError:
-        # Hostname statt IP: auflösen und jede Adresse prüfen
+        # host name instead of an IP: resolve it and check every address
         try:
             addrs = {str(i[4][0]) for i in _orig_getaddrinfo(host, port)}
         except OSError:
@@ -82,7 +82,7 @@ def _report(host: str, port: int) -> None:
     if now - _last_log.get(key, 0) < 600:
         return
     _last_log[key] = now
-    log.warning("Ausgehende Verbindung blockiert: %s:%s (nur Domänencontroller erlaubt)", host, port)
+    log.warning("Outbound connection blocked: %s:%s (only domain controllers allowed)", host, port)
     try:
         from . import db
         db.audit("act_egress_blocked", detail=key)
@@ -99,7 +99,7 @@ def _check(address) -> None:
         host, port = str(address[0]), int(address[1])
         if not is_allowed(host, port):
             _report(host, port)
-            raise EgressBlocked(f"Verbindung zu {host}:{port} durch SAMAUDIT-Ausgangssperre blockiert")
+            raise EgressBlocked(f"connection to {host}:{port} blocked by the SAMAUDIT egress guard")
 
 
 _orig_getaddrinfo = socket.getaddrinfo
@@ -123,13 +123,13 @@ def _connect_ex(self, address):
 
 
 def install() -> None:
-    """Aktiviert den Wächter (EGRESS_GUARD=true, Standard)."""
+    """Activates the guard (EGRESS_GUARD=true, default)."""
     global _installed
     if _installed or not settings.egress_guard or settings.demo_mode:
         return
     socket.socket.connect = _connect  # type: ignore[method-assign]
     socket.socket.connect_ex = _connect_ex  # type: ignore[method-assign]
     _installed = True
-    log.info("Ausgangssperre aktiv: Verbindungen nur zu %s (Ports %s)",
+    log.info("Egress guard active: connections only to %s (ports %s)",
              ", ".join(sorted(set(settings.dc_hosts) | set(settings.egress_allow))) or "–",
              ", ".join(str(p) for p in sorted(ALLOWED_PORTS)))

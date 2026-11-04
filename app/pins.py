@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Automatisches Vertrauen für LDAPS (Trust on First Use mit Pinning).
+"""Automatic trust for LDAPS (trust on first use with pinning).
 
-Beim ersten Kontakt zu einem DC wird dessen Zertifikatskette gelesen und der
-oberste nachweisbar zusammenhängende Aussteller (meist die Unternehmens-CA,
-bei Samba das selbst erzeugte Zertifikat) gemerkt. Spätere Verbindungen werden
-nur akzeptiert, wenn die Kette wieder zu diesem gemerkten Zertifikat führt.
-So funktioniert LDAPS ohne CA-Import, ein später untergeschobenes fremdes
-Zertifikat (Man-in-the-Middle) wird trotzdem erkannt. Erneuert die CA ein
-DC-Zertifikat, bleibt das Vertrauen bestehen.
+On first contact with a DC its certificate chain is read and the topmost
+verifiably connected issuer (usually the enterprise CA, with Samba the
+self-generated certificate) is remembered. Later connections are only
+accepted if the chain leads back to this pinned certificate.
+That way LDAPS works without importing a CA, and a foreign certificate slipped
+in later (man-in-the-middle) is still detected. If the CA renews a
+DC certificate, the trust remains.
 
-Zurücksetzen (z. B. nach CA-Wechsel):
-    docker exec samaudit python -m app.pins reset            # alle
+Reset (e.g. after a CA change):
+    docker exec samaudit python -m app.pins reset            # all
     docker exec samaudit python -m app.pins reset dc01.firma.local
 """
 from __future__ import annotations
@@ -27,12 +27,12 @@ log = logging.getLogger("samaudit.pins")
 
 class PinMismatch(Exception):
     def __init__(self, host: str, expected: str, got: str):
-        super().__init__(f"{host}: erwartet {expected[:16]}…, erhalten {got[:16]}…")
+        super().__init__(f"{host}: expected {expected[:16]}…, got {got[:16]}…")
         self.host, self.expected, self.got = host, expected, got
 
 
 def peer_chain(sock) -> list[bytes]:
-    """DER-Zertifikate, wie sie der Server gesendet hat (Blatt zuerst)."""
+    """DER certificates as sent by the server (leaf first)."""
     chain: list[bytes] = []
     getter = getattr(sock, "get_unverified_chain", None)  # Python ≥ 3.13
     if getter:
@@ -67,7 +67,7 @@ def _issued_by(child, parent) -> bool:
 
 
 def verified_prefix(chain: list[bytes]) -> list:
-    """Die Teilkette ab dem Blatt, in der jedes Zertifikat vom nächsten signiert ist."""
+    """The partial chain from the leaf in which each certificate is signed by the next one."""
     certs = [_load(d) for d in chain]
     out = certs[:1]
     for i in range(len(certs) - 1):
@@ -100,7 +100,7 @@ SERVER_AUTH_OID = "1.3.6.1.5.5.7.3.1"
 
 
 def leaf_names(cert) -> set[str]:
-    """DNS-Namen des Serverzertifikats (SAN, ersatzweise CN), klein geschrieben."""
+    """DNS names of the server certificate (SAN, or CN as a fallback), lower case."""
     from cryptography import x509
     from cryptography.x509.oid import NameOID
     names: set[str] = set()
@@ -115,7 +115,7 @@ def leaf_names(cert) -> set[str]:
 
 
 def _server_cert_ok(cert) -> bool:
-    """Ein Serverzertifikat: entweder ohne EKU (= alle Zwecke) oder mit „Serverauthentifizierung“."""
+    """A server certificate: either without EKU (= all purposes) or with "Server Authentication"."""
     from cryptography import x509
     try:
         eku = cert.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value
@@ -129,7 +129,7 @@ def _server_cert_ok(cert) -> bool:
 def _anchor_matches(pin: dict, fp: str, path: list, anchor) -> bool:
     if pin["fingerprint"] == fp or any(fingerprint(c) == pin["fingerprint"] for c in path):
         return True
-    try:                                   # Kette diesmal ohne das gemerkte Zertifikat → Signatur prüfen
+    try:                                   # chain without the pinned certificate this time → check the signature
         return _issued_by(anchor, _load(pin["der"]))
     except Exception:  # noqa: BLE001
         return False
@@ -145,28 +145,28 @@ def _host_matches(host: str, names: set[str]) -> bool:
 
 
 def check(host: str, chain: list[bytes]) -> dict:
-    """Prüft bzw. merkt das Zertifikat. Wirft PinMismatch bei Abweichung.
+    """Checks or pins the certificate. Raises PinMismatch on a deviation.
 
-    Regeln (gegen Man-in-the-Middle):
-    - Das Zertifikat muss ein Serverzertifikat sein (sonst könnte jedes von der Unternehmens-CA ausgestellte
-      Benutzer-/Computerzertifikat einen DC vortäuschen).
-    - Bekannte Verbindung: Kette muss zum gemerkten Zertifikat führen UND das Serverzertifikat muss einen der
-      beim ersten Kontakt gesehenen DNS-Namen tragen (Erneuerungen behalten den Namen).
-    - Neue Adresse eines bereits gemerkten Namens: kein erneutes „erstes Vertrauen“ – nur, wenn die Kette zu
-      einem gemerkten Zertifikat dieses Namens führt und das Serverzertifikat den konfigurierten Namen trägt.
+    Rules (against man-in-the-middle):
+    - The certificate must be a server certificate (otherwise any user/computer certificate issued by the
+      enterprise CA could impersonate a DC).
+    - Known connection: the chain must lead to the pinned certificate AND the server certificate must carry one
+      of the DNS names seen on first contact (renewals keep the name).
+    - New address of an already pinned name: no new "first trust" – only if the chain leads to
+      a pinned certificate of this name and the server certificate carries the configured name.
     """
     if not chain:
-        raise PinMismatch(host, "?", "kein Zertifikat")
+        raise PinMismatch(host, "?", "no certificate")
     try:
         path = verified_prefix(chain)
-    except Exception as e:  # noqa: BLE001 – unlesbares Zertifikat
-        raise PinMismatch(host, "?", f"unlesbares Zertifikat ({e.__class__.__name__})") from e
+    except Exception as e:  # noqa: BLE001 – unreadable certificate
+        raise PinMismatch(host, "?", f"unreadable certificate ({e.__class__.__name__})") from e
     leaf, anchor = path[0], path[-1]
     fp = fingerprint(anchor)
     names = leaf_names(leaf)
     if not _server_cert_ok(leaf):
         db.audit("act_cert_mismatch", detail=f"{host}: kein Serverzertifikat ({leaf.subject.rfc4514_string()})")
-        raise PinMismatch(host, "Serverzertifikat", "Zertifikat ohne Serverauthentifizierung")
+        raise PinMismatch(host, "server certificate", "certificate without server authentication")
     base = host.split(" [", 1)[0]
     pin = db.get_pin(host)
 
@@ -179,15 +179,15 @@ def check(host: str, chain: list[bytes]) -> dict:
             db.audit("act_cert_mismatch", detail=f"{host}: Zertifikat für {', '.join(sorted(names))[:120]} "
                                                  f"statt {', '.join(sorted(known))[:120]}")
             raise PinMismatch(host, ", ".join(sorted(known)), ", ".join(sorted(names)) or "?")
-        if not known:                      # Einträge aus Versionen vor 1.9.2: Namen jetzt ergänzen
+        if not known:                      # entries from versions before 1.9.2: add the names now
             db.set_pin_names(host, ",".join(sorted(names)))
         db.touch_pin(host)
         return {"first_use": False, "fingerprint": pin["fingerprint"]}
 
     family = [p for p in db.family_pins(base) if p["host"] != host.lower()]
     if family:
-        # Weitere Adresse eines bereits gemerkten Namens (z. B. zweiter DC hinter dem Domänennamen):
-        # nur übernehmen, wenn das Zertifikat erkennbar zu einem DC dieser Domäne gehört.
+        # Further address of an already pinned name (e.g. a second DC behind the domain name):
+        # only adopt it if the certificate recognisably belongs to a DC of this domain.
         dcs = known_dc_names()
 
         def plausible_dc() -> bool:
@@ -205,7 +205,7 @@ def check(host: str, chain: list[bytes]) -> dict:
                 db.touch_pin(host)
                 return {"first_use": False, "fingerprint": p["fingerprint"]}
         if not any(p["is_ca"] for p in family) and plausible_dc():
-            # selbstsignierte DC-Zertifikate (z. B. Samba): jeder DC hat sein eigenes – erster Kontakt wie bisher
+            # self-signed DC certificates (e.g. Samba): every DC has its own – first contact as before
             return _first_use(host, anchor, fp, names, note="weiterer DC")
         db.audit("act_cert_mismatch", detail=f"{host}: neue Adresse mit unbekanntem Zertifikat "
                                              f"({', '.join(sorted(names))[:120]}, SHA256 {fp[:23]}…)")
@@ -215,7 +215,7 @@ def check(host: str, chain: list[bytes]) -> dict:
 
 
 def known_dc_names() -> set[str]:
-    """DNS-Namen der DCs aus dem letzten Scan (leer, solange noch kein Scan lief)."""
+    """DNS names of the DCs from the last scan (empty until a scan has run)."""
     try:
         return {n for n in (db.get_kv("dc_names") or "").split(",") if n}
     except Exception:  # noqa: BLE001
@@ -227,22 +227,22 @@ def _first_use(host: str, anchor, fp: str, names: set[str], note: str = "") -> d
     subject, not_after, is_ca = _describe(anchor)
     db.save_pin(host, fp, subject, not_after, is_ca, anchor.public_bytes(Encoding.DER), ",".join(sorted(names)))
     db.audit("act_cert_pinned", detail=f"{host}: {subject} SHA256 {fp[:23]}…" + (f" ({note})" if note else ""))
-    log.warning("LDAPS: Zertifikat von %s automatisch vertraut und gemerkt (%s, SHA256 %s)", host, subject, fp)
+    log.warning("LDAPS: certificate of %s trusted automatically and pinned (%s, SHA256 %s)", host, subject, fp)
     return {"first_use": True, "fingerprint": fp, "subject": subject}
 
 
 def _cli(argv: list[str]) -> int:
     db.init()
     if len(argv) < 1 or argv[0] not in ("list", "reset"):
-        print("Verwendung: python -m app.pins list | reset [host]")
+        print("Usage: python -m app.pins list | reset [host]")
         return 2
     if argv[0] == "list":
         for p in db.list_pins():
             print(f"{p['host']:35} {'CA ' if p['is_ca'] else 'DC '} {p['subject']}\n{'':35} SHA256 {p['fingerprint']}  "
-                  f"gültig bis {p['not_after']}  gemerkt {p['first_seen']}")
+                  f"valid until {p['not_after']}  pinned {p['first_seen']}")
         return 0
     n = db.delete_pins(argv[1] if len(argv) > 1 else None)
-    print(f"{n} gemerkte(s) Zertifikat(e) entfernt. Beim nächsten Login wird neu vertraut.")
+    print(f"{n} pinned certificate(s) removed. They will be trusted again at the next sign-in.")
     return 0
 
 

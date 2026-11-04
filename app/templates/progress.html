@@ -9,7 +9,7 @@
     <span class="phase">{{ t(scan.phase or 'phase_start', lang) }}</span><span class="num muted" data-pct>{{ scan.progress }} %</span>
   </div>
   <div class="alert" data-error {% if scan.status != 'error' %}hidden{% endif %} style="margin-top:18px;text-align:left">
-    <b>{{ t('scan_failed', lang) }}:</b> <span>{{ scan.error or '' }}</span>
+    <b>{{ t('scan_failed', lang) }}:</b> <span>{% set ek = 'err_' ~ (scan.error or '') %}{{ t(ek, lang) if scan.error and t(ek, lang) != ek else (scan.error or '') }}</span>
   </div>
   <p style="margin-top:18px"><a href="/">{{ t('back', lang) }}</a></p>
 </section>

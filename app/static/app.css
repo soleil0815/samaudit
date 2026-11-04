@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
-/* SAMAUDIT – Oberfläche im Stil von SAMONBOARDING:
-   tiefes Nachtblau, Glasflächen, Violett-Indigo als Akzent, geometrische Überschriften. */
+/* SAMAUDIT – interface in the style of SAMONBOARDING:
+   deep midnight blue, glass surfaces, violet-indigo accent, geometric headings. */
 
 @font-face { font-family: "Inter"; src: url("fonts/Inter-Regular.otf") format("opentype"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "Inter"; src: url("fonts/Inter-Medium.otf") format("opentype"); font-weight: 500; font-display: swap; }
@@ -10,7 +10,7 @@
 @font-face { font-family: "Poppins"; src: url("fonts/Poppins-Medium.ttf") format("truetype"); font-weight: 500 600; font-display: swap; }
 @font-face { font-family: "Poppins"; src: url("fonts/Poppins-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
 
-/* ---------- Farben: dunkel ist Standard ---------- */
+/* ---------- Colours: dark is the default ---------- */
 :root {
   --bg: #0e1222;
   --bg-glow: rgba(88, 96, 190, .22);
@@ -89,7 +89,7 @@ p { margin: 0 0 .75em; }
 .small { font-size: 13px; }
 .num { font-variant-numeric: tabular-nums; }
 
-/* ---------- Marke ---------- */
+/* ---------- Brand ---------- */
 .logo-tile {
   width: 38px; height: 38px; border-radius: 11px; flex: none; display: grid; place-items: center;
   background: linear-gradient(160deg, #9a9dfc, #5c5fe2); box-shadow: 0 6px 20px rgba(99, 102, 241, .45), inset 0 1px 0 rgba(255, 255, 255, .25);
@@ -103,7 +103,7 @@ p { margin: 0 0 .75em; }
   padding: 3px 6px; border-radius: 5px; letter-spacing: .02em;
 }
 
-/* ---------- Grundgerüst ---------- */
+/* ---------- Layout ---------- */
 .shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; }
 .rail {
   background: var(--rail); border-right: 1px solid var(--line); padding: 22px 14px; position: sticky; top: 0; height: 100vh;
@@ -155,7 +155,7 @@ main { padding: 34px 44px 64px; max-width: 1260px; width: 100%; }
   padding: 9px 14px; border-radius: 12px; font-size: 13.5px; margin-bottom: 22px;
 }
 
-/* ---------- Flächen ---------- */
+/* ---------- Surfaces ---------- */
 .panel {
   background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow);
   backdrop-filter: blur(10px);
@@ -182,7 +182,7 @@ main { padding: 34px 44px 64px; max-width: 1260px; width: 100%; }
 .btn[disabled] { opacity: .65; cursor: wait; }
 .btn svg { width: 16px; height: 16px; }
 
-/* ---------- Prüfsiegel ---------- */
+/* ---------- Audit seal ---------- */
 .hero { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 36px; align-items: center; }
 .seal-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .seal { width: 220px; height: 220px; max-width: 100%; }
@@ -208,7 +208,7 @@ main { padding: 34px 44px 64px; max-width: 1260px; width: 100%; }
 .meter i.lv-0 { background: var(--lv-0); } .meter i.lv-1 { background: var(--lv-1); }
 .meter i.lv-2 { background: var(--lv-2); } .meter i.lv-3 { background: var(--lv-3); }
 
-/* ---------- Schweregrade ---------- */
+/* ---------- Severities ---------- */
 .sev { display: inline-flex; align-items: center; gap: 6px; font: 600 12px/1 var(--f-body); padding: 5px 9px 5px 8px;
   border-radius: 999px; white-space: nowrap; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); }
@@ -223,7 +223,7 @@ main { padding: 34px 44px 64px; max-width: 1260px; width: 100%; }
 .sev-tally .t span { font-size: 13px; color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px; }
 .sev-tally .t span::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); }
 
-/* ---------- Tabellen ---------- */
+/* ---------- Tables ---------- */
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th { text-align: left; font-weight: 500; color: var(--ink-3); font-size: 12.5px; padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -235,7 +235,7 @@ td.mono, .mono { font-family: var(--f-mono); font-size: 12.5px; word-break: brea
 .score.lv-0 { color: var(--lv-0); } .score.lv-1 { color: var(--lv-1); } .score.lv-2 { color: var(--lv-2); } .score.lv-3 { color: var(--lv-3); }
 .row-actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; }
 
-/* ---------- Kennzahlen ---------- */
+/* ---------- Key figures ---------- */
 .facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0; border-top: 1px solid var(--line-2); margin: 0; }
 .facts div { padding: 14px 14px 14px 4px; border-bottom: 1px solid var(--line-2); min-width: 0; }
 .facts.wide { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
@@ -243,7 +243,7 @@ td.mono, .mono { font-family: var(--f-mono); font-size: 12.5px; word-break: brea
 .facts dd { margin: 4px 0 0; font: 600 19px/1.2 var(--f-display); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .facts dd small { font: 400 12.5px var(--f-body); color: var(--ink-3); }
 
-/* ---------- Befundliste ---------- */
+/* ---------- Findings list ---------- */
 .findings { display: flex; flex-direction: column; overflow: hidden; }
 .finding { border-bottom: 1px solid var(--line-2); }
 .finding:last-child { border-bottom: 0; }
@@ -304,7 +304,7 @@ td.mono, .mono { font-family: var(--f-mono); font-size: 12.5px; word-break: brea
 .pass-list li::before { content: ""; position: absolute; left: 3px; top: 11px; width: 9px; height: 5px; border-left: 2px solid var(--ok); border-bottom: 2px solid var(--ok); transform: rotate(-45deg); }
 .pass-list.na li::before { border: 0; width: 9px; height: 2px; background: var(--ink-3); transform: none; top: 13px; }
 
-/* ---------- Diagramme ---------- */
+/* ---------- Charts ---------- */
 .trend { width: 100%; height: auto; display: block; }
 .trend .grid { stroke: var(--line); stroke-width: 1; }
 .trend .axis { fill: var(--ink-3); font: 11px var(--f-body); }
@@ -318,13 +318,13 @@ td.mono, .mono { font-family: var(--f-mono); font-size: 12.5px; word-break: brea
 .hbars .bar { fill: var(--accent); }
 .tip { position: fixed; pointer-events: none; background: var(--surface-solid); color: var(--ink); border: 1px solid var(--line); font: 500 12.5px/1.3 var(--f-body); padding: 6px 9px; border-radius: 8px; transform: translate(-50%, -130%); z-index: 50; white-space: nowrap; box-shadow: var(--shadow); }
 
-/* ---------- Fortschritt ---------- */
+/* ---------- Progress ---------- */
 .progress-card { max-width: 580px; margin: 8vh auto 0; text-align: center; }
 .progress-bar { height: 8px; background: var(--line); border-radius: 5px; overflow: hidden; margin: 24px 0 10px; }
 .progress-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--c-stale), var(--c-privileged), var(--c-trusts), var(--c-anomalies)); background-size: 580px 100%; transition: width .4s ease; box-shadow: 0 0 14px rgba(139, 143, 248, .6); }
 .phase { color: var(--ink-2); min-height: 1.5em; }
 
-/* ---------- Anmeldung ---------- */
+/* ---------- Sign-in ---------- */
 .login-page { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(400px, .85fr); align-items: center; padding: 6vh 7vw; gap: 6vw; }
 .login-intro { max-width: 600px; }
 .login-intro .brandline { display: flex; align-items: center; gap: 14px; margin-bottom: 64px; }
@@ -373,7 +373,7 @@ td.mono, .mono { font-family: var(--f-mono); font-size: 12.5px; word-break: brea
 .empty { text-align: center; padding: 54px 24px; color: var(--ink-2); }
 .empty .logo-tile { margin: 0 auto 16px; }
 
-/* ---------- Responsiv ---------- */
+/* ---------- Responsive ---------- */
 @media (max-width: 1080px) {
   .hero { grid-template-columns: 1fr; justify-items: center; }
   .hero .cat-scores, .hero > div:last-child { width: 100%; }
@@ -398,13 +398,13 @@ td.mono, .mono { font-family: var(--f-mono); font-size: 12.5px; word-break: brea
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
-/* ---------- Datenschutzseite ---------- */
+/* ---------- Privacy page ---------- */
 .privacy h3 { margin: 22px 0 6px; }
 .privacy h3:first-child { margin-top: 0; }
 .privacy p, .privacy li { color: var(--ink-2); max-width: 75ch; }
 .privacy ul { margin: 0; padding-left: 20px; }
 
-/* ---------- Hilfe / Handbuch ---------- */
+/* ---------- Help / manual ---------- */
 .help-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 20px; align-items: start; }
 .help-toc { position: sticky; top: 18px; padding: 16px 18px; max-height: calc(100vh - 36px); overflow: auto; font-size: 13.5px; }
 .help-toc b { display: block; margin-bottom: 8px; font-family: var(--f-display); }
@@ -436,7 +436,7 @@ td.mono, .mono { font-family: var(--f-mono); font-size: 12.5px; word-break: brea
   .help-toc { position: static; max-height: none; }
 }
 
-/* ---------- Neuigkeiten (dezent) ---------- */
+/* ---------- What's new (subtle) ---------- */
 .rail .tzinfo .news-link { color: inherit; position: relative; }
 .rail .tzinfo .news-link.has-new { color: var(--ink-2); }
 .news-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 4px; vertical-align: 2px; }

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Webanwendung (Starlette)."""
+"""Web application (Starlette)."""
 from __future__ import annotations
 
 import asyncio
@@ -66,7 +66,7 @@ templates.env.globals["domain_type"] = effective_domain_type
 
 
 # ---------------------------------------------------------------------------
-# Hilfen
+# Helpers
 # ---------------------------------------------------------------------------
 
 def lang_of(request: Request) -> str:
@@ -79,7 +79,7 @@ def client_ip(request: Request) -> str:
 
 
 def safe_next(nxt: str | None) -> str:
-    """Nur lokale Pfade als Weiterleitungsziel (kein //host, kein /\\host, keine Steuerzeichen)."""
+    """Only local paths as redirect targets (no //host, no /\\host, no control characters)."""
     nxt = nxt or "/"
     if (not nxt.startswith("/") or nxt.startswith("//") or "\\" in nxt
             or any(ord(c) < 32 or ord(c) == 127 for c in nxt) or len(nxt) > 200):
@@ -92,7 +92,7 @@ def session_of(request: Request) -> auth.Session | None:
 
 
 async def read_body(request: Request, limit: int) -> bytes | None:
-    """Liest den Anfrage-Inhalt höchstens bis `limit` Bytes (auch bei chunked); sonst None."""
+    """Reads the request body up to at most `limit` bytes (chunked too); otherwise None."""
     try:
         if int(request.headers.get("content-length") or 0) > limit:
             return None
@@ -135,9 +135,9 @@ ACCOUNT_GONE = ("bad_credentials", "not_allowed", "privileged_denied", "user_not
 
 
 async def recheck(request: Request) -> Response | None:
-    """Vor folgenreichen Aktionen (Zertifikat, Löschen) erneut gegen das AD prüfen, ob der Prüfer noch
-    berechtigt ist – Entzug der Gruppe oder Sperre des Kontos wirkt so sofort, nicht erst nach Sitzungsende.
-    Technische Fehler (DC nicht erreichbar) blockieren die Aktion nicht."""
+    """Before consequential actions (certificate, deletion) check against AD again that the auditor is still
+    authorised – removal from the group or a locked account takes effect immediately, not only when the session ends.
+    Technical errors (DC unreachable) do not block the action."""
     if settings.demo_mode:
         return None
     s = request.state.sess
@@ -164,7 +164,7 @@ def require(fn):
 
 
 async def multipart_of(request: Request, limit: int = 1_000_000) -> tuple[dict[str, str], list[tuple[str, bytes]]]:
-    """Kleiner multipart/form-data-Leser (nur Standardbibliothek) für den Zertifikats-Upload."""
+    """Small multipart/form-data reader (standard library only) for the certificate upload."""
     from email import policy
     from email.parser import BytesParser
     from email.utils import collapse_rfc2231_value
@@ -186,7 +186,7 @@ async def multipart_of(request: Request, limit: int = 1_000_000) -> tuple[dict[s
         if not name:
             continue
         payload = part.get_payload(decode=True) or b""
-        if not isinstance(payload, bytes):          # verschachtelter Teil – im Formular nicht vorgesehen
+        if not isinstance(payload, bytes):          # nested part – not expected in the form
             continue
         filename = part.get_filename()
         if filename is not None:
@@ -203,7 +203,7 @@ async def check_csrf(request: Request, form: dict) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Anmeldung
+# Sign-in
 # ---------------------------------------------------------------------------
 
 async def login_page(request: Request):
@@ -224,7 +224,7 @@ async def login_submit(request: Request):
     password = form.get("password") or ""
     if not auth.check_token(request.cookies.get(LOGIN_COOKIE), form.get("token")):
         return RedirectResponse("/login?e=csrf", status_code=303)
-    mark = auth.reserve_attempt(username, ip)   # zählt sofort – auch bei parallelen Anfragen
+    mark = auth.reserve_attempt(username, ip)   # counts immediately – also for parallel requests
     if mark is None:
         if auth.should_log_locked(username, ip):
             db.audit("act_login_failed", username[:80], ip, "locked")
@@ -248,14 +248,14 @@ async def login_submit(request: Request):
             res = await run_in_threadpool(authenticate, username, password)
         except AuthError as e:
             if e.code not in ("bad_credentials", "not_allowed", "privileged_denied", "user_not_found", "account_unusable"):
-                auth.release_attempt(username, ip, mark)   # technischer Fehler, kein Fehlversuch
-            log.warning("Login fehlgeschlagen für %r von %s: %s %s", username[:80], ip, e.code, e.detail)
+                auth.release_attempt(username, ip, mark)   # technical error, not a failed attempt
+            log.warning("Login failed for %r from %s: %s %s", username[:80], ip, e.code, e.detail)
             db.audit("act_login_failed", username[:80], ip, e.code)
             code = "bad_credentials" if e.code == "user_not_found" else e.code
             return RedirectResponse(f"/login?e={code}", status_code=303)
-        except Exception as e:  # noqa: BLE001 – technischer Fehler (DC, Netzwerk): kein Fehlversuch
+        except Exception as e:  # noqa: BLE001 – technical error (DC, network): not a failed attempt
             auth.release_attempt(username, ip, mark)
-            log.warning("Login fehlgeschlagen für %r von %s: %s", username[:80], ip, e)
+            log.warning("Login failed for %r from %s: %s", username[:80], ip, e)
             db.audit("act_login_failed", username[:80], ip, "bind_failed")
             return RedirectResponse("/login?e=bind_failed", status_code=303)
         auth.release_attempt(username, ip, mark)
@@ -274,7 +274,7 @@ async def logout(request: Request):
     form = await form_of(request)
     if await check_csrf(request, form):
         db.audit("act_logout", request.state.sess.user, client_ip(request))
-    auth.destroy(request.state.sess.sid)        # Abmelden ist immer erlaubt
+    auth.destroy(request.state.sess.sid)        # signing out is always allowed
     resp = RedirectResponse("/login", status_code=303)
     resp.delete_cookie(SID_COOKIE, path="/")
     return resp
@@ -290,7 +290,7 @@ async def set_lang(request: Request):
 
 
 # ---------------------------------------------------------------------------
-# Übersicht & Scans
+# Overview & scans
 # ---------------------------------------------------------------------------
 
 @require
@@ -371,7 +371,7 @@ async def scan_delete(request: Request):
 
 
 # ---------------------------------------------------------------------------
-# Bericht
+# Report
 # ---------------------------------------------------------------------------
 
 def report_data(scan_id: int) -> dict | None:
@@ -468,7 +468,7 @@ async def news_page(request: Request):
 
 
 async def news_seen(request: Request):
-    """Hinweis auf der Übersicht ausblenden (wie der Sprachwechsel nur ein Cookie)."""
+    """Hide the notice on the overview (like the language switch, just a cookie)."""
     return _mark_news_seen(RedirectResponse(safe_next(request.query_params.get("next", "/")), status_code=303))
 
 
@@ -505,7 +505,7 @@ async def cert_upload(request: Request):
         info = await run_in_threadpool(webcert.install_upload, files, fields.get("password") or None, user)
     except webcert.CertError as e:
         db.audit("act_cert_failed", user, client_ip(request), str(e)[:200])
-        return _connection(request, cert_err=str(e), status=400)
+        return _connection(request, cert_err=e.text(lang_of(request)), status=400)
     db.audit("act_cert_upload", user, client_ip(request), f"{info.get('subject')} bis {(info.get('not_after') or '')[:10]}")
     return RedirectResponse("/connection?c=cert_uploaded#webcert", status_code=303)
 
@@ -554,14 +554,14 @@ class SecurityHeaders(BaseHTTPMiddleware):
         if settings.cookie_secure:
             h["Strict-Transport-Security"] = "max-age=31536000"
         if not request.url.path.startswith("/static/"):
-            h["Cache-Control"] = "no-store"  # Berichte, Protokoll, Verbindungsdaten nie im Browser-Cache
+            h["Cache-Control"] = "no-store"  # never cache reports, activity log or connection data in the browser
         return resp
 
 
 def _purge():
     res = db.purge_expired(settings.report_retention_days, settings.audit_retention_days)
     if res["scans"] or res["audit"]:
-        log.info("Löschfristen: %s Berichte und %s Protokolleinträge gelöscht", res["scans"], res["audit"])
+        log.info("Retention: deleted %s reports and %s activity log entries", res["scans"], res["audit"])
         db.audit("act_purge", detail=f"{res['scans']} Berichte, {res['audit']} Protokolleinträge")
 
 
@@ -574,7 +574,7 @@ async def _janitor():
             try:
                 await run_in_threadpool(_purge)
             except Exception:  # noqa: BLE001
-                log.exception("Löschfristen konnten nicht angewendet werden")
+                log.exception("Could not apply retention periods")
         await asyncio.sleep(60)
 
 
@@ -584,9 +584,9 @@ async def lifespan(app):
     task = asyncio.create_task(_janitor())
     problems = settings.validate()
     for p in problems:
-        log.error("Konfiguration: %s", p)
+        log.error("Configuration: %s", p)
     if settings.demo_mode:
-        log.warning("DEMO_MODE ist aktiv – Anmeldung mit demo/demo, keine echte Domäne!")
+        log.warning("DEMO_MODE is active – sign in with demo/demo, no real domain!")
     yield
     task.cancel()
 

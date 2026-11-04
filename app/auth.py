@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Sitzungen im Arbeitsspeicher, Schutz vor Brute Force, CSRF.
+"""In-memory sessions, brute-force protection, CSRF.
 
-Das Passwort des angemeldeten Prüfers wird für die Dauer der Sitzung verschlüsselt (Fernet,
-Schlüssel nur im RAM dieses Prozesses) gehalten, damit ein Scan mit dessen
-Rechten laufen kann. Es wird nie in die Datenbank oder in Logs geschrieben.
-Nach Abmeldung, Timeout oder Neustart des Containers ist es weg."""
+The signed-in auditor's password is kept encrypted for the duration of the session (Fernet,
+key only in the RAM of this process) so that a scan can run with the auditor's
+rights. It is never written to the database or to logs.
+After sign-out, timeout or a container restart it is gone."""
 from __future__ import annotations
 
 import hmac
@@ -42,7 +42,7 @@ class Session:
 
 _sessions: dict[str, Session] = {}
 _failures: dict[str, list[float]] = {}
-_MAX_AGE_ABS = 12 * 3600  # absolute Höchstdauer einer Sitzung
+_MAX_AGE_ABS = 12 * 3600  # absolute maximum lifetime of a session
 
 
 def create(user: str, display: str, upn: str, bind_name: str, groups: list[str], password: str, ip: str) -> Session:
@@ -86,7 +86,7 @@ def cleanup() -> None:
                 _failures.pop(k)
 
 
-# --- Brute-Force-Schutz -------------------------------------------------------
+# --- Brute-force protection --------------------------------------------------
 
 def _keys(username: str, ip: str) -> list[str]:
     u = (username or "").lower().split("\\")[-1].split("@")[0]
@@ -112,9 +112,9 @@ def record_failure(username: str, ip: str) -> None:
 
 
 def reserve_attempt(username: str, ip: str) -> float | None:
-    """Prüft die Sperre und zählt den Versuch in einem Schritt – *bevor* das (langsame) LDAP-Bind läuft.
-    So lassen sich mit parallelen Anfragen nicht mehr Passwörter durchprobieren als erlaubt.
-    Liefert eine Marke für release_attempt() oder None, wenn gesperrt."""
+    """Checks the lockout and counts the attempt in one step – *before* the (slow) LDAP bind runs.
+    That way parallel requests cannot try more passwords than allowed.
+    Returns a mark for release_attempt(), or None if locked out."""
     now = time.time()
     window = settings.lockout_min * 60
     with _lock:
@@ -130,7 +130,7 @@ def reserve_attempt(username: str, ip: str) -> float | None:
 
 
 def release_attempt(username: str, ip: str, mark: float | None) -> None:
-    """Versuch nicht als Fehlversuch werten (Erfolg oder technischer Fehler)."""
+    """Do not count the attempt as a failure (success or technical error)."""
     if mark is None:
         return
     with _lock:
@@ -146,7 +146,7 @@ _lock_logged: dict[str, float] = {}
 
 
 def should_log_locked(username: str, ip: str) -> bool:
-    """Gesperrte Wiederholungen nur einmal je Sperrfenster protokollieren (kein Fluten des Protokolls)."""
+    """Log locked-out retries only once per lockout window (no flooding of the log)."""
     now = time.time()
     key = "|".join(_keys(username, ip))
     with _lock:
@@ -164,7 +164,7 @@ def clear_failures(username: str, ip: str) -> None:
         _failures.pop(_keys(username, ip)[0], None)
 
 
-# --- CSRF für das Login-Formular (vor der Sitzung) ----------------------------
+# --- CSRF for the sign-in form (before the session) ---------------------------
 
 def new_login_token() -> str:
     return secrets.token_urlsafe(24)
