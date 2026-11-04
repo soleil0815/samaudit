@@ -20,6 +20,19 @@ def check(cond: bool, msg: str) -> None:
     print(("ok   " if cond else "FAIL ") + msg)
     if not cond:
         failures.append(msg)
+    if not cond and os.environ.get("GITHUB_ACTIONS"):
+        print(f"::error title=Smoke test::{msg}")
+
+
+def _annotate_crash(exc_type, exc, tb):  # an unexpected exception also shows up on the pull request
+    import traceback
+    text = "".join(traceback.format_exception(exc_type, exc, tb))[-3000:]
+    if os.environ.get("GITHUB_ACTIONS"):
+        print("::error title=Smoke test crashed::" + text.replace("%", "%25").replace("\n", "%0A"))
+    sys.__excepthook__(exc_type, exc, tb)
+
+
+sys.excepthook = _annotate_crash
 
 
 # --- Rules --------------------------------------------------------------------
@@ -65,7 +78,13 @@ async def fetch(path: str, cookie: str = "") -> tuple[int, str]:
              "http_version": "1.1", "root_path": ""}
     status: dict = {"body": b""}
 
-    async def receive():
+    sent = {"request": False}
+
+    async def receive():   # first the (empty) request body, then a disconnect – like a real client
+        if sent["request"]:
+            await asyncio.sleep(0.05)
+            return {"type": "http.disconnect"}
+        sent["request"] = True
         return {"type": "http.request", "body": b"", "more_body": False}
 
     async def send(msg):
@@ -87,10 +106,31 @@ from app.version import DONATE_URL, SOURCE_URL  # noqa: E402
 _help = asyncio.run(fetch("/help"))[1]
 _login = asyncio.run(fetch("/login"))[1]
 check(DONATE_URL in _help and SOURCE_URL in _help, "help: source code and donation link")
+check("/static/img/bmc-button.svg" in _help and "buymeacoffee.com/buttons" not in _help,
+      "help: local coffee button, nothing loaded from outside")
+check(asyncio.run(get("/static/img/bmc-button.svg")) == 200, "coffee button is served locally")
 check(SOURCE_URL in _login and DONATE_URL not in _login, "sign-in: source code link, no donation link")
-for _tpl in ("base.html", "dashboard.html", "login.html"):
+for _tpl in ("dashboard.html", "login.html"):
     _src = open(os.path.join(ROOT, "app", "templates", _tpl), encoding="utf-8").read()
     check("DONATE_URL" not in _src and "buymeacoffee" not in _src, f"no donation link in {_tpl}")
+
+# sidebar: coffee button on every signed-in page except the overview "/"
+from types import SimpleNamespace  # noqa: E402
+
+from app.main import templates  # noqa: E402
+
+_sess = SimpleNamespace(display="Demo", groups=["SAMAUDIT-Users"], csrf="x")
+
+
+def _rail(path: str) -> str:
+    return templates.env.get_template("base.html").render(
+        sess=_sess, path=path, lang="en", settings=settings, news_unseen=[], request=None)
+
+
+from app.config import settings  # noqa: E402
+
+check(DONATE_URL in _rail("/scans") and "/static/img/bmc-button.svg" in _rail("/scans"), "sidebar: coffee button on /scans")
+check(DONATE_URL not in _rail("/"), "sidebar: no coffee button on the overview")
 
 # --- Parsers and protections -------------------------------------------------
 from app import webcert  # noqa: E402

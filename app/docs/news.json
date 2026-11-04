@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.1.5",
+    "date": "2026-11-04",
+    "items": [
+      {
+        "type": "notice",
+        "de": "Der offizielle „Buy me a coffee“-Knopf steht jetzt unten in der Seitenleiste (auf allen Seiten außer der Übersicht) und auf der Hilfe-Seite. Er ist im Programm gespeichert; es wird nichts aus dem Internet geladen.",
+        "en": "The official \"Buy me a coffee\" button now sits at the bottom of the sidebar (on every page except the overview) and on the Help page. It is stored in the program; nothing is loaded from the internet."
+      }
+    ]
+  },
+  {
     "version": "2.1.4",
     "date": "2026-11-04",
     "items": [

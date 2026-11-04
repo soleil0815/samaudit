@@ -4,6 +4,11 @@
 
 Programmversionen. Die wöchentlichen Sicherheitsupdates (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.1.5 – Kaffee-Knopf
+
+- Der offizielle „Buy me a coffee“-Knopf steht unten in der Seitenleiste (alle Seiten außer der Übersicht) und auf der Hilfe-Seite, lokal gespeichert (keine Anfrage an deren Server; die Sicherheitsrichtlinie bleibt `img-src 'self'`).
+- GitHub: Sponsor-Knopf (`.github/FUNDING.yml`), derselbe Knopf oben in der README und ein Link am Ende jedes Release-Textes.
+
 ## 2.1.4 – englischer Name der Prüfer-Gruppe
 
 - **Neue Standard-Prüfer-Gruppe `SAMAUDIT-Users`** (bisher `SAMAUDIT-Benutzer`), damit englischsprachige Admins wissen, was sie anlegen müssen.
