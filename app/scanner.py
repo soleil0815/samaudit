@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Führt einen Scan aus: Daten sammeln → Regeln auswerten → speichern."""
+"""Runs a scan: collect data → evaluate rules → store."""
 from __future__ import annotations
 
 import logging
@@ -27,8 +27,8 @@ class ScanBusy(Exception):
     pass
 
 
-# Datenabschnitte der Sammlung → abhängige Regeln (interne Namen). Ist ein Abschnitt beim Lesen
-# fehlgeschlagen, gelten diese Regeln als „nicht prüfbar“ – leere Daten dürfen nie „bestanden“ ergeben.
+# Collected data sections → dependent rules (internal names). If reading a section failed,
+# these rules count as "not checkable" – empty data must never result in "passed".
 SECTION_RULES = {
     "trusts": ("T-",),
     "pki_cas": ("P-ADCS-", "A-CAWeakCrypto", "P-Certighost"),
@@ -54,7 +54,7 @@ def _blocked(rule, failed: set[str]) -> bool:
 
 
 def _remember_dc_names(model: dict) -> None:
-    """DNS-Namen der DCs merken – damit das LDAPS-Pinning einen weiteren DC erkennt (siehe pins.check)."""
+    """Remember the DCs' DNS names – so LDAPS pinning recognises another DC (see pins.check)."""
     try:
         names = sorted({(c.get("dns") or "").lower() for c in model.get("computers", [])
                         if (c.get("is_dc") or c.get("is_rodc")) and c.get("dns")})
@@ -87,7 +87,7 @@ def evaluate(model: dict) -> tuple[list[dict], dict]:
             results.append(res)
             continue
         except Exception as e:  # noqa: BLE001
-            log.exception("Regel %s fehlgeschlagen", r.id)
+            log.exception("Rule %s failed", r.id)
             res.update(state="na", note="na_error", items=[{"detail": str(e)[:200]}])
             results.append(res)
             continue
@@ -175,7 +175,7 @@ def _run(scan_id: int, bind_name: str, password: str) -> None:
             model = demo.build()
         else:
             from . import ldapsrc, sysvol
-            # Berechtigung erneut prüfen (Gruppenmitgliedschaft könnte entzogen worden sein)
+            # Check authorisation again (group membership may have been revoked)
             ldapsrc.authenticate(bind_name, password)
             progress(3, "phase_start")
             conn = ldapsrc.open_connection(bind_name, password)
@@ -190,7 +190,7 @@ def _run(scan_id: int, bind_name: str, password: str) -> None:
             progress(88, "phase_sysvol")
             model["sysvol"] = sysvol.scan(model["meta"]["dc_host"], model["domain"]["fqdn"], bind_name, password,
                                           model.get("gpos", []), model.get("gpo_links", {}))
-        password = ""  # noqa: F841 – Referenz so früh wie möglich verwerfen
+        password = ""  # noqa: F841 – drop the reference as early as possible
         progress(94, "phase_rules")
         results, scores = evaluate(model)
         overview = build_overview(model)
@@ -198,7 +198,7 @@ def _run(scan_id: int, bind_name: str, password: str) -> None:
                        overview.get("fqdn") or settings.domain_fqdn)
         db.audit("act_scan_done", detail=f"#{scan_id} score={scores['global']}")
     except Exception as e:  # noqa: BLE001
-        log.exception("Scan %s fehlgeschlagen", scan_id)
+        log.exception("Scan %s failed", scan_id)
         msg = getattr(e, "code", None) or str(e) or e.__class__.__name__
         db.fail_scan(scan_id, msg)
         db.audit("act_scan_error", detail=f"#{scan_id}: {msg}")

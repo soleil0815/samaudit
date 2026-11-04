@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Eigenes Regel-ID-Schema von SAMAUDIT (ab v1.3).
+"""SAMAUDIT's own rule ID scheme (since v1.3).
 
-STL = veraltete Objekte, PRV = privilegierte Konten, TRS = Vertrauensstellungen, ANM = Anomalien.
-Die IDs sind fest vergeben und ändern sich nicht. Neue Regeln erhalten die nächste freie Nummer.
-LEGACY_IDS ordnet die internen Namen bzw. die IDs aus Versionen bis 1.2 zu, damit ältere
-Berichte in der Datenbank weiterhin angezeigt und verglichen werden können."""
+STL = stale objects, PRV = privileged accounts, TRS = trusts, ANM = anomalies.
+IDs are fixed and never change. New rules get the next free number.
+LEGACY_IDS maps the internal names and the IDs used up to version 1.2, so that older
+reports in the database can still be displayed and compared."""
 
 LEGACY_IDS = {
     "S-InactiveUsers": "STL-01",
@@ -112,13 +112,13 @@ LEGACY_IDS = {
     "A-PSLogging": "ANM-41",
     "A-LSAProtection": "ANM-42",
     "A-ScriptPasswords": "ANM-43",
-    # ab v1.9
+    # since v1.9
     "S-KerberosRC4": "STL-21",
     "S-WeakCertMapping": "STL-22",
     "P-ADCS-ESC17": "PRV-36",
     "P-dMSA": "PRV-37",
     "A-UPNSPNUniqueness": "ANM-44",
-    # ab v2.1
+    # since v2.1
     "P-ADCS-ESC13": "PRV-38",
     "P-KDSRootKey": "PRV-39",
     "P-GMSAReaders": "PRV-40",

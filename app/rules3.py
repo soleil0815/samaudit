@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Prüfkatalog Teil 3 (ab v1.9): Neuerungen 2025/2026 – Kerberos-RC4-Abschaltung, schwache
-Zertifikatszuordnungen, ESC17, delegierte MSAs (BadSuccessor) und UPN/SPN-Missbrauch."""
+"""Rule catalogue part 3 (since v1.9): 2025/2026 changes – Kerberos RC4 deprecation, weak
+certificate mappings, ESC17, delegated MSAs (BadSuccessor) and UPN/SPN abuse."""
 from __future__ import annotations
 
 import unicodedata
@@ -20,7 +20,7 @@ ENC_AES = 0x18
 
 
 # ===========================================================================
-# VERALTETE OBJEKTE
+# STALE OBJECTS
 # ===========================================================================
 
 @rule(id="S-KerberosRC4", category="stale", severity="medium", points=8,
@@ -47,7 +47,7 @@ ENC_AES = 0x18
       refs=[("Microsoft KB5073381 (CVE-2026-20833)", f"{KB}/5073381")])
 def _rc4(ctx: Ctx):
     items = []
-    rodc_group = ctx.group(521)          # entsteht mit der ersten 2008er-Schemaerweiterung → ab dann AES-Schlüssel
+    rodc_group = ctx.group(521)          # created by the first 2008 schema extension → AES keys from then on
     aes_since = (rodc_group or {}).get("created")
     for a in ctx.accounts:
         if not a.get("enabled") and a.get("rid") != 502:
@@ -58,7 +58,7 @@ def _rc4(ctx: Ctx):
             continue
         service = a.get("_kind") == "user" and not a.get("is_gmsa") and (a.get("spns") or a.get("rid") == 502)
         pls = a.get("pwd_last_set")
-        # nur ohne eigene Einstellung betroffen; 1 Tag Spielraum für Konten aus der Einrichtung der Domäne
+        # only affected without an explicit setting; 1 day of leeway for accounts created during domain setup
         if service and not enc and aes_since and pls and pls < aes_since - timedelta(days=1):
             items.append(acc(a, detail="@v_no_aes_keys"))
     try:
@@ -74,12 +74,12 @@ def _rc4(ctx: Ctx):
 
 
 def _mapping_kind(v: str) -> str | None:
-    """Schwache explizite Zuordnung in altSecurityIdentities? (KB5014754)"""
+    """Weak explicit mapping in altSecurityIdentities? (KB5014754)"""
     s = v.strip().lower()
     if not s.startswith("x509:"):
         return None
     if "<sr>" in s or "<ski>" in s or "<sha1-pukey>" in s:
-        return None                       # stark: Aussteller+Seriennummer, SKI, Schlüssel-Hash
+        return None                       # strong: issuer+serial number, SKI, key hash
     if "<rfc822>" in s:
         return "X509RFC822"
     if "<i>" in s and "<s>" in s:
@@ -120,7 +120,7 @@ def _weak_mapping(ctx: Ctx):
 
 
 # ===========================================================================
-# PRIVILEGIERTE KONTEN
+# PRIVILEGED ACCOUNTS
 # ===========================================================================
 
 @rule(id="P-ADCS-ESC17", category="privileged", severity="high", points=15,
@@ -152,7 +152,7 @@ def _esc17(ctx: Ctx):
             continue
         ekus = set(t.get("ekus") or [])
         if SERVER_AUTH not in ekus or ekus & AUTH_EKUS:
-            continue                      # mit Clientauthentifizierung bereits ESC1
+            continue                      # with client authentication already ESC1
         who = _lowpriv_enroll(ctx, t)
         if who:
             items.append({"template": t["display"], "principal": ", ".join(who),
@@ -189,7 +189,7 @@ def _dmsa(ctx: Ctx):
     if not d.get("schema"):
         return None
     if not any("2025" in (c.get("os") or "") for c in ctx.computers if c.get("is_dc") or c.get("is_rodc")):
-        return None                       # ohne DC mit Windows Server 2025 gibt es keinen dMSA-Mechanismus
+        return None                       # without a Windows Server 2025 DC there is no dMSA mechanism
     excluded = ctx.safe_sids() | {pg["group"].get("sid") for pg in ctx.priv_groups if pg.get("admin")}
     guid = (d.get("guid") or "").lower()
     found: dict[str, list[str]] = {}
@@ -199,7 +199,7 @@ def _dmsa(ctx: Ctx):
             if not ace.get("allow") or ace.get("flags", 0) & 0x08 or not sid or sid in excluded:
                 continue
             if ace.get("inherited_object_type"):
-                continue                  # gilt nur für bestimmte untergeordnete Klassen
+                continue                  # applies only to certain child classes
             m, ot = ace.get("mask", 0), (ace.get("object_type") or "").lower()
             if m & ADS_RIGHT_GENERIC_ALL or (m & ADS_RIGHT_DS_CREATE_CHILD and ot in ("", guid)):
                 found.setdefault(sid, []).append(c["dn"])
@@ -222,7 +222,7 @@ def _dmsa(ctx: Ctx):
 
 
 # ===========================================================================
-# ANOMALIEN
+# ANOMALIES
 # ===========================================================================
 
 def _invisible(ch: str) -> bool:
@@ -294,5 +294,5 @@ def _uniqueness(ctx: Ctx):
     return Hit(items) if serious else Hit(items, severity="medium", points=8)
 
 
-# Prüfkatalog Teil 4 (ab v2.1)
+# Rule catalogue part 4 (since v2.1)
 from . import rules4  # noqa: E402,F401

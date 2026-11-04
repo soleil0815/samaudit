@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Kleine SVG-Grafiken für die Weboberfläche (ohne JS-Bibliotheken).
-Farben kommen aus CSS-Variablen, damit Hell/Dunkel automatisch passt."""
+"""Small SVG graphics for the web UI (no JS libraries).
+Colours come from CSS variables, so light/dark mode adapts automatically."""
 from __future__ import annotations
 
 import math
@@ -17,7 +17,7 @@ def level_class(score: int | None) -> str:
 
 
 def seal(score: int | None, lang: str, size: int = 220) -> str:
-    """Das „Prüfsiegel“: Skala mit 50 Teilstrichen, gefüllt bis zum Risikowert."""
+    """The "audit seal": a scale with 50 ticks, filled up to the risk score."""
     s = 0 if score is None else max(0, min(100, int(score)))
     cx = cy = size / 2
     r_out = size / 2 - 6
@@ -47,7 +47,7 @@ def seal(score: int | None, lang: str, size: int = 220) -> str:
 
 
 def trend(points: list[tuple[str, int, int]], lang: str, width: int = 560, height: int = 180) -> str:
-    """points: [(label, score, scan_id)] chronologisch."""
+    """points: [(label, score, scan_id)] in chronological order."""
     if len(points) < 2:
         return ""
     pad_l, pad_r, pad_t, pad_b = 34, 14, 12, 26
@@ -76,7 +76,7 @@ def trend(points: list[tuple[str, int, int]], lang: str, width: int = 560, heigh
 
 
 def hbars(rows: list[tuple[str, int]], width: int = 520, unit: str = "") -> str:
-    """Einfache horizontale Balken (eine Farbe), Werte direkt beschriftet."""
+    """Simple horizontal bars (one colour), values labelled directly."""
     if not rows:
         return ""
     bar_h, gap, label_w = 14, 12, 210
@@ -93,7 +93,7 @@ def hbars(rows: list[tuple[str, int]], width: int = 520, unit: str = "") -> str:
 
 
 def login_dial() -> str:
-    """Dekorative Skala für die Anmeldeseite."""
+    """Decorative scale for the login page."""
     size, n = 520, 72
     c = size / 2
     out = []

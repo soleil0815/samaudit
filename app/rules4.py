@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Prüfkatalog Teil 4 (ab v2.1): ESC13, Golden gMSA/dMSA, gMSA-Kennwortleser, Certighost (CVE-2026-54121)
-und Gruppenrichtlinien, die den Anmeldeschutz lockern."""
+"""Rule catalogue part 4 (since v2.1): ESC13, Golden gMSA/dMSA, gMSA password readers, Certighost (CVE-2026-54121)
+and group policies that weaken logon protection."""
 from __future__ import annotations
 
 from .adutil import ADS_RIGHT_GENERIC_ALL
@@ -23,7 +23,7 @@ def _pki(ctx: Ctx) -> dict:
 
 
 # ===========================================================================
-# PRIVILEGIERTE KONTEN
+# PRIVILEGED ACCOUNTS
 # ===========================================================================
 
 @rule(id="P-ADCS-ESC13", category="privileged", severity="high", points=15,
@@ -54,7 +54,7 @@ def _esc13(ctx: Ctx):
             continue
         ekus = set(t.get("ekus") or [])
         if ekus and not ekus & AUTH_EKUS:
-            continue                          # ohne Anmeldezweck keine Kerberos-Anmeldung
+            continue                          # no Kerberos logon without a logon EKU
         groups = [links[p] for p in t.get("policies") or [] if p in links]
         if not groups:
             continue
@@ -65,7 +65,7 @@ def _esc13(ctx: Ctx):
             g = ctx.by_dn.get((o["group"] or "").lower())
             gt = (g or {}).get("group_type")
             if gt is not None and not gt & UNIVERSAL_GROUP:
-                continue                      # AD wertet die Verknüpfung nur für universelle Gruppen aus
+                continue                      # AD only evaluates the link for universal groups
             priv = g is not None and _group_is_priv(ctx, g)
             critical = critical or priv
             items.append({"template": t["display"], "principal": ", ".join(who),
@@ -76,7 +76,7 @@ def _esc13(ctx: Ctx):
 
 
 def _group_is_priv(ctx: Ctx, g: dict) -> bool:
-    """Gruppe ist selbst privilegiert oder (verschachtelt) Mitglied einer privilegierten Gruppe."""
+    """Group is privileged itself or a (nested) member of a privileged group."""
     for pg in ctx.priv_groups:
         pgg = pg["group"]
         if pgg["dn"].lower() == g["dn"].lower() or (g.get("sid") and g["sid"] in ctx.nested_principals(pgg)):
@@ -84,12 +84,12 @@ def _group_is_priv(ctx: Ctx, g: dict) -> bool:
     return False
 
 
-KDS_CLASS = "aa02fd41-17e0-4f18-8687-b2239649736b"        # schemaIDGUID von msKds-ProvRootKey
+KDS_CLASS = "aa02fd41-17e0-4f18-8687-b2239649736b"        # schemaIDGUID of msKds-ProvRootKey
 
 
 def _kds_rights(aces: list[dict], attr_guid: str | None, container: bool) -> tuple[dict, dict]:
-    """Je SID: liest den Schlüssel? (vertrauliches Attribut: Eigenschaft lesen UND erweitertes Recht) /
-    darf sich Rechte verschaffen (WriteDACL, WriteOwner, GenericAll/GenericWrite)?"""
+    """Per SID: can it read the key? (confidential attribute: read property AND extended right) /
+    can it grant itself rights (WriteDACL, WriteOwner, GenericAll/GenericWrite)?"""
     from .adutil import ADS_RIGHT_DS_CONTROL_ACCESS, ace_grants_control
     rp: dict[str, bool] = {}
     ca: dict[str, bool] = {}
@@ -103,7 +103,7 @@ def _kds_rights(aces: list[dict], attr_guid: str | None, container: bool) -> tup
                 continue
             iot = (ace.get("inherited_object_type") or "").lower()
             if iot and iot != KDS_CLASS:
-                continue                      # wird nur an andere Objektklassen vererbt
+                continue                      # only inherited by other object classes
         elif fl & INHERIT_ONLY:
             continue
         sid, m, ot = ace["sid"], ace.get("mask", 0), (ace.get("object_type") or "").lower()
@@ -146,12 +146,12 @@ def _kds(ctx: Ctx):
     if k is None:
         raise NotApplicable("na_unknown")
     if not k.get("present"):
-        return None                           # kein KDS-Container → keine gMSA/dMSA
+        return None                           # no KDS container → no gMSA/dMSA
     safe = ctx.safe_sids()
     guid = k.get("attr_guid")
     items = []
     if k.get("readable"):
-        # SAMAUDIT läuft mit einem normalen Konto – kann es den Schlüssel lesen, können es viele
+        # SAMAUDIT runs with a normal account – if it can read the key, so can many others
         items.append({"principal": "@v_kds_auditor", "dn": k.get("dn") or "", "detail": "@v_kds_readable"})
     found: dict[tuple[str, str], set[str]] = {}
     sources = [(k.get("dn") or "", (k.get("container_sd") or {}).get("aces") or [], True)]
@@ -168,7 +168,7 @@ def _kds(ctx: Ctx):
         items.append({"principal": ctx.name(sid), "dn": sorted(dns)[0], "detail": f"{detail}|{len(dns)}"})
     if items:
         return Hit(items)
-    # Standard: die Schlüsselobjekte selbst sind für normale Konten unsichtbar – dann ist nur der Container prüfbar
+    # Default: the key objects themselves are invisible to normal accounts – then only the container can be checked
     managed = any(u.get("is_gmsa") for u in ctx.users)
     if any(key.get("sd") is None for key in k.get("keys") or []) or (not k.get("keys") and managed):
         raise NotApplicable("na_kds_hidden")
@@ -265,11 +265,11 @@ def _certighost(ctx: Ctx):
 
 
 # ===========================================================================
-# ANOMALIEN
+# ANOMALIES
 # ===========================================================================
 
 LOOSENING = [
-    # (Registry-Wert, schwacher Wert, Kennung des Details)
+    # (registry value, weak value, detail key)
     (r"Control\Lsa\LimitBlankPasswordUse", 0, "v_gpo_blank_pw"),
     (r"Control\Lsa\RestrictAnonymousSAM", 0, "v_gpo_anon_sam"),
     (r"Control\Lsa\EveryoneIncludesAnonymous", 1, "v_gpo_everyone_anon"),
@@ -307,7 +307,7 @@ def _gpo_anonymous(ctx: Ctx):
         for key, weak, detail in LOOSENING:
             try:
                 vals = gpo_values(ctx, [g], key)
-            except NotApplicable as e:     # z. B. GPO mit Sicherheitsfilter – die übrigen trotzdem auswerten
+            except NotApplicable as e:     # e.g. GPO with security filtering – still evaluate the others
                 unreadable = e
                 break
             for _, v in vals:
