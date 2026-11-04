@@ -43,6 +43,10 @@
       <a href="/help" {% if path == '/help' %}aria-current="page"{% endif %}>{{ icon('help') }}{{ t('nav_help', lang) }}</a>
     </nav>
     <div class="rail-foot">
+      {# voluntary support: on every page except the overview (the owner's wish); local image, nothing loaded #}
+      {% if sess and path != '/' %}<a href="{{ DONATE_URL }}" target="_blank" rel="noopener noreferrer" class="bmc-rail"
+         title="{{ 'Einen Kaffee spendieren' if lang == 'de' else 'Buy me a coffee' }}"><img src="/static/img/bmc-button.svg"
+         alt="{{ 'Einen Kaffee spendieren' if lang == 'de' else 'Buy me a coffee' }}" width="150" height="42"></a>{% endif %}
       {% if sess %}<div class="who-row">
         <div class="who">{{ sess.display }}<small>{{ sess.groups|join(', ') }}</small></div>
         <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ sess.csrf }}"><button class="logout-btn" type="submit" title="{{ t('logout', lang) }}" aria-label="{{ t('logout', lang) }}">{{ icon('logout') }}</button></form>

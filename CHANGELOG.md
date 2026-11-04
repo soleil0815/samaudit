@@ -4,6 +4,11 @@
 
 Program versions. Weekly security updates (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.1.5 – coffee button
+
+- The official "Buy me a coffee" button sits at the bottom of the sidebar (every page except the overview) and on the Help page, stored locally (no request to their servers; the Content Security Policy stays `img-src 'self'`).
+- GitHub: Sponsor button (`.github/FUNDING.yml`), the same button at the top of the README and a link at the end of each release note.
+
 ## 2.1.4 – English auditor group name
 
 - **New default auditor group `SAMAUDIT-Users`** (was `SAMAUDIT-Benutzer`), so English-speaking admins know what to create.
