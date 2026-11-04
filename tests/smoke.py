@@ -20,6 +20,19 @@ def check(cond: bool, msg: str) -> None:
     print(("ok   " if cond else "FAIL ") + msg)
     if not cond:
         failures.append(msg)
+    if not cond and os.environ.get("GITHUB_ACTIONS"):
+        print(f"::error title=Smoke test::{msg}")
+
+
+def _annotate_crash(exc_type, exc, tb):  # an unexpected exception also shows up on the pull request
+    import traceback
+    text = "".join(traceback.format_exception(exc_type, exc, tb))[-3000:]
+    if os.environ.get("GITHUB_ACTIONS"):
+        print("::error title=Smoke test crashed::" + text.replace("%", "%25").replace("\n", "%0A"))
+    sys.__excepthook__(exc_type, exc, tb)
+
+
+sys.excepthook = _annotate_crash
 
 
 # --- Rules --------------------------------------------------------------------
