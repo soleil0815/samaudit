@@ -140,7 +140,7 @@ jobs:
           mapfile -t tags < <(git tag -l 'v*')
           version="$(python3 tools/lockutil.py next-version "$app" "${tags[@]}")"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Sicherheitsupdate $version (Programm $app)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Security update $version (program $app)" >> "$GITHUB_STEP_SUMMARY"
       - id: commit
         name: Commit locks and change log (local, pushed after publishing)
         shell: bash
