@@ -1,6 +1,8 @@
 # SAMAUDIT – Active Directory security assessment
 
-**English** · [Deutsch](README.de.md) · [Manual](app/docs/manual.en.md) · [Changelog](CHANGELOG.md) · [Support the project ☕](#support)
+**English** · [Deutsch](README.de.md) · [Manual](app/docs/manual.en.md) · [Changelog](CHANGELOG.md)
+
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-%E2%98%95-FFDD00?style=flat)](https://buymeacoffee.com/soleil0815v)
 
 Self-hosted web application that reads a Windows or Samba AD domain, runs **115 security checks** and presents the result as a risk score (0–100), a detailed report with remediation advice, and a PDF export – in English or German. It runs as a single Docker container, signs in with a normal (non-admin) domain account and sends no data anywhere.
 

@@ -1,6 +1,8 @@
 # SAMAUDIT – Sicherheitsprüfung für Active Directory
 
-[English](README.md) · **Deutsch** · [Handbuch](app/docs/handbuch.de.md) · [Änderungen](CHANGELOG.de.md) · [Projekt unterstützen ☕](#unterstützen)
+[English](README.md) · **Deutsch** · [Handbuch](app/docs/handbuch.de.md) · [Änderungen](CHANGELOG.de.md)
+
+[![Einen Kaffee spendieren](https://img.shields.io/badge/Einen%20Kaffee%20spendieren-%E2%98%95-FFDD00?style=flat)](https://buymeacoffee.com/soleil0815v)
 
 Selbst gehostete Webanwendung, die eine Windows- oder Samba-AD-Domäne ausliest, **115 Sicherheitsprüfungen** durchführt und das Ergebnis als Risikowert (0–100), detaillierten Bericht mit Maßnahmen und PDF ausgibt – auf Deutsch oder Englisch. Sie läuft als ein einzelner Docker-Container, meldet sich mit einem normalen (Nicht-Admin-)Domänenkonto an und sendet keine Daten nach außen.
 
