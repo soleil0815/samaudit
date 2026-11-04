@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
-/* SAMAUDIT – kleine Helfer, ohne externe Bibliotheken (CSP: nur 'self'). */
+/* SAMAUDIT – small helpers, no external libraries (CSP: 'self' only). */
 (function () {
   "use strict";
   var root = document.documentElement;
 
-  // Darstellung: dunkel (Standard) oder hell – nur Komfort, darf fehlschlagen
+  // Theme: dark (default) or light – convenience only, may fail
   function getTheme() { try { return localStorage.getItem("samaudit-theme") === "light" ? "light" : "dark"; } catch (e) { return "dark"; } }
   function applyTheme(v) {
     if (v === "light") root.setAttribute("data-theme", "light"); else root.removeAttribute("data-theme");
@@ -17,11 +17,11 @@
     var b = ev.target.closest("[data-theme-btn]");
     if (!b) return;
     var next = getTheme() === "light" ? "dark" : "light";
-    try { localStorage.setItem("samaudit-theme", next); } catch (e) { /* ignorieren */ }
+    try { localStorage.setItem("samaudit-theme", next); } catch (e) { /* ignore */ }
     applyTheme(next);
   });
 
-  // Code kopieren
+  // Copy code
   document.addEventListener("click", function (ev) {
     var b = ev.target.closest("[data-copy]");
     if (!b) return;
@@ -33,7 +33,7 @@
     });
   });
 
-  // Tabellen filtern
+  // Filter tables
   document.addEventListener("input", function (ev) {
     var inp = ev.target.closest("[data-filter]");
     if (!inp) return;
@@ -45,7 +45,7 @@
     });
   });
 
-  // Sicherheitsabfrage
+  // Confirmation prompt
   document.addEventListener("submit", function (ev) {
     var f = ev.target;
     var msg = f.getAttribute("data-confirm");
@@ -54,7 +54,7 @@
     if (btn) { btn.disabled = true; btn.textContent = btn.getAttribute("data-busy"); }
   });
 
-  // Tooltips im Verlaufsdiagramm
+  // Tooltips in the trend chart
   var tip = null;
   document.addEventListener("mouseover", function (ev) {
     var g = ev.target.closest && ev.target.closest(".pt[data-tip]");
@@ -67,7 +67,7 @@
     tip.hidden = false;
   });
 
-  // Anker im Bericht: Befund automatisch aufklappen
+  // Anchor in the report: expand the finding automatically
   function openHash() {
     if (!location.hash) return;
     var el = document.getElementById(location.hash.slice(1));
@@ -76,7 +76,7 @@
   window.addEventListener("hashchange", openHash);
   openHash();
 
-  // Scan-Fortschritt
+  // Scan progress
   var prog = document.querySelector("[data-scan-status]");
   if (prog) {
     var url = prog.getAttribute("data-scan-status");

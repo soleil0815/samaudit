@@ -219,7 +219,7 @@ class Workflows(unittest.TestCase):
 
 
 class ComposeTemplate(unittest.TestCase):
-    """docker-compose.yml: dieselbe Härtung wie der frühere Start durch update.sh (darf nicht verloren gehen)."""
+    """docker-compose.yml: the same hardening as the former start by update.sh (must not get lost)."""
 
     def setUp(self):
         self.compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())

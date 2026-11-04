@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""SYSVOL-Auswertung über SMB mit den Anmeldedaten des Admins:
-- Group Policy Preferences mit gespeicherten Passwörtern (cpassword, Autologon)
-- Sicherheitsvorlagen (GptTmpl.inf), Administrative Vorlagen (Registry.pol),
-  erweiterte Überwachungsrichtlinie (audit.csv)
-- Anmeldeskripte (NETLOGON, GPO-Skripte) mit möglichen Klartext-Passwörtern"""
+"""SYSVOL analysis over SMB with the signed-in user's credentials:
+- Group Policy Preferences with stored passwords (cpassword, autologon)
+- security templates (GptTmpl.inf), administrative templates (Registry.pol),
+  advanced audit policy (audit.csv)
+- logon scripts (NETLOGON, GPO scripts) with possible plain-text passwords"""
 from __future__ import annotations
 
 import logging
@@ -45,7 +45,7 @@ def _decode(data: bytes) -> str:
 
 
 class CIDict(dict):
-    """Wörterbuch mit Schlüsseln ohne Beachtung der Groß-/Kleinschreibung (wie Windows bei INF-Dateien)."""
+    """Dictionary with case-insensitive keys (like Windows for INF files)."""
 
     def __init__(self, *a, **kw):
         super().__init__()
@@ -69,9 +69,9 @@ class CIDict(dict):
 
 
 def parse_gpttmpl(text: str) -> dict:
-    """GptTmpl.inf zeilenweise lesen – robust wie Windows selbst: Zeilen ohne „=“ (z. B. in
-    [Service General Setting]: "Spooler",4,"") werden als Name + Rest nach dem ersten Komma gelesen,
-    statt die ganze Datei zu verwerfen. Abschnitte und Schlüssel ohne Groß-/Kleinschreibung."""
+    """Read GptTmpl.inf line by line – as robust as Windows itself: lines without "=" (e.g. in
+    [Service General Setting]: "Spooler",4,"") are read as name + rest after the first comma,
+    instead of discarding the whole file. Sections and keys are case-insensitive."""
     out: CIDict = CIDict()
     sec: CIDict | None = None
     for raw in text.splitlines():
@@ -94,7 +94,7 @@ def parse_gpttmpl(text: str) -> dict:
 
 
 def parse_registry_pol(b: bytes) -> dict:
-    """Registry.pol (PReg) → {'schlüssel\\wert' (klein): Wert}."""
+    """Registry.pol (PReg) → {'key\\value' (lower case): data}."""
     out: dict[str, object] = {}
     if len(b) < 8 or b[:4] != b"PReg":
         return out
@@ -140,7 +140,7 @@ def parse_registry_pol(b: bytes) -> dict:
 
 
 def parse_audit_csv(text: str) -> dict:
-    """audit.csv → {subcategory-GUID (klein) oder Name: Setting Value}."""
+    """audit.csv → {subcategory GUID (lower case) or name: Setting Value}."""
     import csv
     import io
     csv.field_size_limit(10_000_000)
@@ -185,7 +185,7 @@ def scan(server: str, fqdn: str, username: str, password: str, gpos: list[dict],
         import smbclient
         from smbclient import path as smbpath
     except ImportError as e:
-        result.update(status="error", error=f"smbprotocol fehlt: {e}")
+        result.update(status="error", error=f"@err_smb_missing|{e}")   # translated with tv() in the report
         return result
 
     try:
@@ -224,7 +224,7 @@ def scan(server: str, fqdn: str, username: str, password: str, gpos: list[dict],
                     if data:
                         try:
                             _scan_script(data, label + full[len(folder):], result["script_secrets"])
-                        except Exception as e:  # noqa: BLE001 – eine kaputte Datei stoppt nicht den Rest
+                        except Exception as e:  # noqa: BLE001 – one broken file does not stop the rest
                             log.debug("script %s: %s", full, e)
         except Exception as e:  # noqa: BLE001
             log.debug("scripts %s: %s", folder, e)
@@ -259,13 +259,13 @@ def scan(server: str, fqdn: str, username: str, password: str, gpos: list[dict],
                         if _AUTOLOGON.search(data):
                             result["gpp_passwords"].append({"gpo": gname, "guid": guid, "file": short,
                                                             "accounts": "Autologon (DefaultPassword)"})
-            # 2) Administrative Vorlagen
+            # 2) Administrative templates
             pol = read(rf"{base}\{scope}\Registry.pol")
             if pol:
                 result["regpol"].setdefault(guid, {})[scope.lower()] = parse_registry_pol(pol)
-            # 3) Skripte in GPOs
+            # 3) Scripts in GPOs
             scan_scripts(rf"{base}\{scope}\Scripts", rf"{gname}\{scope}\Scripts", "gpo")
-        # 4) Sicherheitsvorlage und erweiterte Überwachung
+        # 4) Security template and advanced audit policy
         inf = read(rf"{base}\Machine\Microsoft\Windows NT\SecEdit\GptTmpl.inf", 1_000_000)
         if inf:
             result["secedit"][guid] = parse_gpttmpl(_decode(inf))
@@ -287,14 +287,14 @@ def scan(server: str, fqdn: str, username: str, password: str, gpos: list[dict],
             base = rf"{root}\{entry.name}"
             gname = names.get(guid, guid)
             if not gpo_readable(base):
-                result["unreadable_gpos"].append(guid)   # z. B. Sicherheitsfilterung: nicht als „leer“ werten
+                result["unreadable_gpos"].append(guid)   # e.g. security filtering: do not count as "empty"
                 continue
             try:
                 _scan_gpo(base, guid, gname)
-            except Exception as e:  # noqa: BLE001 – eine GPO darf nicht den ganzen SYSVOL-Scan beenden
+            except Exception as e:  # noqa: BLE001 – one GPO must not end the whole SYSVOL scan
                 log.warning("GPO %s: %s", guid, e)
                 result["unreadable_gpos"].append(guid)
-        # 5) NETLOGON (eigenes Kontingent)
+        # 5) NETLOGON (separate budget)
         scan_scripts(rf"{sysvol}\scripts", "NETLOGON", "netlogon")
     except Exception as e:  # noqa: BLE001
         result.update(status="error", error=str(e)[:300])

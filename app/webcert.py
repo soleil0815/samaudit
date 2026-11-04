@@ -1,15 +1,18 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""HTTPS-Zertifikat der Weboberfläche – eigenes Zertifikat ohne Reverse Proxy.
+"""HTTPS certificate of the web interface – own certificate without a reverse proxy.
 
-Reihenfolge:
-1. Über die Weboberfläche hochgeladen (Seite „Verbindung“) – gespeichert in data/tls/custom.
-2. Im Ordner certs abgelegt (oder per TLS_PFX / TLS_CERT / TLS_KEY ausgewählt).
-3. Sonst: selbstsigniertes Zertifikat in data/tls (wird einmalig erzeugt).
+Order:
+1. Uploaded via the web interface ("Connection" page) – stored in data/tls/custom.
+2. Placed in the certs folder (or selected with TLS_PFX / TLS_CERT / TLS_KEY).
+3. Otherwise: self-signed certificate in data/tls (generated once).
 
-Erkannt werden PFX/PKCS#12 (z. B. Export aus der Windows-CA) sowie Zertifikat + privater Schlüssel
-als PEM oder DER, auch mit verschlüsseltem Schlüssel. Zwischenzertifikate werden automatisch als Kette
-angehängt. Ein neues Zertifikat wird ohne Neustart aktiv (gilt für neue Verbindungen)."""
+Recognised are PFX/PKCS#12 (e.g. exported from a Windows CA) and certificate + private key
+as PEM or DER, also with an encrypted key. Intermediate certificates are attached automatically as the
+chain. A new certificate becomes active without a restart (applies to new connections).
+
+CertError messages are i18n keys ("certerr_*" in app/i18n.py): the web interface shows them in the
+user's language, str() gives the English text for logs."""
 from __future__ import annotations
 
 import datetime as dt
@@ -31,6 +34,7 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 from .config import settings
+from .i18n import t
 
 log = logging.getLogger("samaudit.tls")
 
@@ -39,21 +43,21 @@ MAX_FILE = 64 * 1024
 MAX_FILES = 10
 
 LOG_TEXT = {
-    "cert_expired": "abgelaufen",
-    "cert_expiring": "läuft in weniger als 30 Tagen ab",
-    "cert_host_mismatch": "PUBLIC_HOSTNAME steht nicht im Zertifikat (Browserwarnung möglich)",
+    "cert_expired": "expired",
+    "cert_expiring": "expires in less than 30 days",
+    "cert_host_mismatch": "PUBLIC_HOSTNAME is not in the certificate (browser warning possible)",
 }
 
-# Wird von prepare() gesetzt und unter „Verbindung“ angezeigt
+# Set by prepare() and shown on the "Connection" page
 INFO: dict = {}
-# Austausch ohne Neustart: der Webserver-Kontext (run.py) leitet jeden Verbindungsaufbau per
-# SNI-Rückruf auf den jeweils aktuellen Kontext um (_current), sobald ein neues Zertifikat aktiv ist.
+# Replacement without restart: the web server context (run.py) redirects every handshake via the
+# SNI callback to the current context (_current) as soon as a new certificate is active.
 _current: ssl.SSLContext | None = None
 _tmpdir: str | None = None
 _lock = threading.Lock()
 
 
-# Nur Verfahren mit Vorwärtsgeheimnis und AEAD (gilt für TLS 1.2; TLS 1.3 ist ohnehin sicher)
+# Only ciphers with forward secrecy and AEAD (applies to TLS 1.2; TLS 1.3 is secure anyway)
 CIPHERS = "ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!eNULL:!MD5:!DSS:!SHA1"
 
 
@@ -71,7 +75,7 @@ def new_context(cert_p: str, key_p: str) -> ssl.SSLContext:
 
 
 def attach(base: ssl.SSLContext) -> None:
-    """Vom Start aufgerufen: Webserver-Kontext härten und für spätere Zertifikatswechsel vorbereiten."""
+    """Called at startup: harden the web server context and prepare it for later certificate changes."""
     _harden(base)
 
     def _sni(sslobj, _server_name, _ctx):
@@ -84,7 +88,15 @@ def attach(base: ssl.SSLContext) -> None:
 
 
 class CertError(Exception):
-    pass
+    """Certificate problem. `key` is an i18n key, `kw` its parameters; `folder` prefixes "certs folder: "."""
+
+    def __init__(self, key: str, folder: bool = False, **kw):
+        self.key, self.folder, self.kw = key, folder, kw
+        super().__init__(self.text("en"))
+
+    def text(self, lang: str) -> str:
+        msg = t(self.key, lang, **self.kw)
+        return f"{t('certerr_folder', lang)}: {msg}" if self.folder else msg
 
 
 def _custom_dir() -> str:
@@ -92,7 +104,7 @@ def _custom_dir() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Hilfsfunktionen
+# Helpers
 # ---------------------------------------------------------------------------
 
 def _read(path: str) -> bytes:
@@ -112,7 +124,7 @@ def _pem_key(data: bytes, password: str | None, name: str):
     while start != -1:
         line_end = data.find(b"-----", start + 11)
         if line_end == -1:
-            break                         # unvollständige Kopfzeile
+            break                         # incomplete header line
         label = data[start + 11:line_end]
         if label.endswith(b"PRIVATE KEY"):
             end_marker = b"-----END " + label + b"-----"
@@ -122,10 +134,10 @@ def _pem_key(data: bytes, password: str | None, name: str):
                 return serialization.load_pem_private_key(block, password.encode() if password else None)
             except TypeError as e:
                 if password:
-                    raise CertError(f"{name}: Der Schlüssel ist nicht verschlüsselt – Passwort weglassen.") from e
-                raise CertError(f"{name}: Der private Schlüssel ist verschlüsselt – bitte Passwort angeben.") from e
+                    raise CertError("certerr_key_not_encrypted", name=name) from e
+                raise CertError("certerr_key_encrypted", name=name) from e
             except ValueError as e:
-                raise CertError(f"{name}: Passwort für den privaten Schlüssel ist falsch.") from e
+                raise CertError("certerr_key_password", name=name) from e
         start = data.find(b"-----BEGIN ", max(line_end + 5, start + 1))
     return None
 
@@ -159,12 +171,12 @@ def _sans(cert: x509.Certificate) -> list[str]:
 def _not_after(cert: x509.Certificate) -> dt.datetime:
     try:
         return cert.not_valid_after_utc
-    except AttributeError:  # ältere cryptography-Versionen
+    except AttributeError:  # older cryptography versions
         return cert.not_valid_after.replace(tzinfo=dt.timezone.utc)
 
 
 def _build_chain(leaf: x509.Certificate, pool: list[x509.Certificate]) -> list[x509.Certificate]:
-    """Hängt passende Zwischenzertifikate an (Aussteller-Name + Signatur), ohne Wurzel-CA."""
+    """Appends matching intermediate certificates (issuer name + signature), without the root CA."""
     chain, cur = [leaf], leaf
     for _ in range(8):
         if cur.issuer == cur.subject:
@@ -178,7 +190,7 @@ def _build_chain(leaf: x509.Certificate, pool: list[x509.Certificate]) -> list[x
                     continue
                 nxt = c
                 break
-        if nxt is None or nxt.issuer == nxt.subject:  # Wurzel nicht mitsenden
+        if nxt is None or nxt.issuer == nxt.subject:  # do not send the root
             break
         chain.append(nxt)
         cur = nxt
@@ -195,26 +207,26 @@ def _host_matches(host: str, sans: list[str]) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Dateien auswerten (Inhalt entscheidet, nicht die Dateiendung)
+# Analyse files (the content decides, not the file extension)
 # ---------------------------------------------------------------------------
 
 def analyze(files: list[tuple[str, bytes]], password: str | None, ca_only_ok: bool = False):
-    """Sucht in den Dateien ein Server-Zertifikat mit passendem privatem Schlüssel.
+    """Looks for a server certificate with a matching private key in the files.
 
-    Liefert (Zertifikat, Schlüssel, alle Zertifikate, Quelle) oder None, wenn gar nichts Verwertbares
-    dabei ist. Wirft CertError mit verständlicher Meldung bei Problemen."""
+    Returns (certificate, key, all certificates, source) or None if there is nothing usable
+    at all. Raises CertError with an understandable message on problems."""
     certs: list[tuple[x509.Certificate, str]] = []
     keys: list[tuple[object, str]] = []
     for name, data in files:
         if len(data) > MAX_FILE:
-            raise CertError(f"{name}: Datei ist zu groß für ein Zertifikat.")
+            raise CertError("certerr_too_large", name=name)
         if b"-----BEGIN " in data:
             certs += [(c, name) for c in _pem_certs(data)]
             k = _pem_key(data, password, name)
             if k is not None:
                 keys.append((k, name))
             continue
-        # Binär: DER-Zertifikat, DER-Schlüssel oder PFX
+        # Binary: DER certificate, DER key or PFX
         try:
             certs.append((x509.load_der_x509_certificate(data), name))
             continue
@@ -229,8 +241,8 @@ def analyze(files: list[tuple[str, bytes]], password: str | None, ca_only_ok: bo
             k, c, extra = pkcs12.load_key_and_certificates(data, password.encode() if password else None)
         except ValueError as e:
             if name.lower().endswith(PFX_EXT):
-                raise CertError(f"{name}: Passwort falsch oder Datei beschädigt.") from e
-            raise CertError(f"{name}: Format nicht erkannt (erwartet PFX, PEM oder DER).") from e
+                raise CertError("certerr_pfx", name=name) from e
+            raise CertError("certerr_format", name=name) from e
         if c is not None:
             certs.append((c, name))
         certs += [(x, name) for x in (extra or [])]
@@ -244,19 +256,18 @@ def analyze(files: list[tuple[str, bytes]], password: str | None, ca_only_ok: bo
             if _pub(leaf) == _pub(k):
                 return leaf, k, pool, cname if cname == kname else f"{cname} + {kname}"
     if leaves and keys:
-        raise CertError("Zertifikat und privater Schlüssel passen nicht zusammen.")
+        raise CertError("certerr_mismatch")
     if leaves and not keys:
-        raise CertError("Zertifikat gefunden, aber kein privater Schlüssel – Schlüsseldatei (.key) mit angeben "
-                        "oder eine PFX-Datei verwenden.")
+        raise CertError("certerr_no_key")
     if keys and not leaves:
-        raise CertError("Privater Schlüssel gefunden, aber kein Server-Zertifikat.")
+        raise CertError("certerr_no_cert")
     if certs and not ca_only_ok:
-        raise CertError("Nur CA-Zertifikate gefunden – es fehlt das Zertifikat für den Server selbst.")
+        raise CertError("certerr_ca_only")
     return None
 
 
 def _from_certs_folder():
-    """Zertifikat aus dem Ordner certs (oder TLS_PFX / TLS_CERT / TLS_KEY)."""
+    """Certificate from the certs folder (or TLS_PFX / TLS_CERT / TLS_KEY)."""
     d = settings.certs_dir
     if not os.path.isdir(d):
         return None
@@ -267,20 +278,20 @@ def _from_certs_folder():
     if chosen:
         missing = [c for c in chosen if c not in names]
         if missing:
-            raise CertError(f"Ordner certs: {', '.join(missing)} nicht gefunden.")
-        # gewählte Dateien + alle übrigen Zertifikate (für die Kette), aber keine weiteren Schlüssel/PFX
+            raise CertError("certerr_missing", folder=True, files=", ".join(missing))
+        # chosen files + all other certificates (for the chain), but no further keys/PFX
         others = [n for n in names if n not in chosen and not n.lower().endswith(PFX_EXT + (".key",))]
         names = chosen + others
     elif len([n for n in names if n.lower().endswith(PFX_EXT)]) > 1:
-        raise CertError("Mehrere PFX-Dateien im Ordner certs – mit TLS_PFX die richtige angeben.")
+        raise CertError("certerr_multi_pfx")
     if not names:
         return None
     password = os.environ.get("TLS_PFX_PASSWORD") or os.environ.get("TLS_KEY_PASSWORD") or None
     try:
-        # ca_only_ok: eine CA-Datei für LDAP_CERT_MODE=verify allein ist kein Fehler
+        # ca_only_ok: a CA file for LDAP_CERT_MODE=verify on its own is not an error
         res = analyze([(n, _read(os.path.join(d, n))) for n in names], password, ca_only_ok=True)
     except CertError as e:
-        raise CertError(f"Ordner certs: {e}") from e
+        raise CertError(e.key, folder=True, **e.kw) from e
     if res:
         leaf, key, pool, src = res
         return leaf, key, pool, f"certs/{src}"
@@ -305,7 +316,7 @@ def _from_upload():
 
 
 # ---------------------------------------------------------------------------
-# Selbstsigniert
+# Self-signed
 # ---------------------------------------------------------------------------
 
 def _self_signed() -> tuple[str, str]:
@@ -327,7 +338,7 @@ def _self_signed() -> tuple[str, str]:
             .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
             .sign(key, hashes.SHA256()))
     _write_pair(cert_p, key_p, [cert], key)
-    log.warning("Selbstsigniertes Zertifikat erzeugt. Eigenes Zertifikat: unter „Verbindung“ hochladen.")
+    log.warning("Self-signed certificate generated. For your own certificate: upload it on the \"Connection\" page.")
     return cert_p, key_p
 
 
@@ -344,11 +355,11 @@ def _write_pair(cert_p: str, key_p: str, chain: list[x509.Certificate], key) -> 
 
 
 # ---------------------------------------------------------------------------
-# Einstieg
+# Entry point
 # ---------------------------------------------------------------------------
 
 def prepare() -> tuple[str, str]:
-    """Ermittelt das aktive Zertifikat und liefert (Pfad Kette, Pfad Schlüssel) für den Webserver."""
+    """Determines the active certificate and returns (chain path, key path) for the web server."""
     info: dict = {}
     own = None
     try:
@@ -358,16 +369,16 @@ def prepare() -> tuple[str, str]:
             own = (leaf, key, pool, src)
             info.update(source="upload", uploaded_by=meta.get("user"), uploaded_at=meta.get("at"))
     except CertError as e:
-        log.error("Hochgeladenes Zertifikat nicht lesbar: %s", e)
-        info["error"] = str(e)
+        log.error("Uploaded certificate not readable: %s", e)
+        info["error"] = e                 # CertError: the template shows e.text(lang)
     if own is None:
         try:
             own = _from_certs_folder()
             if own:
                 info["source"] = "folder"
         except CertError as e:
-            log.error("Eigenes Zertifikat nicht verwendbar: %s – es wird das selbstsignierte verwendet.", e)
-            info["error"] = str(e)
+            log.error("Own certificate not usable: %s – using the self-signed one.", e)
+            info["error"] = e
 
     if own is None:
         cert_p, key_p = _self_signed()
@@ -381,7 +392,7 @@ def prepare() -> tuple[str, str]:
     if info["source"] == "upload":
         d = _custom_dir()
         cert_p, key_p = os.path.join(d, "fullchain.pem"), os.path.join(d, "key.pem")
-    else:  # Ordner certs: aufbereitete Kopie nur im Arbeitsspeicher-Dateisystem (/tmp)
+    else:  # certs folder: prepared copy only in the in-memory file system (/tmp)
         global _tmpdir
         if _tmpdir:
             shutil.rmtree(_tmpdir, ignore_errors=True)
@@ -391,10 +402,10 @@ def prepare() -> tuple[str, str]:
         _write_pair(cert_p, key_p, chain, key)
     info.update(file=source, chain=len(chain))
     _publish(info, leaf)
-    log.info("Eigenes Zertifikat aktiv: %s (gültig bis %s, Kette %d)", INFO["subject"], INFO["not_after"][:10],
+    log.info("Own certificate active: %s (valid until %s, chain %d)", INFO["subject"], INFO["not_after"][:10],
              len(chain))
     for w in INFO["warnings"]:
-        log.warning("Zertifikat: %s", LOG_TEXT.get(w, w))
+        log.warning("Certificate: %s", LOG_TEXT.get(w, w))
     return cert_p, key_p
 
 
@@ -419,51 +430,50 @@ def _publish(info: dict, cert: x509.Certificate) -> None:
 
 
 def _activate() -> None:
-    """Lädt das aktuelle Zertifikat neu – neue Verbindungen nutzen es sofort, ohne Neustart."""
+    """Reloads the current certificate – new connections use it immediately, without a restart."""
     global _current
     cert_p, key_p = prepare()
     _current = new_context(cert_p, key_p)
 
 
 # ---------------------------------------------------------------------------
-# Hochladen / Entfernen über die Weboberfläche
+# Upload / removal via the web interface
 # ---------------------------------------------------------------------------
 
 def install_upload(files: list[tuple[str, bytes]], password: str | None, user: str) -> dict:
     files = [(os.path.basename(n or "datei")[:100], b) for n, b in files if b]
     if not files:
-        raise CertError("Bitte mindestens eine Datei auswählen.")
+        raise CertError("certerr_no_files")
     if len(files) > MAX_FILES:
-        raise CertError(f"Höchstens {MAX_FILES} Dateien auf einmal.")
+        raise CertError("certerr_too_many", n=MAX_FILES)
     res = analyze(files, password or None)
     if not res:
-        raise CertError("In den Dateien wurde kein Zertifikat gefunden.")
+        raise CertError("certerr_none_found")
     leaf, key, pool, _ = res
     from cryptography.hazmat.primitives.asymmetric import dsa, rsa
     if isinstance(key, rsa.RSAPrivateKey) and key.key_size < 2048:
-        raise CertError(f"RSA-Schlüssel mit {key.key_size} Bit ist zu schwach – mindestens 2048 Bit verwenden.")
+        raise CertError("certerr_rsa_weak", bits=key.key_size)
     if isinstance(key, ec.EllipticCurvePrivateKey) and key.curve.key_size < 256:
-        raise CertError("EC-Schlüssel ist zu schwach – mindestens P-256 verwenden.")
+        raise CertError("certerr_ec_weak")
     if isinstance(key, dsa.DSAPrivateKey):
-        raise CertError("DSA-Schlüssel werden nicht unterstützt.")
+        raise CertError("certerr_dsa")
     if _not_after(leaf) < dt.datetime.now(dt.timezone.utc):
-        raise CertError(f"Das Zertifikat ist am {_not_after(leaf):%d.%m.%Y} abgelaufen.")
+        raise CertError("certerr_expired", date_de=f"{_not_after(leaf):%d.%m.%Y}", date_en=f"{_not_after(leaf):%Y-%m-%d}")
     try:
         eku = leaf.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value
         if ExtendedKeyUsageOID.SERVER_AUTH not in eku and ExtendedKeyUsageOID.ANY_EXTENDED_KEY_USAGE not in eku:
-            raise CertError("Das Zertifikat ist nicht für Webserver ausgestellt (Verwendungszweck „Serverauthentifizierung“ "
-                            "fehlt) – Browser würden es ablehnen. Vorlage „Webserver“ der CA verwenden.")
+            raise CertError("certerr_no_server_auth")
     except x509.ExtensionNotFound:
         pass
     chain = _build_chain(leaf, pool)
-    # Probe: lässt sich die Kombination wirklich als Server-Zertifikat laden?
+    # Test: can the combination really be loaded as a server certificate?
     tmp = tempfile.mkdtemp(prefix="samaudit-up-")
     try:
         _write_pair(os.path.join(tmp, "c.pem"), os.path.join(tmp, "k.pem"), chain, key)
         ssl.create_default_context(ssl.Purpose.CLIENT_AUTH).load_cert_chain(
             os.path.join(tmp, "c.pem"), os.path.join(tmp, "k.pem"))
     except ssl.SSLError as e:
-        raise CertError(f"Zertifikat lässt sich nicht verwenden: {e.reason or e}") from e
+        raise CertError("certerr_unusable", reason=e.reason or e) from e
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""LDAP-Anbindung: Anmeldung (Bind mit den Daten des Admins, kein Dienstkonto),
-Prüfung der Admin-Berechtigung und Einsammeln der Domänendaten."""
+"""LDAP access: sign-in (bind with the user's own credentials, no service account),
+authorisation check and collection of the domain data."""
 from __future__ import annotations
 
 import logging
@@ -22,7 +22,7 @@ log = logging.getLogger("samaudit.ldap")
 
 
 class AuthError(Exception):
-    """Fehler bei der Anmeldung. `code` wird in der Oberfläche übersetzt."""
+    """Sign-in error. `code` is translated in the user interface."""
 
     def __init__(self, code: str, detail: str = ""):
         super().__init__(code)
@@ -42,14 +42,14 @@ class AuthResult:
 
 
 # ---------------------------------------------------------------------------
-# Verbindung
+# Connection
 # ---------------------------------------------------------------------------
 
 def _ldap3():
     try:
         import ldap3  # noqa: F401
         return ldap3
-    except ImportError as e:  # pragma: no cover - im Container immer vorhanden
+    except ImportError as e:  # pragma: no cover - always present in the container
         raise AuthError("ldap_missing", str(e)) from e
 
 
@@ -72,11 +72,11 @@ def _server(host: str):
 
 
 def _targets() -> list[tuple[str, str, str]]:
-    """Verbindungsziele als (Name, Adresse, Pin-Schlüssel).
+    """Connection targets as (name, address, pin key).
 
-    Im Modus „auto“ wird ein Name, der auf mehrere DCs zeigt (z. B. der Domänenname), in die einzelnen
-    Adressen aufgelöst – in fester Reihenfolge. So wird jedem DC einzeln vertraut, statt dass wechselnde
-    DCs (DNS-Round-Robin) als „Zertifikat geändert“ gemeldet werden."""
+    In "auto" mode a name that points to several DCs (e.g. the domain name) is resolved into the individual
+    addresses – in a fixed order. That way each DC is trusted individually, instead of alternating
+    DCs (DNS round robin) being reported as "certificate changed"."""
     import socket
     out: list[tuple[str, str, str]] = []
     for host in settings.dc_hosts:
@@ -95,13 +95,13 @@ def _targets() -> list[tuple[str, str, str]]:
 
 
 def _check_pin(host: str, conn) -> None:
-    """LDAPS-Autovertrauen: Zertifikatskette beim ersten Kontakt merken, danach vergleichen."""
+    """LDAPS auto-trust: remember the certificate chain on first contact, compare it afterwards."""
     if settings.ldap_cert_mode != "auto" or not (settings.ldap_ssl or settings.ldap_starttls):
         return
     from . import pins
     sock = getattr(conn, "socket", None)
     if sock is None or not hasattr(sock, "getpeercert"):
-        raise AuthError("tls_failed", "keine TLS-Verbindung")
+        raise AuthError("tls_failed", "no TLS connection")
     try:
         pins.check(host, pins.peer_chain(sock))
     except pins.PinMismatch as e:
@@ -122,7 +122,7 @@ def _remember_type(dtype: str, vendor: str | None) -> None:
 
 
 def normalize_username(username: str) -> tuple[str, str]:
-    """Gibt (bind_name, sam_or_upn) zurück. Akzeptiert user, DOMÄNE\\user und user@domäne."""
+    """Returns (bind_name, sam_or_upn). Accepts user, DOMAIN\\user and user@domain."""
     u = (username or "").strip()
     if not u or len(u) > 256 or any(c in u for c in "()*\x00\r\n"):
         raise AuthError("invalid_user")
@@ -132,12 +132,12 @@ def normalize_username(username: str) -> tuple[str, str]:
         raise AuthError("invalid_user")
     if "@" in u:
         return u, u
-    # implizite UPN (sAMAccountName@DNS-Domäne) funktioniert in AD und Samba
+    # implicit UPN (sAMAccountName@DNS domain) works in AD and Samba
     return f"{u}@{settings.domain_fqdn}", u
 
 
 def open_connection(bind_name: str, password: str):
-    """Bind gegen den ersten erreichbaren DC. Gibt eine gebundene Connection zurück."""
+    """Bind against the first reachable DC. Returns a bound connection."""
     ldap3 = _ldap3()
     from ldap3.core import exceptions as lexc
 
@@ -153,14 +153,14 @@ def open_connection(bind_name: str, password: str):
                 _server(addr), user=bind_name, password=password,
                 authentication=ldap3.SIMPLE, auto_bind=ldap3.AUTO_BIND_NONE,
                 read_only=True, raise_exceptions=False, auto_range=False,
-                auto_referrals=False,          # nie einem Verweis folgen (würde das Passwort erneut senden)
+                auto_referrals=False,          # never follow a referral (would send the password again)
                 receive_timeout=max(settings.ldap_timeout, 30),
             )
             conn.open()
             if settings.ldap_starttls and not settings.ldap_ssl:
                 if not conn.start_tls():
                     raise AuthError("tls_failed", str(conn.result))
-            _check_pin(pin_key, conn)  # vor dem Senden des Passworts
+            _check_pin(pin_key, conn)  # before sending the password
             if not conn.bind():
                 res = conn.result or {}
                 desc = (res.get("description") or "").lower()
@@ -190,15 +190,15 @@ def open_connection(bind_name: str, password: str):
             last_err = AuthError("bind_failed", f"{pin_key}: {e}")
         except OSError as e:
             last_err = AuthError("dc_unreachable", f"{pin_key}: {e}")
-    raise last_err or AuthError("dc_unreachable", "Kein DC konfiguriert")
+    raise last_err or AuthError("dc_unreachable", "no DC configured")
 
 
 # ---------------------------------------------------------------------------
-# Suchhilfen
+# Search helpers
 # ---------------------------------------------------------------------------
 
 class Entry(dict):
-    """Case-insensitive Zugriff auf raw_attributes eines Suchergebnisses."""
+    """Case-insensitive access to the raw_attributes of a search result."""
 
     def __init__(self, dn: str, raw: dict):
         super().__init__({k.lower(): v for k, v in (raw or {}).items()})
@@ -238,7 +238,7 @@ def search(conn, base: str, flt: str, attrs: list[str], scope: str = "SUBTREE", 
 
 
 class SearchFailed(Exception):
-    """Suche abgebrochen oder unvollständig – Ergebnis darf nicht als „leer = bestanden“ gelten."""
+    """Search aborted or incomplete – the result must not count as "empty = passed"."""
 
 
 def _check_result(conn, base: str) -> None:
@@ -246,7 +246,7 @@ def _check_result(conn, base: str) -> None:
     code = res.get("result", 0)
     if code in (0, None):
         return
-    if code == 32:                       # noSuchObject: Basis existiert nicht → wirklich leer
+    if code == 32:                       # noSuchObject: base does not exist → really empty
         return
     raise SearchFailed(f"{base}: {res.get('description')} ({code}) {res.get('message') or ''}".strip())
 
@@ -261,7 +261,7 @@ def base_entry(conn, dn: str, attrs: list[str], sd: bool = False) -> Entry | Non
 
 
 def _full_members(conn, e: Entry) -> list[str]:
-    """Liest 'member' inkl. Range-Retrieval (>1500 Mitglieder)."""
+    """Reads 'member' including range retrieval (>1500 members)."""
     members = as_strs(e.get("member"))
     range_key = next((k for k in e.keys() if k.startswith("member;range=")), None)
     rounds = 0
@@ -273,7 +273,7 @@ def _full_members(conn, e: Entry) -> list[str]:
             break
         nxt = int(m.group(2)) + 1
         if nxt <= int(m.group(1)):
-            break                          # Bereich geht nicht voran – abbrechen statt endlos schleifen
+            break                          # range does not advance – stop instead of looping forever
         e2 = base_entry(conn, e.dn, [f"member;range={nxt}-*"])
         if not e2:
             break
@@ -283,7 +283,7 @@ def _full_members(conn, e: Entry) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Authentifizierung + Admin-Prüfung
+# Authentication + admin check
 # ---------------------------------------------------------------------------
 
 def root_dse(conn) -> dict:
@@ -314,12 +314,12 @@ def _object_sid(conn, dn: str) -> str | None:
 
 
 BUILTIN = {544, 545, 546, 548, 549, 550, 551, 552, 554, 557, 560, 561}
-# Admin-Gruppen, die in JEDER Domäne der Gesamtstruktur zur Abweisung führen
+# Admin groups that lead to rejection in EVERY domain of the forest
 FOREST_PRIV_RIDS = {"512", "516", "518", "519", "520", "521", "526", "527"}
 
 
 def domain_type_for(dse: dict) -> str:
-    """Konfigurierter Typ oder automatisch erkannter (rootDSE vendorName)."""
+    """Configured type or the automatically detected one (rootDSE vendorName)."""
     if settings.domain_type in ("windows", "samba"):
         return settings.domain_type
     return dse.get("detected_type") or "windows"
@@ -327,8 +327,8 @@ def domain_type_for(dse: dict) -> str:
 
 def resolve_group_sids(conn, specs: list[str], domain_sid: str, root_sid: str, base_dn: str,
                        strict: bool = False) -> dict[str, str]:
-    """Gruppenangaben (RID:x, SID, Name, DN) → {SID: Anzeigename}.
-    strict: Suchfehler abbrechen (für Sperrlisten – dort darf ein Fehler nie „durchlassen“ bedeuten)."""
+    """Group specs (RID:x, SID, name, DN) → {SID: display name}.
+    strict: abort on search errors (for deny lists – there an error must never mean "let through")."""
     out: dict[str, str] = {}
     for item in specs:
         it = item.strip()
@@ -356,13 +356,13 @@ def resolve_group_sids(conn, specs: list[str], domain_sid: str, root_sid: str, b
                         out[sid] = it
             except Exception as e:  # noqa: BLE001
                 if strict:
-                    raise AuthError("bind_failed", f"Gruppe {it} nicht auflösbar: {e}") from e
-                log.warning("Gruppe %s nicht auflösbar: %s", it, e)
+                    raise AuthError("bind_failed", f"cannot resolve group {it}: {e}") from e
+                log.warning("Cannot resolve group %s: %s", it, e)
     return out
 
 
 def _netbios(conn, dse: dict, base_dn: str) -> str:
-    """NetBIOS-Name der Domäne – bevorzugt aus dem Verzeichnis (DOMAIN_NETBIOS nur als Ersatz)."""
+    """NetBIOS name of the domain – preferably from the directory (DOMAIN_NETBIOS only as a fallback)."""
     try:
         res = search(conn, f"CN=Partitions,{dse.get('config_nc') or ''}",
                      f"(&(objectClass=crossRef)(nCName={_escape(base_dn)}))", ["nETBIOSName"], paged=False)
@@ -373,19 +373,19 @@ def _netbios(conn, dse: dict, base_dn: str) -> str:
 
 
 def _verify_identity(conn, me: Entry, dse: dict, base_dn: str) -> None:
-    """Gegenprobe per LDAP „Who am I?“ (RFC 4532): stimmt das gebundene Konto – samt Domäne – mit dem
-    gefundenen überein? Windows-DCs unterstützen den Befehl immer; fehlt die Antwort dort, wird abgewiesen."""
+    """Cross-check with LDAP "Who am I?" (RFC 4532): does the bound account – including its domain – match the
+    one found? Windows DCs always support the operation; if the answer is missing there, sign-in is rejected."""
     must = dse.get("detected_type") == "windows"
     try:
         who = conn.extend.standard.who_am_i()
     except Exception as e:  # noqa: BLE001
         if must:
             raise AuthError("user_not_found", f"whoami: {e}") from e
-        log.debug("whoami nicht verfügbar: %s", e)
+        log.debug("whoami not available: %s", e)
         return
     if not who:
         if must:
-            raise AuthError("user_not_found", "whoami leer")
+            raise AuthError("user_not_found", "whoami empty")
         return
     who = str(who)
     if who.lower().startswith("dn:"):
@@ -396,26 +396,26 @@ def _verify_identity(conn, me: Entry, dse: dict, base_dn: str) -> None:
         ok = name.split("@")[0].lower() == (as_str(me.get("sAMAccountName")) or "").lower()
         nb = _netbios(conn, dse, base_dn)
         if ok and dom and nb and dom.lower() != nb.lower():
-            ok = False                     # gleiches Konto, aber andere Domäne der Gesamtstruktur
+            ok = False                     # same account, but a different domain of the forest
     else:
         return
     if not ok:
-        log.warning("Gebundenes Konto (%s) passt nicht zum gefundenen (%s) – abgewiesen", who, me.dn)
+        log.warning("Bound account (%s) does not match the one found (%s) – rejected", who, me.dn)
         raise AuthError("user_not_found")
 
 
 def authenticate(username: str, password: str) -> AuthResult:
-    """Bindet mit den Daten des Benutzers und prüft die Berechtigung:
-    Mitglied einer Prüfer-Gruppe (ALLOWED_GROUPS) und KEIN Mitglied einer privilegierten Gruppe.
-    Wirft AuthError, wenn nicht."""
+    """Binds with the user's credentials and checks authorisation:
+    member of an auditor group (ALLOWED_GROUPS) and NOT a member of a privileged group.
+    Raises AuthError otherwise."""
     bind_name, ident = normalize_username(username)
     conn = open_connection(bind_name, password)
     try:
         dse = root_dse(conn)
         base_dn = dse.get("default_nc") or settings.base_dn
-        # Der Bind lief über einen UPN. Gesucht wird jedes Konto, auf das dieser Name passen kann
-        # (expliziter UPN oder sAMAccountName@Domäne) – bei Mehrdeutigkeit wird abgewiesen, damit nie
-        # die Rechte eines anderen Kontos geprüft werden als das, mit dem gebunden wurde.
+        # The bind used a UPN. Look for every account this name can match
+        # (explicit UPN or sAMAccountName@domain) – if ambiguous, reject, so that the rights of an account
+        # other than the one that was bound are never checked.
         if "@" in ident and not ident.lower().endswith("@" + settings.domain_fqdn):
             flt = f"(&(objectCategory=person)(objectClass=user)(userPrincipalName={_escape(ident)}))"
         else:
@@ -426,7 +426,7 @@ def authenticate(username: str, password: str) -> AuthResult:
                                           "objectSid", "userAccountControl", "sIDHistory"], paged=False)
         if len(res) != 1:
             if len(res) > 1:
-                log.warning("Anmeldename %s ist mehrdeutig (%d Konten) – abgewiesen", ident, len(res))
+                log.warning("Sign-in name %s is ambiguous (%d accounts) – rejected", ident, len(res))
             raise AuthError("user_not_found")
         me = res[0]
         _verify_identity(conn, me, dse, base_dn)
@@ -435,11 +435,11 @@ def authenticate(username: str, password: str) -> AuthResult:
             raise AuthError("account_unusable")
         my_sid = sid_to_str(me.get("objectSid", [None])[0]) or ""
         if not my_sid.startswith("S-1-5-21-"):
-            raise AuthError("user_not_found", "objectSid fehlt")
+            raise AuthError("user_not_found", "objectSid missing")
         domain_sid = my_sid.rsplit("-", 1)[0]
         history = {s for s in (sid_to_str(x) for x in (me.get("sIDHistory") or [])) if s}
 
-        # Effektive Gruppen (rekursiv, inkl. primärer Gruppe) über tokenGroups
+        # Effective groups (recursive, including the primary group) via tokenGroups
         tg = base_entry(conn, me.dn, ["tokenGroups"])
         token_sids = {s for s in (sid_to_str(x) for x in (tg.get("tokenGroups") or [] if tg else [])) if s}
         token_sids.discard(None)
@@ -450,21 +450,21 @@ def authenticate(username: str, password: str) -> AuthResult:
         if dse.get("root_nc") and dse["root_nc"].lower() != base_dn.lower():
             root_sid = _object_sid(conn, dse["root_nc"]) or domain_sid
 
-        # 1) Privilegierte Konten immer abweisen (auch das eingebaute Administrator-Konto).
-        #    Geprüft werden Gruppen-SIDs und der SID-Verlauf. Zusätzlich gelten die Admin-Gruppen JEDER Domäne
-        #    der Gesamtstruktur (Organisations-/Schema-Admins liegen in der Stammdomäne, deren SID ein
-        #    untergeordneter DC nicht immer liefert).
+        # 1) Always reject privileged accounts (including the built-in Administrator account).
+        #    Group SIDs and the SID history are checked. In addition, the admin groups of EVERY domain
+        #    of the forest apply (Enterprise/Schema Admins live in the root domain, whose SID a
+        #    child-domain DC does not always return).
         check_sids = token_sids | history
         denied = resolve_group_sids(conn, settings.denied_groups, domain_sid, root_sid, base_dn, strict=True)
         hit = sorted({denied[s] for s in check_sids if s in denied})
         hit += sorted({f"RID:{s.rsplit('-', 1)[1]} ({s})" for s in check_sids
                        if s not in denied and s.startswith("S-1-5-21-") and s.rsplit("-", 1)[1] in FOREST_PRIV_RIDS})
         if history & {f"S-1-5-32-{r}" for r in (544, 548, 549, 550, 551)}:
-            hit.append("SID-Verlauf: BUILTIN")
+            hit.append("SID history: BUILTIN")
         if hit or my_sid.endswith(("-500", "-502")) or any(h.endswith(("-500", "-502")) for h in history):
-            log.warning("Anmeldung von %s abgewiesen: privilegiertes Konto (%s)", ident, ", ".join(hit) or "RID 500")
+            log.warning("Sign-in of %s rejected: privileged account (%s)", ident, ", ".join(hit) or "RID 500")
             raise AuthError("privileged_denied", ", ".join(hit))
-        # 2) Mitglied einer Prüfer-Gruppe?
+        # 2) Member of an auditor group?
         allowed = resolve_group_sids(conn, settings.allowed_groups, domain_sid, root_sid, base_dn)
         if not allowed:
             raise AuthError("group_missing", ", ".join(settings.allowed_groups))
@@ -487,7 +487,7 @@ def authenticate(username: str, password: str) -> AuthResult:
 
 
 # ---------------------------------------------------------------------------
-# Datensammlung
+# Data collection
 # ---------------------------------------------------------------------------
 USER_ATTRS = ["sAMAccountName", "userPrincipalName", "displayName", "userAccountControl", "lastLogonTimestamp",
               "pwdLastSet", "whenCreated", "adminCount", "servicePrincipalName", "primaryGroupID", "sIDHistory",
@@ -545,13 +545,13 @@ def _account(e: Entry, computer: bool) -> dict:
             "upn": as_str(e.get("userPrincipalName")) or "",
             "display": as_str(e.get("displayName")) or "",
             "has_userpassword": bool(e.get("userPassword") or e.get("unixUserPassword")),
-            # verwaltete Dienstkonten (gMSA und sMSA): zufällige, automatisch gewechselte Passwörter
+            # managed service accounts (gMSA and sMSA): random, automatically rotated passwords
             "is_gmsa": bool({"msds-groupmanagedserviceaccount", "msds-managedserviceaccount",
                              "msds-delegatedmanagedserviceaccount"} & set(d["classes"])),
             "admin_count": as_int(e.get("adminCount"), 0) or 0,
         })
         if d["is_gmsa"]:
-            # wer das Kennwort des gMSA abrufen darf (Sicherheitsbeschreibung wie bei Berechtigungen)
+            # who may retrieve the gMSA password (security descriptor, as for permissions)
             d["gmsa_readers"] = parse_sd(e.get("msDS-GroupMSAMembership"))
     return d
 
@@ -567,7 +567,7 @@ def _parse_gplink(v: str | None) -> list[dict]:
 
 
 def collect(conn, progress) -> dict:
-    """Sammelt alle Daten für die Prüfregeln. `progress(pct, phase)`."""
+    """Collects all data for the check rules. `progress(pct, phase)`."""
     warnings: list[str] = []
 
     failed: set[str] = set()
@@ -576,7 +576,7 @@ def collect(conn, progress) -> dict:
         try:
             return fn()
         except Exception as e:  # noqa: BLE001
-            log.warning("Abschnitt %s fehlgeschlagen: %s", label, e)
+            log.warning("Section %s failed: %s", label, e)
             warnings.append(f"{label}: {e}")
             failed.add(label)
             return default
@@ -592,7 +592,7 @@ def collect(conn, progress) -> dict:
                               "lockOutObservationWindow", "ms-DS-MachineAccountQuota", "whenCreated", "gPLink",
                               "nTSecurityDescriptor"], sd=True)
     if d is None:
-        raise RuntimeError("Domänenobjekt konnte nicht gelesen werden")
+        raise RuntimeError("domain_unreadable")  # error code, translated in the UI (err_domain_unreadable)
     from .adutil import interval_days, interval_minutes
     domain_sid = sid_to_str((d.get("objectSid") or [None])[0])
     root_sid = domain_sid
@@ -626,7 +626,7 @@ def collect(conn, progress) -> dict:
     acl = {"domain_root": parse_sd(d.get("nTSecurityDescriptor"))}
 
     progress(12, "phase_users")
-    # ohne Vertrauensstellungs-Konten (INTERDOMAIN_TRUST_ACCOUNT, 0x800) – die melden sich nie an
+    # without trust accounts (INTERDOMAIN_TRUST_ACCOUNT, 0x800) – they never sign in
     users = [_account(e, False) for e in search(
         conn, dn, "(&(objectCategory=person)(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2048)))",
         USER_ATTRS)]
@@ -638,7 +638,7 @@ def collect(conn, progress) -> dict:
 
     progress(35, "phase_computers")
     computers = [_account(e, True) for e in search(conn, dn, "(objectCategory=computer)", COMPUTER_ATTRS)]
-    # gMSA sind technisch auch Computer-Objektklassen – doppelte vermeiden
+    # gMSAs are technically computer object classes too – avoid duplicates
     gmsa_dns = {u["dn"].lower() for u in users if u.get("is_gmsa")}
     computers = [c for c in computers if c["dn"].lower() not in gmsa_dns and
                  "msds-groupmanagedserviceaccount" not in c["classes"]]
@@ -659,7 +659,7 @@ def collect(conn, progress) -> dict:
                        "created": gentime_to_dt(e.get("whenCreated")),
                        "group_type": as_int(e.get("groupType"))})
     if root_sid != domain_sid:
-        # Enterprise/Schema Admins liegen in der Stammdomäne
+        # Enterprise/Schema Admins live in the root domain
         for e in safe("root_groups", lambda: search(
                 conn, dse["root_nc"], f"(|(objectSid={root_sid}-519)(objectSid={root_sid}-518)(objectSid={root_sid}-527))",
                 ["sAMAccountName", "objectSid", "member"], paged=False), []) or []:
@@ -757,7 +757,7 @@ def collect(conn, progress) -> dict:
             "policies": as_strs(e.get("msPKI-Certificate-Policy")),
             "sd": parse_sd(e.get("nTSecurityDescriptor")),
         })
-    # Ausstellungsrichtlinien, die mit einer Gruppe verknüpft sind (ESC13)
+    # Issuance policies linked to a group (ESC13)
     oids = [{"oid": as_str(e.get("msPKI-Cert-Template-OID")) or "", "name": as_str(e.get("displayName")) or "",
              "group": as_str(e.get("msDS-OIDToGroupLink")) or ""}
             for e in safe("pki_oids", lambda: search(conn, f"CN=OID,{pki_base}", "(msDS-OIDToGroupLink=*)",
@@ -792,7 +792,7 @@ def collect(conn, progress) -> dict:
     gpo_links = {"domain": domain["gplink"], "dc_ou": _parse_gplink(as_str(dc_ou.get("gPLink"))) if dc_ou else [],
                  "all": all_links}
 
-    # Besitzer der DC-Objekte
+    # Owners of the DC objects
     for e in safe("dc_owner", lambda: search(conn, dn, "(&(objectCategory=computer)(|(primaryGroupID=516)(primaryGroupID=521)))",
                                              ["nTSecurityDescriptor"], sd=True), []) or []:
         sdd = parse_sd(e.get("nTSecurityDescriptor"))
@@ -811,11 +811,11 @@ def collect(conn, progress) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Zusätzliche Datenquellen
+# Additional data sources
 # ---------------------------------------------------------------------------
 
 def parse_dns_property(values) -> dict:
-    """dNSProperty → {id: data}. Relevant: 2 = ZONE_ALLOW_UPDATE (0 keine, 1 unsicher, 2 nur sicher)."""
+    """dNSProperty → {id: data}. Relevant: 2 = ZONE_ALLOW_UPDATE (0 none, 1 nonsecure, 2 secure only)."""
     out = {}
     for raw in values or []:
         if not isinstance(raw, (bytes, bytearray)) or len(raw) < 20:
@@ -828,11 +828,11 @@ def parse_dns_property(values) -> dict:
 
 
 def _last_backup(conn, dn: str):
-    """Letzte Sicherung laut Replikations-Metadaten (dSASignature)."""
+    """Last backup according to the replication metadata (dSASignature)."""
     e = base_entry(conn, dn, ["msDS-ReplAttributeMetaData"])
     vals = as_strs(e.get("msDS-ReplAttributeMetaData")) if e else []
     if not vals:
-        return None  # nicht unterstützt (z. B. Samba)
+        return None  # not supported (e.g. Samba)
     for v in vals:
         if "<pszAttributeName>dSASignature</pszAttributeName>" in v:
             m = re.search(r"<ftimeLastOriginatingChange>([^<]+)</ftimeLastOriginatingChange>", v)
@@ -850,7 +850,7 @@ DMSA_CLASS = "msDS-DelegatedManagedServiceAccount"
 
 
 def _collect_dmsa(conn, dn: str, schema_nc: str) -> dict:
-    """Delegierte MSAs (Windows Server 2025): Wer darf sie anlegen, und auf wen verweisen bestehende?"""
+    """Delegated MSAs (Windows Server 2025): who may create them, and whom do existing ones point to?"""
     cls = search(conn, schema_nc, f"(&(objectClass=classSchema)(lDAPDisplayName={DMSA_CLASS}))",
                  ["schemaIDGUID"], paged=False)
     if not cls:
@@ -872,8 +872,8 @@ def _collect_dmsa(conn, dn: str, schema_nc: str) -> dict:
 
 
 def _collect_kds(conn, config_nc: str, schema_nc: str) -> dict:
-    """KDS-Stammschlüssel (Grundlage aller gMSA/dMSA-Kennwörter): wer darf ihn lesen?
-    Der Schlüssel selbst wird nie abgerufen – nur geprüft, ob der Filter darauf greift (dann ist er lesbar)."""
+    """KDS root key (basis of all gMSA/dMSA passwords): who may read it?
+    The key itself is never retrieved – only whether the filter matches it (then it is readable)."""
     base = f"CN=Master Root Keys,CN=Group Key Distribution Service,CN=Services,{config_nc}"
     cont = base_entry(conn, base, ["nTSecurityDescriptor"], sd=True)
     keys = search(conn, base, "(objectClass=msKds-ProvRootKey)", ["cn", "nTSecurityDescriptor"], sd=True, paged=False)

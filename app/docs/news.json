@@ -1,5 +1,26 @@
 [
   {
+    "version": "2.1.3",
+    "date": "2026-11-04",
+    "items": [
+      {
+        "type": "notice",
+        "de": "SAMAUDIT ist jetzt Open Source: Quellcode, Fehlermeldungen und Ideen unter github.com/soleil0815/samaudit.",
+        "en": "SAMAUDIT is now open source: source code, bug reports and ideas at github.com/soleil0815/samaudit."
+      },
+      {
+        "type": "feature",
+        "de": "Server-Protokoll (docker compose logs), Meldungen von update.sh und des Befehls restore sind jetzt englisch, z. B. „START REFUSED“ statt „START ABGEBROCHEN“. Antworten mit j/ja werden weiter angenommen. Die Oberfläche bleibt zweisprachig.",
+        "en": "The server log (docker compose logs) and the messages of update.sh and of the restore command are now in English, e.g. \"START REFUSED\" instead of \"START ABGEBROCHEN\". The web interface stays bilingual."
+      },
+      {
+        "type": "fix",
+        "de": "Fehlermeldungen beim Hochladen eines eigenen Zertifikats und einige Scan-Fehler erscheinen jetzt in der gewählten Sprache der Oberfläche (bisher nur deutsch).",
+        "en": "Error messages when uploading your own certificate and some scan errors now appear in the chosen interface language (previously German only)."
+      }
+    ]
+  },
+  {
     "version": "2.1.2",
     "date": "2026-11-03",
     "items": [

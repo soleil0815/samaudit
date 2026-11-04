@@ -19,15 +19,15 @@ run cat /app/os-packages.txt > "${RUNNER_TEMP:-/tmp}/os-packages.txt"
 if [ "$record" = "--record" ]; then
   mkdir -p locks && cp "${RUNNER_TEMP:-/tmp}/os-packages.txt" locks/os-packages.txt
 elif ! diff -u locks/os-packages.txt "${RUNNER_TEMP:-/tmp}/os-packages.txt" > "${RUNNER_TEMP:-/tmp}/os-diff.txt"; then
-  fail "Bau nicht reproduzierbar" "Die Debian-Pakete im Image weichen von locks/os-packages.txt ab:
+  fail "Build not reproducible" "The Debian packages in the image differ from locks/os-packages.txt:
 $(head -40 "${RUNNER_TEMP:-/tmp}/os-diff.txt")"
 fi
 
 docker run --rm --entrypoint python -v "$PWD/tests:/app/tests:ro" "$image" tests/smoke.py \
-  || fail "Tests im Image fehlgeschlagen" "tests/smoke.py ist im fertigen Image nicht durchgelaufen (Details im Log dieses Schritts)."
+  || fail "Tests in the image failed" "tests/smoke.py did not pass in the finished image (details in the log of this step)."
 
 if run sh -c 'command -v pip || command -v apt-get || command -v apt || python -c "import pip"' >/dev/null 2>&1; then
-  fail "Paketmanager im Image" "pip oder apt ist noch im Image vorhanden."
+  fail "Package manager in the image" "pip or apt is still present in the image."
 fi
 
 {
@@ -35,7 +35,7 @@ fi
   echo '```'
   run python -c "import os, platform; print('SAMAUDIT', os.environ.get('SAMAUDIT_IMAGE_VERSION'), '| Python', platform.python_version())"
   run sh -c '. /etc/os-release; echo "$PRETTY_NAME"'
-  echo "Debian-Pakete: $(wc -l < "${RUNNER_TEMP:-/tmp}/os-packages.txt")"
+  echo "Debian packages: $(wc -l < "${RUNNER_TEMP:-/tmp}/os-packages.txt")"
   run cat /app/package-versions.txt
   echo '```'
 } >> "$summary"

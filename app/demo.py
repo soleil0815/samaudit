@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Demo-Daten: eine fiktive Domäne mit typischen Schwachstellen.
-Wird nur verwendet, wenn DEMO_MODE=true gesetzt ist."""
+"""Demo data: a fictional domain with typical weaknesses.
+Only used when DEMO_MODE=true is set."""
 from __future__ import annotations
 
 import random
@@ -57,14 +57,14 @@ def build() -> dict:
         users.append(u)
         return u
 
-    # --- eingebaute Konten ------------------------------------------------
+    # --- built-in accounts ------------------------------------------------
     user("Administrator", ou=None, rid=500, uac=UAC_NORMAL_ACCOUNT | UAC_DONT_EXPIRE_PASSWORD, last=2, pwd=2310,
          created=3100)
     user("Guest", ou=None, rid=501, uac=UAC_NORMAL_ACCOUNT | UAC_ACCOUNTDISABLE | UAC_PASSWD_NOTREQD, last=None,
          pwd=None, created=3100)
     user("krbtgt", ou=None, rid=502, uac=UAC_NORMAL_ACCOUNT | UAC_ACCOUNTDISABLE, last=None, pwd=2050, created=3100)
 
-    # --- Administratoren --------------------------------------------------
+    # --- administrators ---------------------------------------------------
     ou_adm = "OU=Admins,OU=IT"
     adm = [user(n, ou=ou_adm, last=rnd.randint(1, 20), pwd=rnd.randint(30, 300)) for n in
            ("adm.mueller", "adm.schmidt", "adm.weber", "adm.fischer", "adm.wagner")]
@@ -104,7 +104,7 @@ def build() -> dict:
                                                  "mask": 0x000F01FF, "sid": f"{DOM_SID}-515",
                                                  "object_type": None, "inherited_object_type": None}]})
 
-    # --- normale Benutzer -------------------------------------------------
+    # --- regular users ----------------------------------------------------
     seen = {u["sam"] for u in users}
     for i in range(420):
         fn, ln = rnd.choice(FIRST), rnd.choice(LAST)
@@ -118,9 +118,9 @@ def build() -> dict:
         if r < 0.09:
             uac |= UAC_DONT_EXPIRE_PASSWORD
         if 0.09 <= r < 0.22:
-            last = rnd.randint(200, 900)  # inaktiv
+            last = rnd.randint(200, 900)  # inactive
         if 0.22 <= r < 0.25:
-            last = None  # nie angemeldet
+            last = None  # never logged on
         if 0.25 <= r < 0.32:
             uac |= UAC_ACCOUNTDISABLE
             last = rnd.randint(200, 1500)
@@ -184,7 +184,7 @@ def build() -> dict:
     comp("PC-ALT01", "Windows XP Professional", last=1200, laps=False, uac=UAC_WORKSTATION_TRUST_ACCOUNT |
          UAC_PASSWD_NOTREQD)
 
-    # --- Gruppen ----------------------------------------------------------
+    # --- groups -----------------------------------------------------------
     def gdn(name, ou="CN=Users"):
         return f"CN={name},{ou},{DN}"
 
@@ -416,7 +416,7 @@ _CA_CACHE: list = []
 
 
 def _demo_ca_cert() -> bytes:
-    """Fiktives CA-Zertifikat mit SHA-1-Signatur für die Demo."""
+    """Fictional CA certificate with a SHA-1 signature for the demo."""
     if _CA_CACHE:
         return _CA_CACHE[0]
     import datetime as dt
@@ -430,12 +430,12 @@ def _demo_ca_cert() -> bytes:
                       x509.NameAttribute(NameOID.DOMAIN_COMPONENT, "local")])
     now = dt.datetime.now(dt.timezone.utc)
     try:
-        algo: Any = hashes.SHA1()   # bewusst schwach: die Demo soll den Fund „SHA-1-CA“ zeigen
+        algo: Any = hashes.SHA1()   # deliberately weak: the demo is meant to show the "SHA-1 CA" finding
         cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
                 .serial_number(1).not_valid_before(now - dt.timedelta(days=3000))
                 .not_valid_after(now + dt.timedelta(days=120))
                 .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True).sign(key, algo))
-    except Exception:  # noqa: BLE001 – SHA-1 evtl. gesperrt
+    except Exception:  # noqa: BLE001 – SHA-1 may be blocked
         cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
                 .serial_number(1).not_valid_before(now - dt.timedelta(days=3000))
                 .not_valid_after(now + dt.timedelta(days=120))

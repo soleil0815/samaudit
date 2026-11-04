@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Hilfsfunktionen für Active-Directory-Datenformate (SIDs, Zeitstempel,
-userAccountControl, Security Descriptors)."""
+"""Helper functions for Active Directory data formats (SIDs, timestamps,
+userAccountControl, security descriptors)."""
 from __future__ import annotations
 
 import re
@@ -75,7 +75,7 @@ DOMAIN_RIDS = {
     527: "Enterprise Key Admins",
 }
 
-# Extended Rights / Objekt-GUIDs
+# Extended rights / object GUIDs
 GUID_DS_REPL_GET_CHANGES = "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2"
 GUID_DS_REPL_GET_CHANGES_ALL = "1131f6ad-9c07-11d1-f79f-00c04fc2dcd2"
 GUID_DS_REPL_GET_CHANGES_FILTERED = "89e95b76-444d-4c62-991a-0facbeda640c"
@@ -93,7 +93,7 @@ ADS_RIGHT_DS_SELF = 0x00000008
 FULL_CONTROL_AD = 0x000F01FF
 
 # ---------------------------------------------------------------------------
-# Werte-Normalisierung (ldap3 liefert je nach Schema-Info Listen, Strings, Bytes)
+# Value normalisation (depending on schema info, ldap3 returns lists, strings or bytes)
 # ---------------------------------------------------------------------------
 
 def as_list(v) -> list:
@@ -183,7 +183,7 @@ def sid_domain(sid: str | None) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Zeit
+# Time
 # ---------------------------------------------------------------------------
 _EPOCH_AD = datetime(1601, 1, 1, tzinfo=timezone.utc)
 
@@ -193,7 +193,7 @@ def filetime_to_dt(v) -> datetime | None:
         return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
     n = as_int(v)
     if n is None:
-        # ldap3 kann Zeitwerte bereits als String formatiert liefern
+        # ldap3 may return time values already formatted as strings
         s = as_str(v)
         if s:
             try:
@@ -230,7 +230,7 @@ def gentime_to_dt(v) -> datetime | None:
 
 
 def interval_days(v) -> float | None:
-    """Negative 100ns-Intervalle (maxPwdAge, lockoutDuration …) → Tage."""
+    """Negative 100 ns intervals (maxPwdAge, lockoutDuration …) → days."""
     n = as_int(v)
     if n is None:
         return None
@@ -259,12 +259,12 @@ def days_since(dt: datetime | None) -> int | None:
 
 
 def local_tz():
-    """Zeitzone der Anzeige (TZ, Standard Europe/Berlin)."""
+    """Display time zone (TZ, default Europe/Berlin)."""
     import os
     try:
         from zoneinfo import ZoneInfo
         return ZoneInfo(os.environ.get("TZ") or "Europe/Berlin")
-    except Exception:  # noqa: BLE001 – ohne tzdata: UTC
+    except Exception:  # noqa: BLE001 – without tzdata: UTC
         return timezone.utc
 
 
@@ -276,7 +276,7 @@ def fmt_date(dt: datetime | None) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Security Descriptor (self-relative) – minimaler DACL-Parser
+# Security descriptor (self-relative) – minimal DACL parser
 # ---------------------------------------------------------------------------
 
 def _guid(b: bytes | bytearray) -> str:
@@ -284,7 +284,7 @@ def _guid(b: bytes | bytearray) -> str:
 
 
 def parse_sd(raw) -> dict | None:
-    """Liefert {'owner': sid, 'aces': [{type, flags, mask, sid, object_type, inherited_object_type, inherited}]}."""
+    """Returns {'owner': sid, 'aces': [{type, flags, mask, sid, object_type, inherited_object_type, inherited}]}."""
     raw = first(raw)
     if not isinstance(raw, (bytes, bytearray)) or len(raw) < 20:
         return None
@@ -336,7 +336,7 @@ def _sid_at(raw: bytes | bytearray, off: int) -> str | None:
 
 
 def ace_grants_control(ace: dict) -> list[str]:
-    """Welche gefährlichen Rechte gewährt eine ACE? (für Berichte)"""
+    """Which dangerous rights does an ACE grant? (for reports)"""
     out: list[str] = []
     m = ace.get("mask", 0)
     if not ace.get("allow"):
@@ -355,17 +355,17 @@ def ace_grants_control(ace: dict) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Betriebssysteme
+# Operating systems
 # ---------------------------------------------------------------------------
 
-# Ende des erweiterten Supports von Windows Server 2016 und Windows 10 Enterprise LTSC 2021:
-# letzter Patchtag 12.01.2027 – ab dem 13.01.2027 ohne Sicherheitsupdates
+# End of extended support for Windows Server 2016 and Windows 10 Enterprise LTSC 2021:
+# last patch day 12 Jan 2027 – no security updates from 13 Jan 2027
 EXPIRING_END = datetime(2027, 1, 13, tzinfo=timezone.utc)
 
 
 def classify_os(os_name: str | None, os_version: str | None = None, today: datetime | None = None) -> str:
-    """Grobe Einordnung: 'obsolete', 'win10', 'expiring', 'supported', 'samba', 'other', 'unknown'.
-    'expiring' wird nach EXPIRING_END automatisch zu 'obsolete'."""
+    """Rough classification: 'obsolete', 'win10', 'expiring', 'supported', 'samba', 'other', 'unknown'.
+    'expiring' automatically becomes 'obsolete' after EXPIRING_END."""
     c = _classify_os(os_name, os_version)
     if c == "expiring" and (today or now_utc()) >= EXPIRING_END:
         return "obsolete"
@@ -386,9 +386,9 @@ def _classify_os(os_name: str | None, os_version: str | None = None) -> str:
         return "obsolete"
     if "windows 10" in s:
         if "iot" in s and ("ltsc" in s or "ltsb" in s):
-            return "supported"            # IoT Enterprise LTSC 2021: Support bis 01/2032
+            return "supported"            # IoT Enterprise LTSC 2021: supported until 01/2032
         if "ltsc" in s or "ltsb" in s:
-            # Langzeitversionen: Support je nach Build (2015/2016 beendet, 2019 bis 01/2029, 2021 bis 01/2027)
+            # Long-term servicing versions: support depends on build (2015/2016 ended, 2019 until 01/2029, 2021 until 01/2027)
             m = re.search(r"\((\d{5})\)", os_version or "")
             build = int(m.group(1)) if m else 0
             if build and build <= 14393:

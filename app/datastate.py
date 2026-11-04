@@ -1,14 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Datenbank beim Start schützen – unabhängig davon, wie das Update kam (Dockhand, Watchtower,
+"""Protect the database at start-up – regardless of how the update arrived (Dockhand, Watchtower,
 docker compose pull, update.sh):
 
-1. Nur eine SAMAUDIT-Instanz je Datenordner (Sperrdatei mit fcntl-Lock – wirkt auch zwischen Containern).
-2. Stammt die Datenbank von einer NEUEREN Programmversion (Rückschritt), wird nicht gestartet, sondern
-   klar gemeldet, welche Sicherung zurückzuspielen ist – statt mit Folgefehlern weiterzulaufen.
-3. Läuft eine andere Programmversion als zuletzt, wird zuerst eine Sicherung „vor-<Version>“ angelegt
-   (data/backups/samaudit-vor-<Version>-<Zeit>.db), erst danach ändern Migrationen das Schema.
-4. Die Compose-Datei meldet ihre Version (SAMAUDIT_COMPOSE); ist sie zu alt, gibt es einen Hinweis.
+1. Only one SAMAUDIT instance per data folder (lock file with an fcntl lock – also works across containers).
+2. If the database comes from a NEWER program version (downgrade), the program does not start but
+   states clearly which backup to restore – instead of carrying on with follow-up errors.
+3. If a different program version runs than last time, a backup "vor-<version>" is created first
+   (data/backups/samaudit-vor-<version>-<time>.db; "vor" = "before", the name is kept for existing
+   installations); only then do migrations change the schema.
+4. The Compose file reports its version (SAMAUDIT_COMPOSE); if it is too old, a note is shown.
 """
 from __future__ import annotations
 
@@ -23,18 +24,18 @@ import time
 from .config import settings
 from .version import VERSION
 
-log = logging.getLogger("samaudit.daten")
+log = logging.getLogger("samaudit.data")
 
-# Version des Datenbankschemas – bei jeder Schemaänderung (Migration in db._migrate) erhöhen
+# version of the database schema – increase with every schema change (migration in db._migrate)
 SCHEMA_VERSION = 2
-# Version der docker-compose.yml, die dieses Programm erwartet (bei Änderungen an der Datei erhöhen)
+# version of docker-compose.yml this program expects (increase when the file changes)
 COMPOSE_REQUIRED = 1
 
 _lock_fd: int | None = None
 
 
 class StartRefused(Exception):
-    """Start abgelehnt – die Meldung ist für Menschen geschrieben."""
+    """Start refused – the message is written for humans."""
 
 
 def version_key(v: str | None) -> tuple[int, ...]:
@@ -53,9 +54,9 @@ def backup_keep() -> int:
         return 5
 
 
-# --------------------------------------------------------------------------- Sperre
+# --------------------------------------------------------------------------- lock
 def acquire_lock() -> None:
-    """Nur eine Instanz je Datenordner. Der Lock gilt, solange der Prozess läuft."""
+    """Only one instance per data folder. The lock holds as long as the process runs."""
     global _lock_fd
     os.makedirs(settings.data_dir, exist_ok=True)
     fd = os.open(os.path.join(settings.data_dir, ".samaudit.lock"), os.O_RDWR | os.O_CREAT, 0o600)
@@ -63,14 +64,14 @@ def acquire_lock() -> None:
         fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         os.close(fd)
-        raise StartRefused("Auf diesem Datenordner läuft bereits ein SAMAUDIT-Container. Bitte nur einen "
-                           "Container je Datenordner betreiben (z. B. den alten Container entfernen: "
+        raise StartRefused("A SAMAUDIT container is already running on this data folder. Please run only one "
+                           "container per data folder (e.g. remove the old container: "
                            "docker ps -a).") from None
     _lock_fd = fd
 
 
 def is_locked_elsewhere() -> bool:
-    """True, wenn gerade ein laufendes SAMAUDIT diesen Datenordner benutzt (für restore)."""
+    """True if a running SAMAUDIT is currently using this data folder (for restore)."""
     path = os.path.join(settings.data_dir, ".samaudit.lock")
     if not os.path.exists(path):
         return False
@@ -85,7 +86,7 @@ def is_locked_elsewhere() -> bool:
         os.close(fd)
 
 
-# --------------------------------------------------------------------------- Metadaten
+# --------------------------------------------------------------------------- metadata
 def _read_meta(path: str) -> dict[str, str]:
     con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30)
     try:
@@ -103,7 +104,7 @@ def write_meta(con: sqlite3.Connection) -> None:
 
 
 def list_backups() -> list[str]:
-    """Alle Sicherungen, neueste zuerst (auch die Einzelsicherungen früherer Versionen)."""
+    """All backups, newest first (including the single backups of earlier versions)."""
     files = glob.glob(os.path.join(backup_dir(), "samaudit-*.db"))
     files += glob.glob(settings.db_path + ".vor-*.bak")
     return sorted(files, key=lambda f: os.path.getmtime(f), reverse=True)
@@ -117,14 +118,14 @@ _VOR = re.compile(r"^samaudit-vor-(.+?)-(\d{8}-\d{6})(?:-\d+)?\.db$")
 
 
 def _prune() -> None:
-    """Je Programmversion bleiben die älteste (Stand vor dem ersten Wechsel) und die neueste Sicherung;
-    behalten werden die Sicherungen der letzten BACKUP_KEEP Versionen. So kann eine Absturzschleife
-    keine nützlichen älteren Sicherungen verdrängen."""
+    """Per program version the oldest (state before the first switch) and the newest backup remain;
+    the backups of the last BACKUP_KEEP versions are kept. This way a crash loop cannot push out
+    useful older backups."""
     keep = backup_keep()
     if keep == 0:
         return
     groups: dict[str, list[str]] = {}
-    for f in list_backups():                                   # neueste zuerst
+    for f in list_backups():                                   # newest first
         m = _VOR.match(os.path.basename(f))
         if m:
             groups.setdefault(m.group(1), []).append(f)
@@ -135,13 +136,13 @@ def _prune() -> None:
         if i >= keep:
             remove += files
         elif len(files) > 2:
-            remove += files[1:-1]                              # zwischen neuester und ältester
+            remove += files[1:-1]                              # between newest and oldest
     for f in remove:
         try:
             os.remove(f)
-            log.info("Alte Sicherung entfernt: %s", f)
+            log.info("Old backup removed: %s", f)
         except OSError as e:
-            log.warning("Alte Sicherung nicht entfernbar: %s (%s)", f, e)
+            log.warning("Old backup could not be removed: %s (%s)", f, e)
 
 
 def _db_mtime() -> float:
@@ -149,7 +150,7 @@ def _db_mtime() -> float:
 
 
 def backup_now(label: str) -> str:
-    """Konsistente Kopie der Datenbank (SQLite-Backup-API) nach data/backups/."""
+    """Consistent copy of the database (SQLite backup API) to data/backups/."""
     os.makedirs(backup_dir(), mode=0o700, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     dest = os.path.join(backup_dir(), f"samaudit-{label}-{stamp}.db")
@@ -157,7 +158,7 @@ def backup_now(label: str) -> str:
     while os.path.exists(dest):
         n += 1
         dest = os.path.join(backup_dir(), f"samaudit-{label}-{stamp}-{n}.db")
-    # nur lesend öffnen: verändert die Datenbank (und ihren Zeitstempel) nicht
+    # open read-only: does not change the database (or its timestamp)
     src = sqlite3.connect(f"file:{settings.db_path}?mode=ro", uri=True, timeout=30)
     try:
         tmp = dest + ".part"
@@ -174,52 +175,52 @@ def backup_now(label: str) -> str:
 
 
 def check_and_backup() -> str | None:
-    """Vor db.init(): Rückschritt erkennen, bei Versionswechsel sichern. Gibt den Sicherungspfad zurück."""
+    """Before db.init(): detect a downgrade, back up on a version change. Returns the backup path."""
     if not os.path.exists(settings.db_path):
-        return None                                   # neue Installation
+        return None                                   # new installation
     try:
         meta = _read_meta(settings.db_path)
     except sqlite3.DatabaseError as e:
-        raise StartRefused(f"Die Datenbank {settings.db_path} ist nicht lesbar ({e}). Bitte eine Sicherung "
-                           "zurückspielen: „docker compose run --rm samaudit restore“.") from None
+        raise StartRefused(f"The database {settings.db_path} is not readable ({e}). Please restore a backup: "
+                           "\"docker compose run --rm samaudit restore\".") from None
     db_app = meta.get("app_version")
     try:
         db_schema = int(meta.get("schema_version", "0"))
     except ValueError:
         db_schema = 0
     if (db_app and version_key(db_app) > version_key(VERSION)) or db_schema > SCHEMA_VERSION:
-        newer = db_app or f"Schema {db_schema}"
+        newer = db_app or f"schema {db_schema}"
         hint = _backups_for(db_app) if db_app else []
         if hint:
-            what = (f"Bitte die Sicherung von vor dem Wechsel auf {newer} zurückspielen: "
-                    f"{os.path.relpath(hint[0], settings.data_dir)} (im Datenordner) – "
-                    f"„docker compose run --rm samaudit restore“ zeigt die Sicherungen und spielt die gewählte zurück.")
+            what = (f"Please restore the backup from before the switch to {newer}: "
+                    f"{os.path.relpath(hint[0], settings.data_dir)} (in the data folder) – "
+                    "\"docker compose run --rm samaudit restore\" lists the backups and restores the chosen one.")
         else:
-            what = ("Es gibt keine Sicherung „vor-" + str(db_app) + "“. Entweder wieder die neuere Version "
-                    "verwenden (SAMAUDIT_VERSION in der .env) oder eine ältere Sicherung zurückspielen: "
-                    "„docker compose run --rm samaudit restore“.")
-        raise StartRefused(f"Die Datenbank stammt von SAMAUDIT {newer} und ist neuer als dieses Programm "
-                           f"({VERSION}). Eine ältere Version kann sie nicht sicher verwenden. {what}")
+            what = ("There is no backup \"vor-" + str(db_app) + "\". Either use the newer version again "
+                    "(SAMAUDIT_VERSION in .env) or restore an older backup: "
+                    "\"docker compose run --rm samaudit restore\".")
+        raise StartRefused(f"The database comes from SAMAUDIT {newer} and is newer than this program "
+                           f"({VERSION}). An older version cannot use it safely. {what}")
     if db_app == VERSION and db_schema == SCHEMA_VERSION:
-        return None                                   # gleiche Version wie zuletzt – nichts zu tun
-    # schon gesichert und seitdem unverändert (z. B. Neustart nach einem Absturz)? dann keine weitere Kopie
+        return None                                   # same version as last time – nothing to do
+    # already backed up and unchanged since (e.g. restart after a crash)? then no further copy
     same = [b for b in _backups_for(VERSION) if os.path.getmtime(b) >= _db_mtime()]
     if same:
-        log.info("Sicherung vor dem Wechsel auf %s besteht bereits: %s", VERSION, same[0])
+        log.info("Backup from before the switch to %s already exists: %s", VERSION, same[0])
         return same[0]
     try:
         dest = backup_now(f"vor-{VERSION}")
     except Exception as e:  # noqa: BLE001
-        raise StartRefused(f"Sicherung vor dem Wechsel auf {VERSION} fehlgeschlagen ({e}). Ohne Sicherung "
-                           "wird die Datenbank nicht verändert – bitte Speicherplatz und Rechte von ./data prüfen.") from e
-    log.info("Versionswechsel %s → %s: Datenbank gesichert: %s", db_app or "unbekannt (vor 2.0)", VERSION, dest)
+        raise StartRefused(f"Backup before the switch to {VERSION} failed ({e}). Without a backup the database "
+                           "is not changed – please check free space and permissions of ./data.") from e
+    log.info("Version change %s → %s: database backed up: %s", db_app or "unknown (before 2.0)", VERSION, dest)
     _prune()
     return dest
 
 
-# --------------------------------------------------------------------------- Compose-Datei
+# --------------------------------------------------------------------------- Compose file
 def compose_status() -> dict | None:
-    """None = alles gut; sonst Angaben für den Hinweis (Log und Oberfläche)."""
+    """None = all good; otherwise details for the note (log and web UI)."""
     raw = os.environ.get("SAMAUDIT_COMPOSE", "").strip()
     have = int(raw) if raw.isdigit() else 0
     if have >= COMPOSE_REQUIRED:
@@ -228,6 +229,7 @@ def compose_status() -> dict | None:
 
 
 def compose_message(lang: str = "de") -> str | None:
+    """Note about an outdated Compose file, in the UI language (lang "de" or "en"); None = no note."""
     st = compose_status()
     if not st:
         return None
@@ -245,9 +247,9 @@ def compose_message(lang: str = "de") -> str | None:
 
 
 def prepare() -> None:
-    """Beim Start vor allem anderen aufrufen."""
+    """Call at start-up before anything else."""
     acquire_lock()
     check_and_backup()
-    msg = compose_message("de")
+    msg = compose_message("en")                       # the log is in English; the web UI shows its own language
     if msg:
         log.warning(msg)

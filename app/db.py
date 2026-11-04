@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""SQLite-Speicher für Scans, Befunde und das Aktivitätsprotokoll."""
+"""SQLite storage for scans, findings and the activity log."""
 from __future__ import annotations
 
 import json
@@ -81,7 +81,7 @@ def now_iso() -> str:
 
 
 def _rename_previous_db() -> None:
-    """Einmalig: Datenbankdatei früherer Versionen auf samaudit.db umbenennen (Inhalt bleibt erhalten)."""
+    """One-off: rename the database file of earlier versions to samaudit.db (the content is kept)."""
     old = os.path.join(os.path.dirname(settings.db_path), "adaudit.db")
     if os.path.exists(old) and not os.path.exists(settings.db_path):
         for suffix in ("", "-wal", "-shm"):
@@ -97,7 +97,7 @@ def _connect() -> sqlite3.Connection:
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA synchronous=NORMAL")
     con.execute("PRAGMA foreign_keys=ON")
-    con.execute("PRAGMA secure_delete=ON")  # gelöschte Inhalte überschreiben (Datenschutz)
+    con.execute("PRAGMA secure_delete=ON")  # overwrite deleted content (privacy)
     return con
 
 
@@ -120,21 +120,21 @@ def conn():
 
 def _migrate(c: sqlite3.Connection) -> None:
     cols = {r[1] for r in c.execute("PRAGMA table_info(cert_pins)").fetchall()}
-    # Schemaänderungen hier ergänzen und datastate.SCHEMA_VERSION erhöhen – die Sicherung
-    # „vor-<Version>“ legt datastate.check_and_backup() vorher an.
+    # Add schema changes here and increase datastate.SCHEMA_VERSION – datastate.check_and_backup()
+    # creates the "vor-<version>" backup beforehand.
     if "names" not in cols:                                   # Schema 2
         c.execute("ALTER TABLE cert_pins ADD COLUMN names TEXT")
 
 
 def init() -> None:
     with conn() as c:
-        c.executescript(SCHEMA)                 # nur CREATE … IF NOT EXISTS
-        c.execute("BEGIN IMMEDIATE")            # Migrationen und Versionsangabe ganz oder gar nicht
+        c.executescript(SCHEMA)                 # only CREATE … IF NOT EXISTS
+        c.execute("BEGIN IMMEDIATE")            # migrations and version info all or nothing
         _migrate(c)
         from .datastate import write_meta
-        write_meta(c)  # Programm- und Schemaversion merken (Schutz vor Rückschritt)
-        # Scans, die beim letzten Beenden noch liefen, als abgebrochen markieren
-        c.execute("UPDATE scans SET status='error', error='Abgebrochen (Neustart)' WHERE status='running'")
+        write_meta(c)  # remember program and schema version (protection against downgrades)
+        # Mark scans that were still running at the last shutdown as aborted (error code, see err_aborted_restart)
+        c.execute("UPDATE scans SET status='error', error='aborted_restart' WHERE status='running'")
     try:
         os.chmod(settings.db_path, 0o600)
     except OSError:
@@ -218,7 +218,7 @@ def failed_rule_ids(scan_id: int) -> set[str]:
 
 
 def delete_scan(scan_id: int) -> bool:
-    """Löscht einen Bericht samt Befunden – nie einen laufenden Scan."""
+    """Deletes a report including its findings – never a running scan."""
     with conn() as c:
         if c.execute("DELETE FROM scans WHERE id=? AND status!='running'", (scan_id,)).rowcount == 0:
             return False
@@ -232,7 +232,7 @@ def running_scan() -> dict | None:
     return dict(r) if r else None
 
 
-# --- Protokoll ---------------------------------------------------------------
+# --- Activity log -----------------------------------------------------------
 
 def audit(action: str, user: str | None = None, ip: str | None = None, detail: str | None = None) -> None:
     with conn() as c:
@@ -246,7 +246,7 @@ def audit_entries(limit: int = 300) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-# --- Gemerkte DC-Zertifikate (LDAPS-Autovertrauen) ---------------------------
+# --- Pinned DC certificates (LDAPS auto-trust) -------------------------------
 
 def get_pin(host: str) -> dict | None:
     with conn() as c:
@@ -267,7 +267,7 @@ def set_pin_names(host: str, names: str) -> None:
 
 
 def family_pins(base: str) -> list[dict]:
-    """Alle gemerkten Einträge eines konfigurierten Namens (\"name\" und \"name [IP]\")."""
+    """All pinned entries of a configured name (\"name\" and \"name [IP]\")."""
     b = base.lower()
     with conn() as c:
         rows = c.execute("SELECT * FROM cert_pins WHERE host=? OR substr(host, 1, ?)=?",
@@ -289,14 +289,14 @@ def list_pins() -> list[dict]:
 def delete_pins(host: str | None = None) -> int:
     with conn() as c:
         if host:
-            h = host.lower()     # „firma.local“ entfernt auch „firma.local [10.0.0.1]“ usw.
+            h = host.lower()     # "firma.local" also removes "firma.local [10.0.0.1]" etc.
             cur = c.execute("DELETE FROM cert_pins WHERE host=? OR substr(host, 1, ?)=?", (h, len(h) + 2, h + " ["))
         else:
             cur = c.execute("DELETE FROM cert_pins")
         return cur.rowcount
 
 
-# --- Einfache Schlüssel/Wert-Ablage (z. B. erkannter Domänentyp) -------------
+# --- Simple key/value store (e.g. detected domain type) ----------------------
 
 def set_kv(key: str, value: str) -> None:
     with conn() as c:
@@ -309,10 +309,10 @@ def get_kv(key: str, default: str | None = None) -> str | None:
     return r["value"] if r else default
 
 
-# --- Löschfristen (Datenschutz) ------------------------------------------------
+# --- Retention periods (privacy) -----------------------------------------------
 
 def purge_expired(report_days: int, audit_days: int) -> dict:
-    """Löscht Berichte und Protokolleinträge, die älter als die Frist sind (0 = nie)."""
+    """Deletes reports and activity log entries older than the retention period (0 = never)."""
     from datetime import timedelta
     out = {"scans": 0, "audit": 0}
     now = datetime.now(timezone.utc)
@@ -332,10 +332,10 @@ def purge_expired(report_days: int, audit_days: int) -> dict:
 
 
 def compact() -> None:
-    """Gelöschte Daten auch physisch entfernen: Datei neu aufbauen und WAL-Datei leeren."""
+    """Also remove deleted data physically: rebuild the file and empty the WAL file."""
     with _lock:
         with conn():
-            pass  # stellt die Verbindung her
-        assert _con is not None  # noqa: S101 – conn() hat sie eben angelegt
+            pass  # opens the connection
+        assert _con is not None  # noqa: S101 – conn() has just created it
         _con.execute("VACUUM")
         _con.execute("PRAGMA wal_checkpoint(TRUNCATE)")

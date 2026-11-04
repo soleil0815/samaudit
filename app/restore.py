@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Sicherung der Datenbank zurückspielen.
+"""Restore a database backup.
 
     docker compose stop samaudit
-    docker compose run --rm samaudit restore              # Liste, Auswahl per Nummer
-    docker compose run --rm samaudit restore <Dateiname>  # direkt
+    docker compose run --rm samaudit restore              # list, choose by number
+    docker compose run --rm samaudit restore <file name>  # directly
     docker compose up -d
 
-Die aktuelle Datenbank wird vorher nach data/backups/samaudit-ersetzt-<Zeit>.db gesichert –
-ein Zurückspielen lässt sich also selbst wieder rückgängig machen.
+The current database is backed up first to data/backups/samaudit-ersetzt-<time>.db ("ersetzt" =
+"replaced"; the name is kept for existing installations) – so a restore can itself be undone.
 """
 from __future__ import annotations
 
@@ -28,11 +28,11 @@ def _info(path: str) -> str:
             v = con.execute("SELECT value FROM kv WHERE key='app_version'").fetchone()
         finally:
             con.close()
-        ver = v[0] if v else "vor 2.0"
+        ver = v[0] if v else "before 2.0"
     except sqlite3.Error:
         ver = "?"
     when = time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(path)))
-    return f"{when}  Stand: {ver}"
+    return f"{when}  version: {ver}"
 
 
 def _check(path: str) -> None:
@@ -42,7 +42,7 @@ def _check(path: str) -> None:
     finally:
         con.close()
     if not r or r[0] != "ok":
-        raise SystemExit(f"Die Sicherung ist beschädigt ({r[0] if r else '?'}) – nichts geändert.")
+        raise SystemExit(f"The backup is damaged ({r[0] if r else '?'}) – nothing changed.")
 
 
 def _restore(chosen: str) -> None:
@@ -50,7 +50,7 @@ def _restore(chosen: str) -> None:
     db = settings.db_path
     if os.path.exists(db):
         saved = datastate.backup_now("ersetzt")
-        print(f"Aktuelle Datenbank gesichert: {os.path.relpath(saved, settings.data_dir)}")
+        print(f"Current database backed up: {os.path.relpath(saved, settings.data_dir)}")
     tmp = db + ".restore"
     src = sqlite3.connect(f"file:{chosen}?mode=ro", uri=True)
     try:
@@ -66,60 +66,60 @@ def _restore(chosen: str) -> None:
         if os.path.exists(db + suffix):
             os.remove(db + suffix)
     os.replace(tmp, db)
-    print(f"Zurückgespielt: {os.path.basename(chosen)}  ({_info(db)})")
+    print(f"Restored: {os.path.basename(chosen)}  ({_info(db)})")
 
 
 def rollback(since: float) -> int:
-    """Für update.sh: Rückfall nach einem fehlgeschlagenen Update. Hat die neue Version seit `since` eine
-    Sicherung „vor-…“ angelegt, hat sie die Datenbank übernommen – dann wird die ÄLTESTE davon (der Stand
-    vor dem Update) zurückgespielt. Sonst wurde nichts verändert (z. B. Sicherheitsupdate derselben Version)."""
+    """For update.sh: rollback after a failed update. If the new version created a backup "vor-…"
+    since `since`, it has taken over the database – then the OLDEST of these (the state before the update)
+    is restored. Otherwise nothing was changed (e.g. security update of the same version)."""
     cands = [b for b in datastate.list_backups()
              if os.path.basename(b).startswith("samaudit-vor-") and os.path.getmtime(b) >= since - 5]
     if not cands:
-        print("Die Datenbank wurde bei diesem Update nicht verändert – nichts zurückzuspielen.")
+        print("The database was not changed by this update – nothing to restore.")
         return 0
-    _restore(cands[-1])                       # list_backups: neueste zuerst → letzte = älteste
+    _restore(cands[-1])                       # list_backups: newest first → last = oldest
     return 0
 
 
 def main(argv: list[str]) -> int:
     try:
-        datastate.acquire_lock()             # für die ganze Dauer: kein Start während des Zurückspielens
+        datastate.acquire_lock()             # for the whole run: no start while restoring
     except datastate.StartRefused:
-        print("SAMAUDIT läuft noch auf diesem Datenordner. Bitte zuerst anhalten: docker compose stop samaudit")
+        print("SAMAUDIT is still running on this data folder. Please stop it first: docker compose stop samaudit")
         return 1
     if argv[:1] == ["--rollback"]:
         if len(argv) != 2:
-            print("Aufruf: restore --rollback <Startzeit>")
+            print("Usage: restore --rollback <start time>")
             return 2
         return rollback(float(argv[1]))
     backups = datastate.list_backups()
     if not backups:
-        print("Keine Sicherungen gefunden (data/backups/).")
+        print("No backups found (data/backups/).")
         return 1
     if argv:
         name = os.path.basename(argv[0])
         chosen = next((b for b in backups if os.path.basename(b) == name), None)
         if not chosen:
-            print(f"Sicherung nicht gefunden: {name}")
+            print(f"Backup not found: {name}")
             return 1
     else:
-        print("Vorhandene Sicherungen (neueste zuerst):")
+        print("Available backups (newest first):")
         for i, b in enumerate(backups, 1):
             print(f"  {i:2}  {os.path.basename(b):55}  {_info(b)}")
         if not sys.stdin.isatty():
-            print("\nDateiname angeben: docker compose run --rm samaudit restore <Dateiname>")
+            print("\nGive the file name: docker compose run --rm samaudit restore <file name>")
             return 1
         try:
-            a = input("Nummer der Sicherung (Enter = abbrechen): ").strip()
+            a = input("Number of the backup (Enter = cancel): ").strip()
         except EOFError:
             a = ""
         if not a.isdigit() or not 1 <= int(a) <= len(backups):
-            print("Abgebrochen – nichts geändert.")
+            print("Cancelled – nothing changed.")
             return 1
         chosen = backups[int(a) - 1]
     _restore(chosen)
-    print("Jetzt starten: docker compose up -d")
+    print("Now start it: docker compose up -d")
     return 0
 
 

@@ -21,7 +21,7 @@
   {% else %}
     {% if cert_msg %}<div class="alert ok" role="status">{{ t(cert_msg, lang) }}</div>{% endif %}
     {% if cert_err %}<div class="alert" role="alert">{{ cert_err }}</div>{% endif %}
-    {% if webcert.error %}<div class="alert">{{ t('webcert_error', lang) }} {{ webcert.error }}</div>{% endif %}
+    {% if webcert.error %}<div class="alert">{{ t('webcert_error', lang) }} {{ webcert.error.text(lang) if webcert.error.text is defined else webcert.error }}</div>{% endif %}
     {% for w in webcert.warnings or [] %}<div class="alert {{ '' if w == 'cert_expired' else 'warn' }}">{{ t(w, lang) }}</div>{% endfor %}
     <dl class="facts wide">
       <div><dt>{{ t('webcert_source', lang) }}</dt><dd style="font-size:15px">

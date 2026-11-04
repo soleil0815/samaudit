@@ -34,7 +34,7 @@ jobs:
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker pull --platform linux/amd64 "$image"
           echo "image=$image" >> "$GITHUB_OUTPUT"
-          echo "Geprüft: $image ($(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$image"))" >> "$GITHUB_STEP_SUMMARY"
+          echo "Checked: $image ($(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$image"))" >> "$GITHUB_STEP_SUMMARY"
       - id: trivy
         name: Vulnerability scan (Trivy)
         run: .github/scripts/trivy.sh "${{ steps.pull.outputs.image }}"

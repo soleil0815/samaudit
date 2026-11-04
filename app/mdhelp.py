@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Handbuch (app/docs/*.md) als HTML für die Hilfe-Seite.
+"""Manual (app/docs/*.md) as HTML for the help page.
 
-Bewusst kleiner, eigener Markdown-Leser für genau die Elemente, die das Handbuch nutzt
-(Überschriften, Absätze, Listen, Tabellen, Code, Hinweise, Fett, Code im Text, Links) –
-ohne zusätzliche Bibliothek. Aller Text wird HTML-maskiert; Links nur auf http(s), # oder /."""
+A deliberately small, custom Markdown reader for exactly the elements the manual uses
+(headings, paragraphs, lists, tables, code, notes, bold, inline code, links) –
+without an extra library. All text is HTML-escaped; links only to http(s), # or /."""
 from __future__ import annotations
 
 import os
@@ -30,7 +30,7 @@ def _slug(text: str, used: set[str]) -> str:
 
 
 def _inline(text: str) -> str:
-    """Inline-Formatierung auf bereits maskiertem Text."""
+    """Inline formatting on already escaped text."""
     codes: list[str] = []
 
     def keep_code(m):
@@ -53,7 +53,7 @@ def _inline(text: str) -> str:
 
 
 def render(md: str) -> tuple[str, list[tuple[int, str, str]]]:
-    """Gibt (HTML, Inhaltsverzeichnis[(Ebene, id, Titel)]) zurück."""
+    """Returns (HTML, table of contents[(level, id, title)])."""
     lines = md.splitlines()
     html: list[str] = []
     toc: list[tuple[int, str, str]] = []
@@ -114,7 +114,7 @@ def render(md: str) -> tuple[str, list[tuple[int, str, str]]]:
             flush()
             ordered = lm.group(2)[0].isdigit()
             tag = "ol" if ordered else "ul"
-            items: list[list] = []   # [text, [unterpunkte]]
+            items: list[list] = []   # [text, [sub-items]]
             while i < n:
                 m2 = re.match(r"^(\s*)([-*]|\d+\.)\s+(.*)$", lines[i])
                 if m2 and len(m2.group(1)) == 0:
@@ -122,7 +122,7 @@ def render(md: str) -> tuple[str, list[tuple[int, str, str]]]:
                 elif m2 and items:
                     items[-1][1].append(m2.group(3)); i += 1
                 elif lines[i].startswith("   ") and lines[i].strip() and items:
-                    items[-1][0] += " " + lines[i].strip(); i += 1   # Fortsetzungszeile
+                    items[-1][0] += " " + lines[i].strip(); i += 1   # continuation line
                 else:
                     break
             out = [f"<{tag}>"]

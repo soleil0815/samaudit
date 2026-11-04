@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Aufbereitung der Rohdaten: Indizes, rekursive Gruppenauflösung, privilegierte Konten."""
+"""Preparation of the raw data: indexes, recursive group resolution, privileged accounts."""
 from __future__ import annotations
 
 from .adutil import DOMAIN_RIDS, WELL_KNOWN_SIDS, days_since, now_utc, sid_rid
@@ -8,7 +8,7 @@ from .adutil import DOMAIN_RIDS, WELL_KNOWN_SIDS, days_since, now_utc, sid_rid
 BUILTIN_RIDS = {544, 545, 546, 548, 549, 550, 551, 552, 554, 557, 560, 561}
 ROOT_RIDS = {518, 519, 527, 498}
 
-# Privilegierte Gruppen: (RID oder Name, Schlüssel für Anzeige, "Admin-Ebene")
+# Privileged groups: (RID or name, display key, "admin tier")
 ADMIN_GROUP_RIDS = [512, 519, 518, 544]
 OPERATOR_GROUP_RIDS = [548, 549, 550, 551]
 
@@ -74,13 +74,13 @@ class Ctx:
 
     # ------------------------------------------------------------------
     def members(self, group: dict | None) -> list[dict]:
-        """Rekursive Mitglieder (Benutzer/Computer) einer Gruppe, inkl. primaryGroupID."""
+        """Recursive members (users/computers) of a group, including primaryGroupID."""
         if not group:
             return []
         return list(self._members_cached(group["dn"].lower()))
 
     def _members_cached(self, gdn: str) -> tuple:
-        # Zwischenspeicher pro Ctx (lru_cache auf Methoden hielte jedes Ctx samt Domänendaten dauerhaft im RAM)
+        # Per-Ctx cache (lru_cache on methods would keep every Ctx and its domain data in RAM for good)
         if gdn in self._members_memo:
             return self._members_memo[gdn]
         seen_groups: set[str] = set()
@@ -113,7 +113,7 @@ class Ctx:
         return res
 
     def foreign_members(self, group: dict | None) -> list[str]:
-        """SIDs aus ForeignSecurityPrincipals (z. B. Authenticated Users)."""
+        """SIDs from ForeignSecurityPrincipals (e.g. Authenticated Users)."""
         out = []
         for mdn in (group or {}).get("members", []):
             if ",cn=foreignsecurityprincipals," in mdn.lower():
@@ -123,7 +123,7 @@ class Ctx:
 
     # ------------------------------------------------------------------
     def _build_priv(self) -> None:
-        self.priv_map: dict[str, list[str]] = {}   # dn -> Gruppen
+        self.priv_map: dict[str, list[str]] = {}   # dn -> groups
         self.admin_dns: set[str] = set()
         self.priv_groups: list[dict] = []
         candidates = [(rid, True) for rid in ADMIN_GROUP_RIDS] + [(rid, False) for rid in OPERATOR_GROUP_RIDS + [520, 526, 527]]
@@ -161,7 +161,7 @@ class Ctx:
 
     # ------------------------------------------------------------------
     def inactive(self, acc: dict, days: int) -> bool:
-        """Inaktiv = letzte Anmeldung älter als `days` – oder nie angemeldet und älter als `days`."""
+        """Inactive = last logon older than `days` – or never logged on and older than `days`."""
         ll = acc.get("last_logon")
         if ll is not None:
             return (self.now - ll).days > days
@@ -169,12 +169,12 @@ class Ctx:
         return created is not None and (self.now - created).days > days
 
     def safe_sids(self) -> set[str]:
-        """Prinzipale, die Standard-Schreib-/Replikationsrechte besitzen dürfen."""
+        """Principals that are allowed to hold default write/replication rights."""
         return {
             "S-1-5-18", "S-1-5-32-544", "S-1-5-9", "S-1-5-10", "S-1-3-0",
             self.group_sid(512), self.group_sid(519), self.group_sid(518), self.group_sid(516),
             self.group_sid(521), self.group_sid(498),
-            # untergeordnete Domäne: Objekte der Konfigurationspartition berechtigen die Admins der Stammdomäne
+            # child domain: objects in the configuration partition grant rights to the forest root domain admins
             f"{self.root_sid}-512", f"{self.root_sid}-516",
         }
 
@@ -189,7 +189,7 @@ class Ctx:
 
     # ------------------------------------------------------------------
     def nested_principals(self, group: dict | None) -> set[str]:
-        """SIDs aller verschachtelten Gruppen und ForeignSecurityPrincipals unterhalb einer Gruppe."""
+        """SIDs of all nested groups and ForeignSecurityPrincipals below a group."""
         out: set[str] = set()
         seen: set[str] = set()
 
@@ -213,7 +213,7 @@ class Ctx:
         return out
 
     def gpo_guids(self, scope: str = "dc") -> list[str]:
-        """Aktiv verknüpfte GPOs: 'dc' = Domäne + OU Domain Controllers (in Anwendungsreihenfolge), 'all' = alle."""
+        """Actively linked GPOs: 'dc' = domain + Domain Controllers OU (in order of application), 'all' = all."""
         failed = set((self.m.get("meta") or {}).get("failed_sections") or [])
         if failed & {"all_links", "site_links", "dc_ou", "gpos"}:
             from .rules import NotApplicable

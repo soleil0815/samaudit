@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Oberflächentexte Deutsch / Englisch."""
+"""User interface texts, German / English."""
 from __future__ import annotations
 
 T: dict[str, dict[str, str]] = {
-    # Allgemein
+    # General
     "app_name": {"de": "SAMAUDIT", "en": "SAMAUDIT"},
     "tagline": {"de": "Sicherheitsprüfung für Active Directory", "en": "Active Directory security assessment"},
     "nav_dashboard": {"de": "Übersicht", "en": "Overview"},
@@ -27,7 +27,7 @@ T: dict[str, dict[str, str]] = {
     "login_footer": {"de": "Die Anmeldung erfolgt direkt am Domänencontroller. Ihr Passwort wird nicht gespeichert.",
                      "en": "You sign in directly against the domain controller. Your password is not stored."},
     "config_error": {"de": "Konfigurationsfehler", "en": "Configuration error"},
-    # Fehlercodes Login
+    # Sign-in error codes
     "err_bad_credentials": {"de": "Benutzername oder Passwort ist falsch.", "en": "Wrong username or password."},
     "err_not_allowed": {"de": "Zugriff verweigert: Dieses Konto ist nicht Mitglied der Prüfer-Gruppe (ALLOWED_GROUPS).",
                         "en": "Access denied: this account is not a member of the auditor group (ALLOWED_GROUPS)."},
@@ -65,6 +65,10 @@ T: dict[str, dict[str, str]] = {
     "err_csrf": {"de": "Die Sitzung ist abgelaufen. Bitte erneut versuchen.", "en": "Session expired. Please try again."},
     "err_session": {"de": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
                     "en": "Your session has expired. Please sign in again."},
+    # Scan error codes (scans.error)
+    "err_domain_unreadable": {"de": "Das Domänenobjekt konnte nicht gelesen werden.", "en": "The domain object could not be read."},
+    "err_aborted_restart": {"de": "Abgebrochen (Neustart)", "en": "Aborted (restart)"},
+    "err_smb_missing": {"de": "smbprotocol fehlt: {arg}", "en": "smbprotocol missing: {arg}"},
     # Dashboard
     "hello": {"de": "Angemeldet als", "en": "Signed in as"},
     "domain": {"de": "Domäne", "en": "Domain"},
@@ -97,7 +101,7 @@ T: dict[str, dict[str, str]] = {
     "level_1": {"de": "Gut", "en": "Good"},
     "level_2": {"de": "Handlungsbedarf", "en": "Action needed"},
     "level_3": {"de": "Kritisch", "en": "Critical"},
-    # Kategorien
+    # Categories
     "cat_stale": {"de": "Veraltete Objekte", "en": "Stale objects"},
     "cat_privileged": {"de": "Privilegierte Konten", "en": "Privileged accounts"},
     "cat_trusts": {"de": "Vertrauensstellungen", "en": "Trusts"},
@@ -110,7 +114,7 @@ T: dict[str, dict[str, str]] = {
                     "en": "Connections to other domains and forests"},
     "catd_anomalies": {"de": "Richtlinien und Konfigurationen der Domäne",
                        "en": "Domain policies and configuration"},
-    # Schweregrade
+    # Severities
     "sev_critical": {"de": "Kritisch", "en": "Critical"},
     "sev_high": {"de": "Hoch", "en": "High"},
     "sev_medium": {"de": "Mittel", "en": "Medium"},
@@ -184,7 +188,7 @@ T: dict[str, dict[str, str]] = {
     "back": {"de": "Zurück", "en": "Back"},
     "scan_failed": {"de": "Der Scan ist fehlgeschlagen", "en": "The scan failed"},
     "not_found": {"de": "Nicht gefunden", "en": "Not found"},
-    # Phasen
+    # Phases
     "phase_start": {"de": "Verbindung wird aufgebaut", "en": "Connecting"},
     "phase_domain": {"de": "Domäne und Richtlinien lesen", "en": "Reading domain and policies"},
     "phase_users": {"de": "Benutzerkonten lesen", "en": "Reading user accounts"},
@@ -197,7 +201,7 @@ T: dict[str, dict[str, str]] = {
     "phase_sysvol": {"de": "SYSVOL durchsuchen", "en": "Searching SYSVOL"},
     "phase_rules": {"de": "Prüfregeln auswerten", "en": "Evaluating checks"},
     "phase_done": {"de": "Fertig", "en": "Done"},
-    # Nicht prüfbar
+    # Not checkable
     "na_smb_disabled": {"de": "SMB-Prüfungen sind deaktiviert (SMB_CHECKS=false).", "en": "SMB checks are disabled."},
     "na_smb_error": {"de": "SYSVOL war per SMB nicht erreichbar.", "en": "SYSVOL was not reachable via SMB."},
     "na_acl": {"de": "Berechtigungen konnten nicht gelesen werden.", "en": "Permissions could not be read."},
@@ -209,7 +213,7 @@ T: dict[str, dict[str, str]] = {
     "na_gpo_unreadable": {"de": "Mindestens eine wirksame Gruppenrichtlinie ist für das Prüferkonto nicht lesbar (Sicherheitsfilterung).", "en": "At least one applied group policy is not readable by the auditor account (security filtering)."},
     "na_esc8_certsrv": {"de": "Die Web-Registrierung (/certsrv) ist im AD nicht hinterlegt – bitte auf dem CA-Server prüfen, ob sie per HTTP mit NTLM erreichbar ist.", "en": "Web enrollment (/certsrv) is not recorded in AD – check on the CA server whether it is reachable over HTTP with NTLM."},
     "na_section": {"de": "Die nötigen Daten konnten beim Scan nicht vollständig gelesen werden.", "en": "The required data could not be read completely during the scan."},
-    # Spalten
+    # Columns
     "col_account": {"de": "Konto", "en": "Account"},
     "col_last_logon": {"de": "Letzte Anmeldung", "en": "Last logon"},
     "col_pwd_last_set": {"de": "Passwort gesetzt", "en": "Password set"},
@@ -233,7 +237,7 @@ T: dict[str, dict[str, str]] = {
     "col_days": {"de": "Tage", "en": "Days"},
     "col_gpo": {"de": "GPO", "en": "GPO"},
     "col_file": {"de": "Datei", "en": "File"},
-    # Werte
+    # Values
     "v_own_domain": {"de": "eigene Domäne!", "en": "own domain!"},
     "v_foreign_domain": {"de": "fremde Domäne", "en": "foreign domain"},
     "dir_0": {"de": "deaktiviert", "en": "disabled"},
@@ -329,6 +333,31 @@ T: dict[str, dict[str, str]] = {
     "cert_expired": {"de": "Das Zertifikat ist abgelaufen.", "en": "The certificate has expired."},
     "cert_expiring": {"de": "Das Zertifikat läuft in weniger als 30 Tagen ab.", "en": "The certificate expires in less than 30 days."},
     "cert_host_mismatch": {"de": "PUBLIC_HOSTNAME steht nicht im Zertifikat – Browser zeigen dann eine Warnung.", "en": "PUBLIC_HOSTNAME is not in the certificate – browsers will show a warning."},
+    # Web certificate errors (webcert.CertError)
+    "certerr_folder": {"de": "Ordner certs", "en": "certs folder"},
+    "certerr_key_not_encrypted": {"de": "{name}: Der Schlüssel ist nicht verschlüsselt – Passwort weglassen.", "en": "{name}: the key is not encrypted – leave the password empty."},
+    "certerr_key_encrypted": {"de": "{name}: Der private Schlüssel ist verschlüsselt – bitte Passwort angeben.", "en": "{name}: the private key is encrypted – please enter the password."},
+    "certerr_key_password": {"de": "{name}: Passwort für den privaten Schlüssel ist falsch.", "en": "{name}: wrong password for the private key."},
+    "certerr_too_large": {"de": "{name}: Datei ist zu groß für ein Zertifikat.", "en": "{name}: file is too large for a certificate."},
+    "certerr_pfx": {"de": "{name}: Passwort falsch oder Datei beschädigt.", "en": "{name}: wrong password or damaged file."},
+    "certerr_format": {"de": "{name}: Format nicht erkannt (erwartet PFX, PEM oder DER).", "en": "{name}: format not recognised (expected PFX, PEM or DER)."},
+    "certerr_mismatch": {"de": "Zertifikat und privater Schlüssel passen nicht zusammen.", "en": "Certificate and private key do not match."},
+    "certerr_no_key": {"de": "Zertifikat gefunden, aber kein privater Schlüssel – Schlüsseldatei (.key) mit angeben oder eine PFX-Datei verwenden.",
+                       "en": "Certificate found, but no private key – add the key file (.key) or use a PFX file."},
+    "certerr_no_cert": {"de": "Privater Schlüssel gefunden, aber kein Server-Zertifikat.", "en": "Private key found, but no server certificate."},
+    "certerr_ca_only": {"de": "Nur CA-Zertifikate gefunden – es fehlt das Zertifikat für den Server selbst.", "en": "Only CA certificates found – the certificate for the server itself is missing."},
+    "certerr_missing": {"de": "{files} nicht gefunden.", "en": "{files} not found."},
+    "certerr_multi_pfx": {"de": "Mehrere PFX-Dateien im Ordner certs – mit TLS_PFX die richtige angeben.", "en": "Several PFX files in the certs folder – select the right one with TLS_PFX."},
+    "certerr_no_files": {"de": "Bitte mindestens eine Datei auswählen.", "en": "Please select at least one file."},
+    "certerr_too_many": {"de": "Höchstens {n} Dateien auf einmal.", "en": "At most {n} files at once."},
+    "certerr_none_found": {"de": "In den Dateien wurde kein Zertifikat gefunden.", "en": "No certificate was found in the files."},
+    "certerr_rsa_weak": {"de": "RSA-Schlüssel mit {bits} Bit ist zu schwach – mindestens 2048 Bit verwenden.", "en": "RSA key with {bits} bits is too weak – use at least 2048 bits."},
+    "certerr_ec_weak": {"de": "EC-Schlüssel ist zu schwach – mindestens P-256 verwenden.", "en": "EC key is too weak – use at least P-256."},
+    "certerr_dsa": {"de": "DSA-Schlüssel werden nicht unterstützt.", "en": "DSA keys are not supported."},
+    "certerr_expired": {"de": "Das Zertifikat ist am {date_de} abgelaufen.", "en": "The certificate expired on {date_en}."},
+    "certerr_no_server_auth": {"de": "Das Zertifikat ist nicht für Webserver ausgestellt (Verwendungszweck „Serverauthentifizierung“ fehlt) – Browser würden es ablehnen. Vorlage „Webserver“ der CA verwenden.",
+                               "en": "The certificate is not issued for web servers (the \"Server Authentication\" purpose is missing) – browsers would reject it. Use the CA's \"Web Server\" template."},
+    "certerr_unusable": {"de": "Zertifikat lässt sich nicht verwenden: {reason}", "en": "Certificate cannot be used: {reason}"},
     "pins_title": {"de": "Vertrauenswürdige DC-Zertifikate", "en": "Trusted DC certificates"},
     "pins_intro": {"de": "SAMAUDIT vertraut dem LDAPS-Zertifikat eines Domänencontrollers beim ersten Kontakt automatisch und merkt sich die ausstellende CA. Ändert sich das Zertifikat später auf eine andere CA, wird die Verbindung abgelehnt (Schutz vor Man-in-the-Middle).",
                    "en": "SAMAUDIT automatically trusts a DC's LDAPS certificate on first contact and remembers the issuing CA. A later certificate from a different CA is rejected (man-in-the-middle protection)."},
@@ -368,7 +397,7 @@ T: dict[str, dict[str, str]] = {
     "col_privilege": {"de": "Recht", "en": "Right"},
     "col_line": {"de": "Zeile", "en": "Line"},
     "col_kind": {"de": "Muster", "en": "Pattern"},
-    # Audit-Aktionen
+    # Audit actions
     "act_login": {"de": "Anmeldung", "en": "Sign-in"},
     "act_login_failed": {"de": "Anmeldung fehlgeschlagen", "en": "Sign-in failed"},
     "act_logout": {"de": "Abmeldung", "en": "Sign-out"},
@@ -392,7 +421,7 @@ def t(key: str, lang: str = "de", **kw) -> str:
 
 
 def tv(value, lang: str = "de") -> str:
-    """Übersetzt Werte aus Befunden, die mit '@' beginnen."""
+    """Translates finding values that start with '@'."""
     if isinstance(value, str) and value.startswith("@"):
         key, _, arg = value[1:].partition("|")
         if key in T:

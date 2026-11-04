@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Helpers for pinned builds and security updates (standard library only, unit-tested).
 
-Policy (see README, "Sicherheitsupdates und Versionen"):
+Policy (see README, "Security updates and versions"):
 - The base image stays in the same Python series and the same Debian release
   (tag "<series>.<patch>-slim-<codename>", always with digest).
 - Every Python package stays within its major version (before 1.0: within its minor version).
@@ -161,7 +161,7 @@ def diff(old_dir: Path, new_dir: Path) -> str:
     rows = []
     ob, nb = base_of(_read(old_dir / "Dockerfile")), base_of(_read(new_dir / "Dockerfile"))
     if ob != nb:
-        rows.append(("Basis-Image", "python", _short(ob), _short(nb)))
+        rows.append(("Base image", "python", _short(ob), _short(nb)))
     for area, fname, parser in (("Debian", "locks/os-packages.txt", parse_os),
                                 ("Python", "requirements.txt", parse_lock)):
         o, n = parser(_read(old_dir / fname)), parser(_read(new_dir / fname))
@@ -170,7 +170,7 @@ def diff(old_dir: Path, new_dir: Path) -> str:
                 rows.append((area, name, o.get(name, "–"), n.get(name, "–")))
     if not rows:
         return ""
-    lines = ["| Bereich | Paket | vorher | jetzt |", "|---|---|---|---|"]
+    lines = ["| Area | Package | before | now |", "|---|---|---|---|"]
     lines += [f"| {a} | {p} | {o} | {n} |" for a, p, o, n in rows]
     return "\n".join(lines) + "\n"
 
@@ -241,15 +241,15 @@ def main(argv: list[str]) -> int:
         except (OSError, ValueError):
             eol = None
         if not eol:
-            print(f"::error title=Unterbau-Prüfung::{product} {name}: Supportende nicht ermittelbar (endoflife.date)")
+            print(f"::error title=Base check::{product} {name}: end of support not determinable (endoflife.date)")
             return 1
         state, days = eol_status(eol, today)
-        msg = f"{product} {name}: Sicherheitsupdates bis {eol} (noch {days} Tage)"
+        msg = f"{product} {name}: security updates until {eol} ({days} days left)"
         if state == "fail":
-            print(f"::error title=Unterbau anheben::{msg} – weniger als 6 Monate. Unterbau bewusst anheben.")
+            print(f"::error title=Lift the base::{msg} – less than 6 months. Lift the base deliberately.")
             return 1
         if state == "notice":
-            print(f"::warning title=Unterbau bald anheben::{msg} – weniger als 12 Monate.")
+            print(f"::warning title=Lift the base soon::{msg} – less than 12 months.")
         else:
             print(msg)
     else:

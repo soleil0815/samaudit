@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Erweiterter Prüfkatalog (Teil 2): DNS, PKI, Gruppenrichtlinien, Überwachung,
-Sicherung, RODC, Berechtigungen auf kritischen Objekten u. v. m."""
+"""Extended rule catalogue (part 2): DNS, PKI, group policies, auditing,
+backup, RODC, permissions on critical objects and more."""
 from __future__ import annotations
 
 from .adutil import (
@@ -15,7 +15,7 @@ ADS_RIGHT_DS_CREATE_CHILD = 0x1
 
 
 # ---------------------------------------------------------------------------
-# Hilfen
+# Helpers
 # ---------------------------------------------------------------------------
 
 def _cfg(ctx: Ctx) -> dict:
@@ -23,7 +23,7 @@ def _cfg(ctx: Ctx) -> dict:
 
 
 def gpo_values(ctx: Ctx, guids: list[str], key: str) -> list[tuple[str, object]]:
-    """Werte eines Registry-Schlüssels aus GptTmpl.inf (Registry Values) und Registry.pol der GPOs."""
+    """Values of a registry key from the GPOs' GptTmpl.inf (Registry Values) and Registry.pol."""
     sv = need_sysvol(ctx)
     check_gpos_readable(ctx, guids)
     key = key.lower().lstrip("\\")
@@ -72,7 +72,7 @@ def acl_hits(ctx: Ctx, sd: dict | None, extra_safe: set[str] | frozenset[str] = 
 
 
 # ===========================================================================
-# VERALTETE OBJEKTE
+# STALE OBJECTS
 # ===========================================================================
 
 @rule(id="S-MachinePwdNotRotated", category="stale", severity="medium", points=5,
@@ -143,7 +143,7 @@ def _subnets(ctx: Ctx):
 
 
 # ===========================================================================
-# PRIVILEGIERTE KONTEN
+# PRIVILEGED ACCOUNTS
 # ===========================================================================
 
 @rule(id="P-BroadGroupInAdmins", category="privileged", severity="critical", points=30,
@@ -329,7 +329,7 @@ def _rodc(ctx: Ctx):
             if o and ctx.is_priv(o):
                 items.append({"account": r["sam"], "detail": "Revealed", "value": o.get("sam")})
     if not items and unprivileged(ctx) and not any(r.get("revealed") for r in rodcs):
-        raise NotApplicable("na_restricted")  # msDS-RevealedUsers ist nur für Admins lesbar
+        raise NotApplicable("na_restricted")  # msDS-RevealedUsers is only readable by admins
     return Hit(items) if items else None
 
 
@@ -389,7 +389,7 @@ def _esc9(ctx: Ctx):
             continue
         ekus = set(t.get("ekus") or [])
         auth = not ekus or bool(ekus & AUTH_EKUS)
-        # bereits als ESC1 bzw. ESC17 gewertet (frei wählbarer Name ohne Genehmigung)? Dann nicht doppelt zählen
+        # already scored as ESC1 or ESC17 (freely chosen name without approval)? Then do not count twice
         free_name = bool(t.get("name_flag", 0) & 0x1) and not (t.get("enroll_flag", 0) & 0x2) \
             and not t.get("ra_signature", 0)
         covered = free_name and (auth or "1.3.6.1.5.5.7.3.1" in ekus)
@@ -438,7 +438,7 @@ def _esc8(ctx: Ctx):
                 if part.strip().lower().startswith("http://"):
                     items.append({"value": part.strip(), "detail": ca.get("name")})
     if not items and (ctx.m.get("pki") or {}).get("cas"):
-        # Die klassische Web-Registrierung (/certsrv) steht nicht im AD – per LDAP nicht beurteilbar
+        # Classic web enrollment (/certsrv) is not in AD – cannot be assessed via LDAP
         raise NotApplicable("na_esc8_certsrv")
     return Hit(items) if items else None
 
@@ -475,7 +475,7 @@ def _ca_crypto(ctx: Ctx):
             loaded.append(x509.load_der_x509_certificate(der))
         except Exception:  # noqa: BLE001
             continue
-    # Nach einer CA-Erneuerung bleiben alte Zertifikate in AD stehen – bewertet wird je CA nur das neueste
+    # After a CA renewal old certificates remain in AD – only the newest per CA is assessed
     newest: dict[str, x509.Certificate] = {}
     for cert in loaded:
         key_ = cert.subject.rfc4514_string()
@@ -486,10 +486,10 @@ def _ca_crypto(ctx: Ctx):
         name = cert.subject.rfc4514_string()[:80]
         try:
             algo = (cert.signature_hash_algorithm.name if cert.signature_hash_algorithm else "?").lower()
-        except Exception:  # noqa: BLE001 – unbekanntes Verfahren
+        except Exception:  # noqa: BLE001 – unknown algorithm
             algo = "?"
         if algo in ("md5", "sha1"):
-            # bei selbstsignierten Stammzertifikaten ist die eigene Signatur ohne Bedeutung
+            # for self-signed root certificates the own signature does not matter
             root = cert.issuer == cert.subject
             items.append({"detail": name, "value": algo.upper(), "recommended": "SHA-256"})
             worst = max(worst, 1 if root else 2)
@@ -509,7 +509,7 @@ def _ca_crypto(ctx: Ctx):
 
 
 # ===========================================================================
-# VERTRAUENSSTELLUNGEN
+# TRUSTS
 # ===========================================================================
 
 @rule(id="T-ForeignAdmins", category="trusts", severity="high", points=15,
@@ -548,7 +548,7 @@ def _selective(ctx: Ctx):
 
 
 # ===========================================================================
-# ANOMALIEN – Richtlinien, DNS, Sicherung
+# ANOMALIES – policies, DNS, backup
 # ===========================================================================
 
 @rule(id="A-PwdPolicyDetails", category="anomalies", severity="low", points=2,
@@ -640,7 +640,7 @@ def _backup(ctx: Ctx):
 def _tombstone(ctx: Ctx):
     v = _cfg(ctx).get("tombstone_lifetime")
     if v is None:
-        v = 60                      # nicht gesetzt = Windows-Standard 60 Tage
+        v = 60                      # not set = Windows default of 60 days
     if v >= 180:
         return None
     return Hit([{"value": str(v), "recommended": "180"}])
@@ -673,7 +673,7 @@ def _dsh_sdprop(ctx: Ctx):
 
 
 # ===========================================================================
-# ANOMALIEN – Gruppenrichtlinien auf DCs und in der Domäne
+# ANOMALIES – group policies on DCs and in the domain
 # ===========================================================================
 
 def _gpo_list(ctx: Ctx, vals) -> str:
@@ -793,12 +793,12 @@ def _dc_privs(ctx: Ctx):
                     continue
                 name = ctx.name(p.upper())
             else:
-                # Namen statt SIDs: nur exakt bekannte Standard-Prinzipale durchlassen (ohne Domänen-Präfix)
+                # names instead of SIDs: only let exactly known default principals through (without domain prefix)
                 short = p.lower().split("\\")[-1].strip()
                 if short in SAFE_PRINCIPAL_NAMES or p.lower().startswith("nt service\\"):
                     continue
                 name = p
-            # Exchange /PrepareAD vergibt „Überwachungs- und Sicherheitsprotokoll verwalten“ an Exchange Servers
+            # Exchange /PrepareAD grants "Manage auditing and security log" to Exchange Servers
             if priv == "SeSecurityPrivilege" and name.lower() in ("exchange servers", "exchange-server"):
                 continue
             items.append({"privilege": priv, "principal": name, "gpo": ctx.gpo_name(g)})
@@ -847,7 +847,7 @@ def _zerologon(ctx: Ctx):
     al = gpo_values(ctx, ctx.gpo_guids("dc"), r"Netlogon\Parameters\VulnerableChannelAllowList")
     if al:
         items.append({"detail": "VulnerableChannelAllowList", "gpo": _gpo_list(ctx, al)})
-    # FullSecureChannelProtection wirkt seit der Erzwingung (Februar 2021) nicht mehr – nicht werten
+    # FullSecureChannelProtection has had no effect since enforcement (February 2021) – do not score
     return Hit(items) if items else None
 
 
@@ -995,5 +995,5 @@ def _scripts(ctx: Ctx):
     return Hit([{"file": h["file"], "line": str(h["line"]), "kind": h["kind"]} for h in hits]) if hits else None
 
 
-# Prüfkatalog Teil 3 (ab v1.9)
+# Rule catalogue part 3 (since v1.9)
 from . import rules3  # noqa: E402,F401

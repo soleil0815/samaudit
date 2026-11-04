@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Programmname und Version.
+"""Program name and version.
 
-VERSION        Programmversion (ändert sich nur mit Programmänderungen)
-IMAGE_VERSION  Version des Container-Images: gleich VERSION oder „<VERSION>-s<n>“ für ein
-               Sicherheitsupdate (gleiches Programm, neue Paketstände). Wird beim Bau gesetzt."""
+VERSION        program version (changes only with program changes)
+IMAGE_VERSION  version of the container image: equal to VERSION or "<VERSION>-s<n>" for a
+               security update (same program, newer packages). Set at build time."""
 import os
 import re
 
 APP_NAME = "SAMAUDIT"
-VERSION = "2.1.2"
-SOURCE_URL = "https://github.com/soleil0815/samaudit"   # Quellcode (AGPL §13)
-DONATE_URL = "https://buymeacoffee.com/soleil0815v"   # freiwillige Unterstützung, nur auf der Hilfe-Seite
+VERSION = "2.1.3"
+SOURCE_URL = "https://github.com/soleil0815/samaudit"   # source code (AGPL §13)
+DONATE_URL = "https://buymeacoffee.com/soleil0815v"   # voluntary support, only on the help page
 
 _img = os.environ.get("SAMAUDIT_IMAGE_VERSION", "").strip()
 IMAGE_VERSION = _img if re.fullmatch(re.escape(VERSION) + r"(-s\d+)?", _img) else VERSION

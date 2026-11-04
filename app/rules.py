@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Prüfregeln. Jede Regel liefert bei einem Befund eine Liste betroffener Objekte.
+"""Audit rules. On a finding, each rule returns a list of affected objects.
 
-Bewertung (angelehnt an das bekannte Vier-Bereiche-Modell):
-  Punkte je Regel → Summe je Bereich (max. 100) → Gesamtrisiko = höchster Bereichswert.
-  0 = keine Befunde, 100 = sehr hohes Risiko.
+Scoring (based on the well-known four-category model):
+  points per rule → sum per category (max. 100) → overall risk = highest category score.
+  0 = no findings, 100 = very high risk.
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ SEVERITIES = ["critical", "high", "medium", "low", "info"]
 
 
 class NotApplicable(Exception):
-    """Regel kann in dieser Umgebung nicht geprüft werden (Grund = i18n-Schlüssel oder Text)."""
+    """Rule cannot be checked in this environment (reason = i18n key or text)."""
 
 
 @dataclass
@@ -33,7 +33,7 @@ class Hit:
     points: int | None = None
     severity: str | None = None
     count: int | None = None
-    note: str | None = None  # kurzer Zusatz (bereits übersetzt nicht nötig: Zahlen/Fakten)
+    note: str | None = None  # short addendum (no translation needed: numbers/facts)
 
 
 @dataclass
@@ -50,7 +50,7 @@ class Rule:
     code: str = ""
     refs: list[tuple[str, str]] = field(default_factory=list)
     platforms: tuple = ("windows", "samba")
-    legacy_id: str = ""            # interner Name vor der Umstellung auf STL-/PRV-…-Nummern
+    legacy_id: str = ""            # internal name before the switch to STL-/PRV-… numbers
 
 
 RULES: list[Rule] = []
@@ -64,7 +64,7 @@ def rule(**kw):
 
 
 # ---------------------------------------------------------------------------
-# Hilfen
+# Helpers
 # ---------------------------------------------------------------------------
 
 def acc(a: dict, **extra) -> dict:
@@ -83,7 +83,7 @@ def enabled_computers(ctx: Ctx, include_dc=True):
 
 
 def unprivileged(ctx: Ctx) -> bool:
-    """Scan lief mit normalen Benutzerrechten (Standard ab v1.2)."""
+    """Scan ran with normal user rights (default since v1.2)."""
     return bool((ctx.m.get("meta") or {}).get("unprivileged"))
 
 
@@ -97,8 +97,8 @@ def need_sysvol(ctx: Ctx) -> dict:
 
 
 def check_gpos_readable(ctx: Ctx, guids) -> None:
-    """Ist eine wirksame GPO für den Prüfer nicht lesbar (z. B. Sicherheitsfilterung), lässt sich die Einstellung
-    nicht beurteilen – dann „nicht prüfbar“ statt eines falschen Ergebnisses."""
+    """If an effective GPO is not readable for the auditor (e.g. security filtering), the setting cannot
+    be assessed – then "not checkable" instead of a wrong result."""
     sv = need_sysvol(ctx)
     bad = {g.upper() for g in (sv.get("unreadable_gpos") or [])} & {g.upper() for g in guids}
     if bad:
@@ -106,9 +106,9 @@ def check_gpos_readable(ctx: Ctx, guids) -> None:
 
 
 def effective_dc_registry(ctx: Ctx, key_suffix: str) -> str | None:
-    """Wert aus GptTmpl.inf der GPOs auf Domäne → DC-OU (spätere überschreiben frühere)."""
+    """Value from GptTmpl.inf of the GPOs on domain → DC OU (later ones override earlier ones)."""
     sv = need_sysvol(ctx)
-    check_gpos_readable(ctx, ctx.gpo_guids("dc"))   # wirft „nicht prüfbar“ bei unlesbaren Verknüpfungen/GPOs
+    check_gpos_readable(ctx, ctx.gpo_guids("dc"))   # raises "not checkable" for unreadable links/GPOs
     secedit = sv.get("secedit", {})
     value = None
     links = (ctx.m.get("gpo_links") or {})
@@ -130,7 +130,7 @@ MS = "https://learn.microsoft.com"
 ATT = "https://attack.mitre.org/techniques"
 
 # ===========================================================================
-# VERALTETE OBJEKTE
+# STALE OBJECTS
 # ===========================================================================
 
 
@@ -152,7 +152,7 @@ ATT = "https://attack.mitre.org/techniques"
       refs=[("MITRE ATT&CK T1078.002", f"{ATT}/T1078/002/")])
 def _inactive_users(ctx: Ctx):
     days = ctx.cfg.inactive_days
-    # ohne gMSA und ohne das eingebaute Administrator-Konto (soll als Notfallkonto gerade NICHT genutzt werden)
+    # excluding gMSAs and the built-in Administrator account (as an emergency account it should NOT be used)
     eu = [u for u in enabled_users(ctx) if not u.get("is_gmsa") and u.get("rid") != 500]
     hits = [u for u in eu if ctx.inactive(u, days)]
     if not hits:
@@ -410,7 +410,7 @@ def _primary_group(ctx: Ctx):
 def _userpassword(ctx: Ctx):
     hits = [u for u in ctx.users if u.get("has_userpassword")]
     if not hits and unprivileged(ctx):
-        raise NotApplicable("na_restricted")  # unixUserPassword ist vertraulich
+        raise NotApplicable("na_restricted")  # unixUserPassword is confidential
     return Hit([acc(u) for u in hits]) if hits else None
 
 
@@ -434,7 +434,7 @@ def _laps(ctx: Ctx):
     if not targets:
         return None
     if not (cfg.get("laps_legacy_schema") or cfg.get("laps_windows_schema")):
-        # Windows LAPS kann auch nach Entra ID sichern (ohne AD-Schema) – aus AD heraus nicht feststellbar
+        # Windows LAPS can also back up to Entra ID (without AD schema) – not detectable from AD
         return Hit([acc(c, os=c.get("os")) for c in targets], points=10, severity="medium", note="@n_no_laps_schema")
     missing = [c for c in targets if not c.get("laps")]
     if not missing:
@@ -461,7 +461,7 @@ def _admincount(ctx: Ctx):
 
 
 # ===========================================================================
-# PRIVILEGIERTE KONTEN
+# PRIVILEGED ACCOUNTS
 # ===========================================================================
 
 def admin_item(ctx: Ctx, a: dict, **extra):
@@ -503,7 +503,7 @@ def _schema_ea(ctx: Ctx):
             continue
         for a in ctx.members(g):
             if a.get("rid") == 500:
-                continue                  # das eingebaute Administrator-Konto ist hier standardmäßig Mitglied
+                continue                  # the built-in Administrator account is a member here by default
             items.append(acc(a, group=g.get("sam")))
     return Hit(items) if items else None
 
@@ -684,7 +684,7 @@ def _domain_root_acl(ctx: Ctx):
     res = _acl_findings(ctx, (ctx.m.get("acl") or {}).get("domain_root"), False)
     if res is None:
         raise NotApplicable("na_acl")
-    # wer bereits unter DCSync (PRV-10) gemeldet ist, wird hier nicht ein zweites Mal gewertet
+    # anyone already reported under DCSync (PRV-10) is not scored a second time here
     sync = {s for s, r in (_acl_findings(ctx, (ctx.m.get("acl") or {}).get("domain_root"), True) or {}).items()
             if "DCSync" in r}
     items = [{"principal": ctx.name(s), "rights": ", ".join(sorted(r))} for s, r in res.items() if s not in sync]
@@ -753,7 +753,7 @@ def _constrained(ctx: Ctx):
         if not a.get("enabled") or a.get("is_dc"):
             continue
         targets = a.get("delegate_to") or []
-        # Dienst/Host[:Port][/Dienstname] – z. B. ldap/dc01.firma.local/firma.local
+        # service/host[:port][/service name] – e.g. ldap/dc01.firma.local/firma.local
         to_dc = [t for t in targets if len(t.split("/")) > 1 and t.split("/")[1].split(":", 1)[0].lower() in ctx.dc_names]
         pt = bool(a["uac"] & UAC_TRUSTED_TO_AUTH_FOR_DELEGATION)
         if to_dc:
@@ -907,7 +907,7 @@ def _esc2(ctx: Ctx):
             continue
         ekus = set(t.get("ekus") or [])
         if t.get("name_flag", 0) & 0x1:
-            continue  # bereits ESC1
+            continue  # already ESC1
         if ekus and "2.5.29.37.0" not in ekus:
             continue
         who = _lowpriv_enroll(ctx, t)
@@ -917,7 +917,7 @@ def _esc2(ctx: Ctx):
 
 
 # ===========================================================================
-# VERTRAUENSSTELLUNGEN
+# TRUSTS
 # ===========================================================================
 TRUST_DIR: dict[int | None, str] = {0: "@dir_0", 1: "@dir_1", 2: "@dir_2", 3: "@dir_3"}
 
@@ -943,9 +943,9 @@ def _sid_filtering(ctx: Ctx):
     items = []
     for t in ctx.m.get("trusts", []):
         a = t.get("attributes", 0)
-        if not (t.get("direction", 0) & 2) or a & 0x20:  # nur wo wir vertrauen; nicht innerhalb der Gesamtstruktur
+        if not (t.get("direction", 0) & 2) or a & 0x20:  # only where we trust; not within the forest
             continue
-        if t.get("type") == 3:            # Kerberos-Bereich (MIT): keine SIDs, SID-Filterung ohne Bedeutung
+        if t.get("type") == 3:            # Kerberos realm (MIT): no SIDs, SID filtering irrelevant
             continue
         if a & 0x8:
             if a & 0x40:
@@ -979,7 +979,7 @@ def _tgt_deleg(ctx: Ctx):
       columns=["trust", "direction", "changed"])
 def _trust_inactive(ctx: Ctx):
     items = [trust_item(t) for t in ctx.m.get("trusts", [])
-             if not (t.get("attributes", 0) & 0x20) and t.get("type") != 3   # MIT-Bereiche wechseln kein Passwort
+             if not (t.get("attributes", 0) & 0x20) and t.get("type") != 3   # MIT realms do not rotate passwords
              and (ctx.age(t.get("changed")) or 0) > 45]
     return Hit(items) if items else None
 
@@ -1010,7 +1010,7 @@ def _trust_aes(ctx: Ctx):
 
 
 # ===========================================================================
-# ANOMALIEN
+# ANOMALIES
 # ===========================================================================
 
 def pol(ctx: Ctx) -> dict:
@@ -1085,7 +1085,7 @@ def _rev_policy(ctx: Ctx):
       columns=["value", "detail"])
 def _pso(ctx: Ctx):
     if not ctx.m.get("psos") and unprivileged(ctx):
-        raise NotApplicable("na_restricted")  # PSOs sind nur für Admins lesbar
+        raise NotApplicable("na_restricted")  # PSOs are only readable by admins
     items = []
     for p in ctx.m.get("psos", []):
         if (p.get("min_length") or 0) < 8 or p.get("reversible") or not p.get("lockout_threshold"):
@@ -1302,7 +1302,7 @@ def _ldap_signing(ctx: Ctx):
       columns=["value", "recommended"], platforms=("windows",))
 def _ntlmv1(ctx: Ctx):
     v = effective_dc_registry(ctx, r"Control\Lsa\LmCompatibilityLevel")
-    # Ein DC weist NTLMv1 erst ab Stufe 5 ab; darunter (auch Standard 3) nimmt er NTLMv1 an, unter 3 sogar LM
+    # A DC only refuses NTLMv1 from level 5; below that (including the default 3) it accepts NTLMv1, below 3 even LM
     if v is None:
         return Hit([{"value": "@v_not_configured_3", "recommended": "5"}], points=8, severity="medium")
     try:
@@ -1339,11 +1339,11 @@ def _anon(ctx: Ctx):
     return Hit([{"value": v}]) if len(v) >= 7 and v[6] == "2" else None
 
 
-# Erweiterter Katalog
+# Extended catalogue
 from . import rules2  # noqa: E402,F401
 from .ruleids import LEGACY_IDS  # noqa: E402
 
-# Eigene, stabile Regel-IDs vergeben (STL-01 …); der interne Name bleibt als legacy_id erhalten
+# Assign SAMAUDIT's own stable rule IDs (STL-01 …); the internal name is kept as legacy_id
 for _r in RULES:
     _r.legacy_id = _r.id
     _r.id = LEGACY_IDS[_r.id]

@@ -10,7 +10,7 @@
   <a class="btn btn-primary" href="/report/{{ scan.id }}/pdf">{{ icon('pdf') }}{{ t('download_pdf', lang) }}</a>
 </div>
 
-<!-- Zusammenfassung -->
+<!-- Summary -->
 <section class="panel panel-pad">
   <div class="hero">
     <div class="seal-wrap">
@@ -67,12 +67,12 @@
 
 {% if ov.warnings or ov.sysvol.status == 'error' %}
 <div class="alert warn" style="margin-top:18px"><b>{{ t('warnings', lang) }}:</b>
-  {% if ov.sysvol.status == 'error' %}{{ t('sysvol_status', lang) }}: {{ ov.sysvol.error }}. {% endif %}
+  {% if ov.sysvol.status == 'error' %}{{ t('sysvol_status', lang) }}: {{ tv(ov.sysvol.error, lang) }}. {% endif %}
   {% for w in ov.warnings %}{{ w }}{% if not loop.last %}; {% endif %}{% endfor %}
 </div>
 {% endif %}
 
-<!-- Befunde je Bereich -->
+<!-- Findings per area -->
 {% for c in CATEGORIES %}
 <section class="section" id="cat-{{ c }}">
   <h2 style="--c: var(--c-{{ c }})"><span class="dot"></span>{{ t('cat_' ~ c, lang) }} <span class="score {{ level_class(scores[c]) }}">{{ scores[c] }}</span></h2>
@@ -121,7 +121,7 @@
 </section>
 {% endfor %}
 
-<!-- Domänenüberblick -->
+<!-- Domain overview -->
 <section class="section" id="overview">
   <h2>{{ t('overview', lang) }}</h2>
   <div class="grid g-2">
@@ -168,7 +168,7 @@
   </div>
 </section>
 
-<!-- Bestanden / nicht prüfbar -->
+<!-- Passed / not checkable -->
 <section class="section" id="passed">
   <h2>{{ t('passed', lang) }} <span class="muted num" style="font-size:16px">{{ passed|length }}</span></h2>
   <div class="panel panel-pad"><ul class="pass-list">{% for f in passed %}<li>{{ f.rule.title[lang] }}</li>{% endfor %}</ul></div>

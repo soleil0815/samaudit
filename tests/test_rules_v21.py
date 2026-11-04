@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Selbsttests der Prüfungen aus 2.1 (ESC13, KDS-Stammschlüssel, gMSA-Kennwortleser, Certighost,
-Gruppenrichtlinien mit gelockertem Anmeldeschutz) – mit der Demo-Domäne als Grundlage."""
+"""Self-tests for the 2.1 checks (ESC13, KDS root key, gMSA password readers, Certighost,
+group policies with weakened logon protection) – based on the demo domain."""
 from __future__ import annotations
 
 import copy
@@ -58,7 +58,7 @@ class ESC13(unittest.TestCase):
         hit = run("PRV-38", self.model())
         self.assertIsNotNone(hit)
         self.assertEqual(hit.items[0]["template"], "VPN-Zugang")
-        self.assertIsNone(hit.severity)                               # Standard: hoch
+        self.assertIsNone(hit.severity)                               # default: high
 
     def test_link_to_domain_admins_is_critical(self):
         hit = run("PRV-38", self.model(group_rid=512))
@@ -68,7 +68,7 @@ class ESC13(unittest.TestCase):
         m = self.model()
         dn = m["pki"]["oids"][0]["group"]
         m["groups"].append({"dn": dn, "sam": "VPN-Nutzer", "sid": f"{SID}-1997", "rid": 1997, "members": [],
-                            "group_type": -2147483640})                 # universelle Sicherheitsgruppe
+                            "group_type": -2147483640})                 # universal security group
         adm = next(g for g in m["groups"] if g.get("sid") == "S-1-5-32-544") if any(
             g.get("sid") == "S-1-5-32-544" for g in m["groups"]) else next(g for g in m["groups"] if g.get("rid") == 512)
         adm["members"] = list(adm.get("members") or []) + [dn]
@@ -78,14 +78,14 @@ class ESC13(unittest.TestCase):
         m = self.model()
         dn = m["pki"]["oids"][0]["group"]
         m["groups"].append({"dn": dn, "sam": "VPN-Nutzer", "sid": f"{SID}-1997", "rid": 1997, "members": [],
-                            "group_type": -2147483646})                 # globale Gruppe: Verknüpfung wirkt nicht
+                            "group_type": -2147483646})                 # global group: the link has no effect
         self.assertIsNone(run("PRV-38", m))
 
     def test_only_admins_may_enroll(self):
         self.assertIsNone(run("PRV-38", self.model(enroll_sid=f"{SID}-512")))
 
     def test_no_logon_purpose(self):
-        self.assertIsNone(run("PRV-38", self.model(ekus=("1.3.6.1.5.5.7.3.4",))))   # nur E-Mail-Schutz
+        self.assertIsNone(run("PRV-38", self.model(ekus=("1.3.6.1.5.5.7.3.4",))))   # email protection only
 
     def test_no_links(self):
         self.assertIsNone(run("PRV-38", copy.deepcopy(BASE)))
@@ -107,7 +107,7 @@ class KDSRootKey(unittest.TestCase):
         self.assertIsNone(run("PRV-39", self.model()))
 
     def test_invisible_keys_are_not_a_pass(self):
-        with self.assertRaises(NotApplicable):                       # Standard für normale Konten
+        with self.assertRaises(NotApplicable):                       # default for normal accounts
             run("PRV-39", self.model(keys=[]))
         with self.assertRaises(NotApplicable):
             run("PRV-39", self.model(keys=[{"dn": "CN=k1", "sd": None}]))
@@ -117,7 +117,7 @@ class KDSRootKey(unittest.TestCase):
         self.assertEqual(hit.items[0]["detail"], "@v_kds_readable")
 
     def test_read_property_alone_is_not_enough(self):
-        # vertrauliches Attribut: "Alle Eigenschaften lesen" ohne erweitertes Recht liest den Schlüssel nicht
+        # confidential attribute: "Read all properties" without the extended right does not read the key
         keys = [{"dn": "CN=k1", "sd": {"owner": None, "aces": DEFAULT_KEY_SD["aces"] + [ace(f"{SID}-1051", 0x20094)]}}]
         self.assertIsNone(run("PRV-39", self.model(keys=keys)))
 
@@ -133,9 +133,9 @@ class KDSRootKey(unittest.TestCase):
 
     def test_container_ace_for_other_classes_does_not_count(self):
         a = ace(f"{SID}-1051", 0x000F01FF, flags=0x0A)
-        a["inherited_object_type"] = "bf967aba-0de6-11d0-a285-00aa003049e2"   # nur für user-Objekte
+        a["inherited_object_type"] = "bf967aba-0de6-11d0-a285-00aa003049e2"   # only for user objects
         self.assertIsNone(run("PRV-39", self.model(container_sd={"owner": None, "aces": [a]})))
-        b = ace(f"{SID}-1051", 0x000F01FF)                                      # nicht vererbbar
+        b = ace(f"{SID}-1051", 0x000F01FF)                                      # not inheritable
         self.assertIsNone(run("PRV-39", self.model(container_sd={"owner": None, "aces": [b]})))
 
     def test_write_dacl_is_reported(self):
@@ -225,7 +225,7 @@ class Certighost(unittest.TestCase):
     def test_default_machine_template(self):
         hit = run("PRV-41", self.only("Machine"))
         self.assertEqual(hit.items[0]["template"], "Computer")
-        self.assertIsNone(hit.severity)                                # niedrig (Patchstand unbekannt)
+        self.assertIsNone(hit.severity)                                # low (patch level unknown)
 
     def test_copied_template_and_authenticated_users(self):
         m = self.only("FIRMA-Computer")
@@ -284,13 +284,13 @@ class ServerSupportEnd(unittest.TestCase):
 
     def test_more_than_90_days_before(self):
         hit = self.check("STL-11", self.ctx_at((2026, 9, 1)))
-        self.assertIsNone(hit.severity)                               # Hinweis ohne Punkte
+        self.assertIsNone(hit.severity)                               # note without points
 
     def test_within_90_days_and_dc(self):
         self.assertEqual(self.check("STL-11", self.ctx_at((2026, 10, 30))).severity, "low")
         hit = self.check("STL-11", self.ctx_at((2026, 10, 30), dc=True))
         self.assertEqual(hit.severity, "medium")
-        self.assertEqual(hit.note, "@n_days_left|75")             # bis einschließlich 12.01.2027
+        self.assertEqual(hit.note, "@n_days_left|75")             # up to and including 12 Jan 2027
 
     def test_last_patch_day_still_supported_and_iot_ltsc(self):
         from datetime import datetime, timezone
