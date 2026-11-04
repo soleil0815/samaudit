@@ -26,6 +26,9 @@ def _list(name: str, default: str) -> list[str]:
 
 # Domain, Enterprise and Schema Admins, Administrators, Account/Server/Print/Backup Operators,
 # Group Policy Creator Owners, (Enterprise) Key Admins, Domain Controllers
+DEFAULT_GROUP = "SAMAUDIT-Users"
+LEGACY_GROUP = "SAMAUDIT-Benutzer"     # default up to 2.1.3
+
 DEFAULT_DENIED = ["RID:512", "RID:519", "RID:518", "RID:544", "RID:548", "RID:549", "RID:550", "RID:551",
                   "RID:520", "RID:526", "RID:527", "RID:516", "RID:521", "DnsAdmins"]
 
@@ -67,7 +70,10 @@ class Settings:
 
         # --- Access: auditors only, no administrators --------------------
         # Only members of one of these groups may sign in (sAMAccountName, DN, SID or RID:x).
-        self.allowed_groups = _list("ALLOWED_GROUPS", "SAMAUDIT-Benutzer")
+        self.allowed_groups = _list("ALLOWED_GROUPS", DEFAULT_GROUP)
+        # Without ALLOWED_GROUPS, the German group name used up to 2.1.3 is accepted as well, so existing
+        # installations keep working. An explicit ALLOWED_GROUPS always means exactly those groups.
+        self.legacy_groups = [] if "ALLOWED_GROUPS" in os.environ else [LEGACY_GROUP]
         # Members of these groups are ALWAYS rejected (tier-0 accounts do not belong in a web app).
         # RIDs are language-independent ("Domänen-Admins" == "Domain Admins"). Extendable via DENIED_GROUPS.
         self.denied_groups = DEFAULT_DENIED + [g for g in _list("DENIED_GROUPS", "") if g not in DEFAULT_DENIED]
@@ -122,6 +128,11 @@ class Settings:
 
         # --- Demo (only for trying it out without a domain!) -------------
         self.demo_mode = _bool("DEMO_MODE", False)
+
+    @property
+    def accepted_groups(self) -> list[str]:
+        """All auditor groups whose members may sign in (ALLOWED_GROUPS plus the legacy default)."""
+        return self.allowed_groups + [g for g in self.legacy_groups if g not in self.allowed_groups]
 
     def validate(self) -> list[str]:
         """Configuration problems, for the server log only (English).

@@ -4,6 +4,12 @@
 
 Programmversionen. Die wöchentlichen Sicherheitsupdates (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.1.4 – englischer Name der Prüfer-Gruppe
+
+- **Neue Standard-Prüfer-Gruppe `SAMAUDIT-Users`** (bisher `SAMAUDIT-Benutzer`), damit englischsprachige Admins wissen, was sie anlegen müssen.
+- **Bestehende Installationen müssen nichts tun:** Ist `ALLOWED_GROUPS` in der `.env` gesetzt, gilt wie bisher genau diese Gruppe. Ohne Einstellung werden `SAMAUDIT-Users` und der bisherige Name `SAMAUDIT-Benutzer` angenommen. Privilegierte Konten werden weiterhin immer abgewiesen.
+- `.env.example` setzt die Gruppe nicht mehr ausdrücklich; Anmelde- und Datenschutzseite nennen alle angenommenen Gruppen.
+
 ## 2.1.3 – erste öffentliche Version
 
 - **SAMAUDIT ist jetzt Open Source** unter [github.com/soleil0815/samaudit](https://github.com/soleil0815/samaudit).

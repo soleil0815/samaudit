@@ -465,9 +465,9 @@ def authenticate(username: str, password: str) -> AuthResult:
             log.warning("Sign-in of %s rejected: privileged account (%s)", ident, ", ".join(hit) or "RID 500")
             raise AuthError("privileged_denied", ", ".join(hit))
         # 2) Member of an auditor group?
-        allowed = resolve_group_sids(conn, settings.allowed_groups, domain_sid, root_sid, base_dn)
+        allowed = resolve_group_sids(conn, settings.accepted_groups, domain_sid, root_sid, base_dn)
         if not allowed:
-            raise AuthError("group_missing", ", ".join(settings.allowed_groups))
+            raise AuthError("group_missing", ", ".join(settings.accepted_groups))
         matched = [allowed[s] for s in token_sids if s in allowed]
         if not matched:
             raise AuthError("not_allowed")

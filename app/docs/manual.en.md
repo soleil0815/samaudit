@@ -12,7 +12,7 @@ The manual has two parts: **Part A** for auditors who use SAMAUDIT in the browse
 2. The sign-in box shows which **domain** you are signing in to.
 3. Sign in with your **normal** domain account – as `user`, `DOMAIN\user` or `user@domain`.
 
-Only members of the auditor group (default `SAMAUDIT-Benutzer`) may sign in.
+Only members of the auditor group (default `SAMAUDIT-Users`) may sign in.
 
 > **Admin accounts are always rejected** – even if they are in the auditor group. This is deliberate: the password of a highly privileged account is never typed into a web interface. Use your normal work account.
 
@@ -95,7 +95,7 @@ Bottom left: **DE / EN** switches the language, **Dark / Light** the appearance.
 | Message | Meaning / remedy |
 |---|---|
 | Wrong username or password | Check your input. After several failed attempts sign-in is blocked briefly (default 5 attempts / 15 minutes). |
-| Access denied: not a member of the auditor group | Have the account added to `SAMAUDIT-Benutzer`, then sign in again. |
+| Access denied: not a member of the auditor group | Have the account added to `SAMAUDIT-Users`, then sign in again. |
 | Admin accounts may not sign in | Use a normal account (see above). |
 | The auditor group does not exist | Create the group in the domain (operations, Part B). |
 | The account is locked / disabled / must change its password | Resolve in the domain (e.g. change the password on a PC). |
@@ -109,9 +109,9 @@ Bottom left: **DE / EN** switches the language, **Dark / Light** the appearance.
 
 - Server or NAS with Docker and Docker Compose (or a container manager such as Dockhand or Portainer).
 - From the server to the DCs: TCP 636 (LDAPS), TCP 445 (SMB/SYSVOL), DNS.
-- A group **`SAMAUDIT-Benutzer`** in the domain containing the auditors' normal accounts:
-  - Windows: `New-ADGroup SAMAUDIT-Benutzer -GroupScope Global` and `Add-ADGroupMember SAMAUDIT-Benutzer -Members max.muster`
-  - Samba: `samba-tool group add SAMAUDIT-Benutzer` and `samba-tool group addmembers SAMAUDIT-Benutzer max.muster`
+- A group **`SAMAUDIT-Users`** in the domain containing the auditors' normal accounts:
+  - Windows: `New-ADGroup SAMAUDIT-Users -GroupScope Global` and `Add-ADGroupMember SAMAUDIT-Users -Members max.muster`
+  - Samba: `samba-tool group add SAMAUDIT-Users` and `samba-tool group addmembers SAMAUDIT-Users max.muster`
 
 ### Installation
 
@@ -148,7 +148,7 @@ All settings live in the `.env` file (annotated template: `.env.example`). After
 |---|---|---|
 | `DOMAIN_FQDN` | – | DNS name of the domain (required) |
 | `DC_HOSTS` | `DOMAIN_FQDN` | fixed DCs, separated by `;` |
-| `ALLOWED_GROUPS` | `SAMAUDIT-Benutzer` | auditor group(s) |
+| `ALLOWED_GROUPS` | `SAMAUDIT-Users` | auditor group(s); without the setting `SAMAUDIT-Benutzer` is accepted as well |
 | `DENIED_GROUPS` | – | additionally blocked groups |
 | `PUBLIC_HOSTNAME` | – | name used to open SAMAUDIT |
 | `PORT` | `9400` | port of the web interface on the server |
