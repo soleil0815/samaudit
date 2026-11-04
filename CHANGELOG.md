@@ -4,6 +4,10 @@
 
 Program versions. Weekly security updates (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.1.7 – new coffee link
+
+- The "Buy me a coffee" link now points to [buymeacoffee.com/soleil0815](https://buymeacoffee.com/soleil0815) (in the app, README, release notes and the GitHub Sponsor button).
+
 ## 2.1.6 – compact coffee button
 
 - Compact "Buy me a coffee" button (yellow pill with the official cup icon, stored locally) at the bottom of the sidebar on every page, including the overview, and on the Help page.

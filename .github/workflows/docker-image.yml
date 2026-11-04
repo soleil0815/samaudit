@@ -160,7 +160,7 @@ jobs:
               print(f"- **{labels['en'].get(i.get('type'), 'Info')}:** {i.get('en') or i.get('de')}")
           print(f"\nImage: `ghcr.io/{repo}:{v}` – update: container manager or `docker compose pull && docker compose up -d`")
           print("\nWithout internet: download the matching image file (amd64/arm64) and SHA256SUMS, then `sh update.sh --load <file>`.")
-          print("\nSAMAUDIT is free. If it helps you: [buy me a coffee ☕](https://buymeacoffee.com/soleil0815v)")
+          print("\nSAMAUDIT is free. If it helps you: [buy me a coffee ☕](https://buymeacoffee.com/soleil0815)")
           if any(i.get("de") for i in items):
               print("\n<details><summary>Deutsch</summary>\n")
               for i in items:

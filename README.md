@@ -2,7 +2,7 @@
 
 **English** · [Deutsch](README.de.md) · [Manual](app/docs/manual.en.md) · [Changelog](CHANGELOG.md)
 
-<a href="https://buymeacoffee.com/soleil0815v"><img src="docs/images/bmc-button.svg" alt="Buy me a coffee" width="180"></a>
+<a href="https://buymeacoffee.com/soleil0815"><img src="docs/images/bmc-button.svg" alt="Buy me a coffee" width="180"></a>
 
 Self-hosted web application that reads a Windows or Samba AD domain, runs **115 security checks** and presents the result as a risk score (0–100), a detailed report with remediation advice, and a PDF export – in English or German. It runs as a single Docker container, signs in with a normal (non-admin) domain account and sends no data anywhere.
 
@@ -399,7 +399,7 @@ It builds for `linux/amd64` and `linux/arm64` without cache; the built image is 
 
 ## Support
 
-SAMAUDIT is free and stays free. If it saves you time and you would like to say thanks, you can buy me a coffee: **[buymeacoffee.com/soleil0815v](https://buymeacoffee.com/soleil0815v)**. Bug reports and ideas are just as welcome – see [CONTRIBUTING.md](CONTRIBUTING.md).
+SAMAUDIT is free and stays free. If it saves you time and you would like to say thanks, you can buy me a coffee: **[buymeacoffee.com/soleil0815](https://buymeacoffee.com/soleil0815)**. Bug reports and ideas are just as welcome – see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence and use
 

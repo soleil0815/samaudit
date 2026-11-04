@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.1.7",
+    "date": "2026-11-04",
+    "items": [
+      {
+        "type": "notice",
+        "de": "Der „Buy me a coffee“-Knopf führt jetzt zur neuen Adresse buymeacoffee.com/soleil0815.",
+        "en": "The \"Buy me a coffee\" button now leads to the new address buymeacoffee.com/soleil0815."
+      }
+    ]
+  },
+  {
     "version": "2.1.6",
     "date": "2026-11-04",
     "items": [
