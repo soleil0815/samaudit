@@ -16,7 +16,7 @@ summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
 fail() { echo "::error title=$1::$2"; printf '### %s\n%s\n' "$1" "$2" >> "$summary"; exit 1; }
 
 if docker buildx imagetools inspect "$image:$version" >/dev/null 2>&1; then
-  fail "Version existiert bereits" "$image:$version ist schon veröffentlicht und wird nie überschrieben."
+  fail "Version already exists" "$image:$version is already published and is never overwritten."
 fi
 
 meta="${RUNNER_TEMP:-/tmp}/build-meta.json"
@@ -27,9 +27,9 @@ docker buildx build --no-cache --pull \
   --provenance=true --sbom=true \
   --output "type=image,name=$image,push-by-digest=true,name-canonical=true,push=true" \
   --metadata-file "$meta" . \
-  || fail "Bau fehlgeschlagen" "Das Image für $version konnte nicht gebaut werden (Details im Log dieses Schritts)."
+  || fail "Build failed" "The image for $version could not be built (details in the log of this step)."
 digest="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["containerimage.digest"])' "$meta")"
-[[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "Bau fehlgeschlagen" "Kein Digest für das gebaute Image."
+[[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || fail "Build failed" "No digest for the built image."
 echo "built (untagged): $image@$digest"
 
 docker pull --platform linux/amd64 "$image@$digest"
@@ -45,9 +45,9 @@ for arch in amd64 arm64; do
   docker tag "$image@$digest" "$image:$version"
   if [ ${#save_opts[@]} -gt 0 ]; then docker save --platform "linux/$arch" "$image:$version"
   else docker save "$image:$version"; fi | gzip -9 > "$assets/samaudit-$version-$arch.tar.gz" \
-    || fail "Image-Datei fehlgeschlagen" "Die Image-Datei für $arch konnte nicht erstellt werden."
+    || fail "Image file failed" "The image file for $arch could not be created."
   tar -tzf "$assets/samaudit-$version-$arch.tar.gz" | grep '^manifest.json$' >/dev/null \
-    || fail "Image-Datei fehlgeschlagen" "Die Image-Datei für $arch ist unvollständig."
+    || fail "Image file failed" "The image file for $arch is incomplete."
   docker rmi "$image:$version" >/dev/null 2>&1 || true
 done
 # files for a new installation; .env.example as "env.example" – release uploads skip names starting with "."
@@ -63,9 +63,9 @@ else
   echo "::notice::$version is not the highest version – latest stays unchanged"
 fi
 docker buildx imagetools create "${tags[@]}" "$image@$digest" \
-  || fail "Veröffentlichen fehlgeschlagen" "Die Tags für $version konnten nicht gesetzt werden."
+  || fail "Publishing failed" "The tags for $version could not be set."
 {
-  echo "### Veröffentlicht: $image:$version"
+  echo "### Published: $image:$version"
   echo "Digest: \`$digest\`"
   printf 'Tags: %s\n' "${tags[*]//-t /}"
 } >> "$summary"

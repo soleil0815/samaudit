@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Die SAMAUDIT-Autoren
-"""Startpunkt: richtet das HTTPS-Zertifikat ein (eigenes oder selbstsigniert) und startet den Webserver."""
+"""Entry point: sets up the HTTPS certificate (your own or self-signed) and starts the web server."""
 from __future__ import annotations
 
 import logging
@@ -18,14 +18,14 @@ log = logging.getLogger("samaudit")
 
 def main() -> None:
     os.makedirs(settings.data_dir, exist_ok=True)
-    # vor allem anderen: nur eine Instanz, Rückschritt erkennen, vor einem Versionswechsel sichern
+    # before anything else: only one instance, detect a downgrade, back up before a version change
     from app import datastate
     try:
         datastate.prepare()
         from app import db
-        db.init()          # Schema anpassen und Version merken – sofort, nicht erst beim Start des Webservers
+        db.init()          # adapt the schema and record the version – right away, not only when the web server starts
     except datastate.StartRefused as e:
-        log.error("START ABGEBROCHEN: %s", e)
+        log.error("START REFUSED: %s", e)
         raise SystemExit(78) from None
     # inside the container: listen on all interfaces; the host decides via the port mapping what is reachable
     kwargs: dict[str, Any] = {"host": "0.0.0.0",  # noqa: S104
@@ -40,13 +40,13 @@ def main() -> None:
     from app import egress
     egress.install()
     from app.version import APP_NAME, VERSION
-    log.info("%s v%s startet auf Port %s (%s), Domäne %s (%s), Zeitzone %s%s", APP_NAME, VERSION, settings.port,
+    log.info("%s v%s starting on port %s (%s), domain %s (%s), time zone %s%s", APP_NAME, VERSION, settings.port,
              "HTTPS" if settings.tls_enabled else "HTTP", settings.domain_fqdn or "–", settings.domain_type, settings.tz,
              " – DEMO" if settings.demo_mode else "")
     config = uvicorn.Config("app.main:app", **kwargs)
     config.load()
-    if settings.tls_enabled and config.ssl is not None:   # mit ssl_certfile immer gesetzt
-        # Kontext merken: ein über die Weboberfläche hochgeladenes Zertifikat wird ohne Neustart aktiv
+    if settings.tls_enabled and config.ssl is not None:   # always set with ssl_certfile
+        # keep the context: a certificate uploaded via the web interface becomes active without a restart
         webcert.attach(config.ssl)
     uvicorn.Server(config).run()
 

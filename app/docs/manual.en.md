@@ -211,8 +211,8 @@ In addition, the published image is scanned daily, and every week it is checked 
 | Reason | What to do |
 |---|---|
 | Trivy reports CRITICAL/HIGH | The fix usually arrives within days – wait for next Monday or rerun later via *Actions → Security update → Run workflow*. If it stays red: have the package raised specifically, or assess the finding and add it to `.trivyignore` with a reason and an expiry date. |
-| Versions could not be determined / build failed | Usually a source was briefly unreachable – rerun. If it stays red, have it checked. |
-| Tests inside the image failed | A new package version does not fit – have it checked. |
+| *Security update: versions not determinable* / *Build failed* | Usually a source was briefly unreachable – rerun. If it stays red, have it checked. |
+| *Tests in the image failed* | A new package version does not fit – have it checked. |
 | Lift the base soon / now | Plan and deliberately carry out the move to the next Python or Debian release (`tools/lock-policy.env`, `tools/update-locks.sh --major`, new program version). |
 | Daily scan red | New vulnerability in the published image – start the security update manually, otherwise as for Trivy. |
 
@@ -242,8 +242,8 @@ SAMAUDIT sends no data to third parties, loads nothing from the internet and del
 
 | Problem | Solution |
 |---|---|
-| Container does not start, log: "START ABGEBROCHEN: Die Datenbank stammt von …" | An older version runs on the database of a newer one – restore the backup named there (see above) or use the newer version again. |
-| Notice "docker-compose.yml is outdated" | Get the current file (`sh update.sh` or `/app/dist/docker-compose.yml` from the image), own additions into `docker-compose.override.yml`, `docker compose up -d`. |
+| Container does not start, log: "START REFUSED: The database comes from SAMAUDIT …" | An older version runs on the database of a newer one – restore the backup named there (see above) or use the newer version again. |
+| Note "docker-compose.yml is outdated" | Get the current file (`sh update.sh` or `/app/dist/docker-compose.yml` from the image), own additions into `docker-compose.override.yml`, `docker compose up -d`. |
 | No DC reachable | DNS inside the container: add `dns`/`extra_hosts` in `docker-compose.override.yml` (see Installation), then `docker compose up -d`. |
 | Many checks "not checkable (SMB)" | Allow TCP 445 to the DCs or set `SMB_CHECKS=false`. |
 | View logs | `docker compose logs -f` |

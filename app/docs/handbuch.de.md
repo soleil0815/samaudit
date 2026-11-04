@@ -211,8 +211,8 @@ Zusätzlich wird das veröffentlichte Image täglich gescannt, und jede Woche wi
 | Grund | Was tun |
 |---|---|
 | Trivy meldet CRITICAL/HIGH | Meist kommt die Korrektur in den nächsten Tagen – nächsten Montag abwarten oder den Lauf später unter *Actions → Security update → Run workflow* neu starten. Bleibt er rot: Paket gezielt anheben lassen oder den Fund bewerten und mit Begründung und Ablaufdatum in `.trivyignore` eintragen. |
-| Versionen nicht ermittelbar / Bau fehlgeschlagen | Meist kurzzeitig eine Quelle nicht erreichbar – Lauf neu starten. Bleibt er rot, prüfen lassen. |
-| Tests im Image fehlgeschlagen | Eine neue Paketversion passt nicht – prüfen lassen. |
+| *Security update: versions not determinable* / *Build failed* | Meist kurzzeitig eine Quelle nicht erreichbar – Lauf neu starten. Bleibt er rot, prüfen lassen. |
+| *Tests in the image failed* | Eine neue Paketversion passt nicht – prüfen lassen. |
 | Unterbau bald / jetzt anheben | Wechsel auf die nächste Python- bzw. Debian-Version planen und bewusst durchführen (`tools/lock-policy.env`, `tools/update-locks.sh --major`, neue Programmversion). |
 | Täglicher Scan rot | Neue Schwachstelle im veröffentlichten Image – Sicherheitsupdate von Hand starten, sonst wie bei Trivy. |
 
@@ -242,8 +242,8 @@ SAMAUDIT überträgt keine Daten an Dritte, lädt nichts aus dem Internet und l�
 
 | Problem | Lösung |
 |---|---|
-| Container startet nicht, Log: „START ABGEBROCHEN: Die Datenbank stammt von …“ | Eine ältere Version läuft auf der Datenbank einer neueren – die genannte Sicherung zurückspielen (siehe oben) oder wieder die neuere Version verwenden. |
-| Hinweis „docker-compose.yml ist veraltet“ | Aktuelle Datei holen (`sh update.sh` oder `/app/dist/docker-compose.yml` aus dem Image), eigene Ergänzungen in die `docker-compose.override.yml`, `docker compose up -d`. |
+| Container startet nicht, Log: „START REFUSED: The database comes from SAMAUDIT …“ | Eine ältere Version läuft auf der Datenbank einer neueren – die genannte Sicherung zurückspielen (siehe oben) oder wieder die neuere Version verwenden. |
+| Hinweis „docker-compose.yml ist veraltet“ (Log: „Note: your docker-compose.yml is outdated …“) | Aktuelle Datei holen (`sh update.sh` oder `/app/dist/docker-compose.yml` aus dem Image), eigene Ergänzungen in die `docker-compose.override.yml`, `docker compose up -d`. |
 | Kein DC erreichbar | DNS im Container: `dns`/`extra_hosts` in der `docker-compose.override.yml` eintragen (siehe Installation), dann `docker compose up -d`. |
 | Viele Prüfungen „nicht prüfbar (SMB)“ | TCP 445 zu den DCs freigeben oder `SMB_CHECKS=false`. |
 | Logs ansehen | `docker compose logs -f` |

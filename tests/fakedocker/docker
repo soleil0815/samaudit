@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Nachgebauter docker-Befehl für die Selbsttests von update.sh (kein echter Docker nötig).
+"""Stand-in docker command for the update.sh self-tests (no real Docker needed).
 
-Zustand in $FAKE_STATE (JSON):
-  registry   {ref: image_id}            was "docker pull" liefern kann
-  images     {ref: image_id}            lokale Tags
-  meta       {image_id: {"version": "2.0.1", "dist": "/pfad/zu/dist", "health": "healthy"}}
+State in $FAKE_STATE (JSON):
+  registry   {ref: image_id}            what "docker pull" can deliver
+  images     {ref: image_id}            local tags
+  meta       {image_id: {"version": "2.0.1", "dist": "/path/to/dist", "health": "healthy"}}
   containers {name: {"image": id, "labels": {...}, "mounts": [...], "health": "..."}}
   networks   {name: {"labels": {...}}}
-  calls      Liste aller Aufrufe (mit SAMAUDIT_VERSION aus der Umgebung)
+  calls      list of all calls (with SAMAUDIT_VERSION from the environment)
 """
 import json
 import os

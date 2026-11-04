@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Selbsttests: Sicherung vor Versionswechsel, Schutz vor Rückschritt, Zurückspielen, Sperre je Datenordner,
-Versionsprüfung der docker-compose.yml. Alles in Temp-Ordnern (nie in echten Datenordnern)."""
+"""Self-tests: backup before a version change, downgrade protection, restore, lock per data folder,
+version check of docker-compose.yml. Everything in temp folders (never in real data folders)."""
 from __future__ import annotations
 
 import importlib
@@ -41,7 +41,7 @@ class DataState(unittest.TestCase):
         os.environ.pop("DATA_DIR", None)
 
     def start(self):
-        """wie run.py: prüfen/sichern, dann Schema anlegen/migrieren und Version merken"""
+        """like run.py: check/back up, then create/migrate the schema and record the version"""
         path = self.ds.check_and_backup()
         if self.db._con is not None:
             self.db._con.close()
@@ -73,21 +73,21 @@ class DataState(unittest.TestCase):
 
     def test_version_change_backs_up_before_migration(self):
         self.start()
-        self.set_meta(None)                                    # Datenbank einer Version vor 2.0
+        self.set_meta(None)                                    # database of a version before 2.0
         con = sqlite3.connect(self.db.settings.db_path)
-        con.execute("INSERT INTO kv VALUES('marker', 'alt')")
+        con.execute("INSERT INTO kv VALUES('marker', 'old')")
         con.commit(); con.close()
         path = self.start()
         self.assertTrue(path and os.path.basename(path).startswith(f"samaudit-vor-{self.ds.VERSION}-"))
         self.assertEqual(oct(os.stat(path).st_mode & 0o777), "0o600")
         b = sqlite3.connect(path)
-        self.assertEqual(b.execute("SELECT value FROM kv WHERE key='marker'").fetchone()[0], "alt")
-        self.assertIsNone(b.execute("SELECT value FROM kv WHERE key='app_version'").fetchone())   # Stand VOR dem Wechsel
+        self.assertEqual(b.execute("SELECT value FROM kv WHERE key='marker'").fetchone()[0], "old")
+        self.assertIsNone(b.execute("SELECT value FROM kv WHERE key='app_version'").fetchone())   # state BEFORE the switch
         b.close()
 
     def test_old_schema_is_migrated_after_backup(self):
         self.start()
-        con = sqlite3.connect(self.db.settings.db_path)    # Schema 1: cert_pins ohne Spalte names
+        con = sqlite3.connect(self.db.settings.db_path)    # schema 1: cert_pins without column names
         con.executescript("DROP TABLE cert_pins; CREATE TABLE cert_pins (host TEXT PRIMARY KEY, fingerprint TEXT NOT NULL,"
                           " subject TEXT, not_after TEXT, is_ca INTEGER NOT NULL DEFAULT 0, der BLOB,"
                           " first_seen TEXT NOT NULL, last_seen TEXT);")
@@ -140,7 +140,7 @@ class DataState(unittest.TestCase):
         os.chmod(self.ds.backup_dir(), 0o500)
         self.addCleanup(os.chmod, self.ds.backup_dir(), 0o700)
         if os.access(self.ds.backup_dir(), os.W_OK):
-            self.skipTest("läuft als root – Schreibschutz greift nicht")
+            self.skipTest("running as root – write protection does not apply")
         with self.assertRaises(self.ds.StartRefused):
             self.ds.check_and_backup()
 
@@ -154,44 +154,44 @@ class DataState(unittest.TestCase):
         self.assertTrue(self.ds.is_locked_elsewhere())
         with self.assertRaises(self.ds.StartRefused):
             self.ds.acquire_lock()
-        self.assertEqual(self.rs.main(["irgendwas.db"]), 1)        # restore verweigert, solange es läuft
+        self.assertEqual(self.rs.main(["anything.db"]), 1)         # restore refused while it is running
         p.kill(); p.wait()
         self.assertFalse(self.ds.is_locked_elsewhere())
 
     def test_restore_by_name_keeps_current_db(self):
         self.start()
         con = sqlite3.connect(self.db.settings.db_path)
-        con.execute("INSERT INTO kv VALUES('marker', 'vorher')"); con.commit(); con.close()
+        con.execute("INSERT INTO kv VALUES('marker', 'before')"); con.commit(); con.close()
         b = self.ds.backup_now("vor-9.9.9")
         con = sqlite3.connect(self.db.settings.db_path)
-        con.execute("UPDATE kv SET value='nachher' WHERE key='marker'"); con.commit(); con.close()
+        con.execute("UPDATE kv SET value='after' WHERE key='marker'"); con.commit(); con.close()
         self.db._con.close(); self.db._con = None
         self.assertEqual(self.rs.main([os.path.basename(b)]), 0)
         v = sqlite3.connect(self.db.settings.db_path).execute("SELECT value FROM kv WHERE key='marker'").fetchone()[0]
-        self.assertEqual(v, "vorher")
+        self.assertEqual(v, "before")
         self.assertTrue(any("samaudit-ersetzt-" in f for f in self.ds.list_backups()))
         self.assertEqual(self.rs.main(["../../etc/passwd"]), 1)
 
     def test_rollback_restores_the_state_before_the_update(self):
         self.start()
         con = sqlite3.connect(self.db.settings.db_path)
-        con.execute("INSERT INTO kv VALUES('marker', 'vorher')"); con.commit(); con.close()
+        con.execute("INSERT INTO kv VALUES('marker', 'before')"); con.commit(); con.close()
         self.set_meta("1.0.0")
         time.sleep(0.05)
         since = time.time()
-        self.start()                          # neue Version übernimmt die Datenbank → Sicherung vor-<VERSION>
+        self.start()                          # new version takes over the database → backup vor-<VERSION>
         con = sqlite3.connect(self.db.settings.db_path)
-        con.execute("UPDATE kv SET value='nachher' WHERE key='marker'"); con.commit(); con.close()
+        con.execute("UPDATE kv SET value='after' WHERE key='marker'"); con.commit(); con.close()
         time.sleep(0.05)
-        self.ds.backup_now(f"vor-{self.ds.VERSION}")   # spätere (teilweise migrierte) Kopie darf nicht gewinnen
+        self.ds.backup_now(f"vor-{self.ds.VERSION}")   # later (partly migrated) copy must not win
         self.db._con.close(); self.db._con = None
         self.assertEqual(self.rs.rollback(since), 0)
         v = sqlite3.connect(self.db.settings.db_path).execute("SELECT value FROM kv WHERE key='marker'").fetchone()[0]
-        self.assertEqual(v, "vorher")
+        self.assertEqual(v, "before")
         self.assertEqual(self.ds._read_meta(self.db.settings.db_path).get("app_version"), "1.0.0")
 
     def test_rollback_of_security_update_changes_nothing(self):
-        self.start()                          # 2.0.0 → 2.0.0-s1: gleiche Programmversion, keine Sicherung
+        self.start()                          # 2.0.0 → 2.0.0-s1: same program version, no backup
         since = time.time()
         self.assertIsNone(self.start())
         self.db._con.close(); self.db._con = None
@@ -202,7 +202,7 @@ class DataState(unittest.TestCase):
         self.start()
         self.set_meta("1.0.0")
         self.db._con.close(); self.db._con = None
-        first = self.ds.check_and_backup()    # neue Version stürzt danach ab, bevor sie etwas schreibt
+        first = self.ds.check_and_backup()    # new version then crashes before writing anything
         for _ in range(6):
             self.assertEqual(self.ds.check_and_backup(), first)
         self.assertEqual(len(self.ds._backups_for(self.ds.VERSION)), 1)
@@ -216,26 +216,37 @@ class DataState(unittest.TestCase):
             time.sleep(0.02)
         self.ds._prune()
         left = {os.path.basename(f) for f in self.ds.list_backups()}
-        self.assertNotIn(names[0], left)                         # 1.0.0: dritte Version → weg
-        self.assertIn(names[1], left)                            # 1.1.0 bleibt
-        self.assertIn(names[2], left)                            # älteste 1.2.0 bleibt
-        self.assertIn(names[5], left)                            # neueste 1.2.0 bleibt
+        self.assertNotIn(names[0], left)                         # 1.0.0: third version → gone
+        self.assertIn(names[1], left)                            # 1.1.0 stays
+        self.assertIn(names[2], left)                            # oldest 1.2.0 stays
+        self.assertIn(names[5], left)                            # newest 1.2.0 stays
         self.assertNotIn(names[3], left)
 
     def test_unreadable_database_gives_clear_message(self):
         with open(self.db.settings.db_path, "wb") as f:
-            f.write(b"das ist keine SQLite-Datenbank" * 100)
+            f.write(b"this is not an SQLite database" * 100)
         with self.assertRaises(self.ds.StartRefused) as cm:
             self.ds.check_and_backup()
         self.assertIn("restore", str(cm.exception))
+
+    def test_compose_note_is_logged_in_english(self):
+        saved = os.environ.pop("SAMAUDIT_COMPOSE", None)
+        self.addCleanup(lambda: os.environ.__setitem__("SAMAUDIT_COMPOSE", saved) if saved is not None
+                        else os.environ.pop("SAMAUDIT_COMPOSE", None))
+        with self.assertLogs("samaudit.data", "WARNING") as cm:
+            self.ds.prepare()
+        if self.ds._lock_fd is not None:
+            os.close(self.ds._lock_fd)
+            self.ds._lock_fd = None
+        self.assertTrue(any("Note: " in m and "docker-compose" in m for m in cm.output), cm.output)
 
     def test_failed_migration_leaves_old_version_marked(self):
         self.start()
         self.set_meta("1.0.0", "1")
         orig = self.db._migrate
         def broken(c):
-            c.execute("ALTER TABLE scans ADD COLUMN halb TEXT")
-            raise RuntimeError("Migration bricht ab")
+            c.execute("ALTER TABLE scans ADD COLUMN half TEXT")
+            raise RuntimeError("migration aborts")
         self.db._migrate = broken
         self.addCleanup(setattr, self.db, "_migrate", orig)
         self.db._con.close(); self.db._con = None
@@ -243,7 +254,7 @@ class DataState(unittest.TestCase):
             self.db.init()
         self.db._con.close(); self.db._con = None
         cols = {r[1] for r in sqlite3.connect(self.db.settings.db_path).execute("PRAGMA table_info(scans)")}
-        self.assertNotIn("halb", cols, "half-done migration must be rolled back")
+        self.assertNotIn("half", cols, "half-done migration must be rolled back")
         self.assertEqual(self.ds._read_meta(self.db.settings.db_path)["app_version"], "1.0.0")
 
 
@@ -265,10 +276,10 @@ class ComposeVersion(unittest.TestCase):
         self.assertIsNotNone(self.ds.compose_message("de"))
         os.environ["SAMAUDIT_COMPOSE"] = "1"
         req = self.ds.COMPOSE_REQUIRED
-        self.ds.COMPOSE_REQUIRED = 2                    # Programm erwartet eine neuere Datei
+        self.ds.COMPOSE_REQUIRED = 2                    # program expects a newer file
         self.addCleanup(setattr, self.ds, "COMPOSE_REQUIRED", req)
         self.assertIn("veraltet (Version 1, benötigt 2)", self.ds.compose_message("de"))
-        self.assertIn("outdated", self.ds.compose_message("en"))
+        self.assertIn("outdated (version 1, needed 2)", self.ds.compose_message("en"))
         self.ds.COMPOSE_REQUIRED = req
         os.environ["SAMAUDIT_COMPOSE"] = str(self.ds.COMPOSE_REQUIRED)
         self.assertIsNone(self.ds.compose_message("de"))
@@ -284,7 +295,7 @@ class ComposeVersion(unittest.TestCase):
         self.assertEqual(s["image"], "${SAMAUDIT_IMAGE:-ghcr.io/soleil0815/samaudit}:${SAMAUDIT_VERSION:-latest}")
         self.assertEqual(s["ports"], ["${PORT:-9400}:9400"])
         self.assertEqual(s["environment"]["PORT"], "9400")
-        # keine auf Prüfsummen gepinnten Zusatz-Container – die Datei muss sich nicht je Version ändern
+        # no extra containers pinned by digest – the file must not need to change per version
         self.assertEqual(list(c["services"]), ["samaudit"])
         self.assertNotIn("@sha256:", (ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
 

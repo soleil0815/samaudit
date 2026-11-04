@@ -23,7 +23,7 @@ With several PFX files, name the right one in .env: TLS_PFX=web.pfx
 (or TLS_CERT=file.crt and TLS_KEY=file.key).
 
 The result is shown under "Connection" in the web interface (issuer, expiry date,
-warnings) and in the log:  docker logs samaudit 2>&1 | grep -i zertifikat
+warnings) and in the log:  docker logs samaudit 2>&1 | grep -iE 'certificate|zertifikat'
 If your certificate cannot be used (wrong password, key does not match), SAMAUDIT keeps
 running with the self-signed certificate and shows the reason there.
 

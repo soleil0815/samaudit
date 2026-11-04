@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Real end-to-end run of the update path with Docker Compose (no registry needed – uses --load):
 #   1. old installation (container started with "docker run", program files, ZIP) → update.sh migrates
-#      it to Compose, takes over DOCKER_EXTRA_HOSTS, the program backs up the database "vor-<version>"
+#      it to Compose, takes over DOCKER_EXTRA_HOSTS, the program backs up the database "vor-<version>" (= "before")
 #   2. broken new version → update.sh starts the previous one again and resets SAMAUDIT_VERSION
 #   3. restore of a backup via "docker compose run … restore"
 #   4. database of a newer version → the program refuses to start with a clear message
@@ -19,14 +19,14 @@ here="$PWD"
 work="$(mktemp -d)"
 dir="$work/samaudit"
 fail() {
-  echo "::error title=Update-Weg fehlgeschlagen::$1"
-  printf '### Update-Weg fehlgeschlagen\n%s\n' "$1" >> "$summary"
+  echo "::error title=Update path failed::$1"
+  printf '### Update path failed\n%s\n' "$1" >> "$summary"
   docker ps -a || true
   docker logs --tail 60 samaudit 2>&1 || true
   # the container log also as an annotation (job logs cannot always be opened); demo data only, no secrets
-  docker logs --tail 40 samaudit 2>&1 | python3 -c "import sys; t=sys.stdin.read()[-3500:] or '(leer)'; print('::error title=Container-Log::' + t.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))" || true
+  docker logs --tail 40 samaudit 2>&1 | python3 -c "import sys; t=sys.stdin.read()[-3500:] or '(empty)'; print('::error title=Container log::' + t.replace('%','%25').replace('\r','%0D').replace('\n','%0A'))" || true
   docker inspect -f '{{.State.Status}} {{.State.ExitCode}} {{json .State.Health}}' samaudit 2>&1 | head -c 3000 \
-    | sed 's/^/::error title=Container-Zustand::/' || true
+    | sed 's/^/::error title=Container state::/' || true
   exit 1
 }
 cleanup() {
@@ -49,9 +49,9 @@ wait_healthy() {
 }
 
 ver="$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' "$src")"
-[ -n "$ver" ] || fail "Image ohne Versionsangabe"
+[ -n "$ver" ] || fail "image without version label"
 docker tag "$src" "$repo:$ver"
-# "kaputte" neue Version: übernimmt die Datenbank (Programmversion 9.9.9), besteht aber den Gesundheitscheck nie
+# "broken" new version: takes over the database (program version 9.9.9) but never passes the health check
 printf 'FROM %s\nRUN sed -i "s/^VERSION = .*/VERSION = \\"9.9.9\\"/" /app/app/version.py\nLABEL org.opencontainers.image.version="9.9.9"\nHEALTHCHECK --interval=2s --timeout=2s --start-period=1s --start-interval=1s --retries=2 CMD false\n' "$src" \
   | docker build -q -t "$repo:9.9.9" - >/dev/null
 docker save "$repo:$ver" | gzip > "$work/samaudit-$ver-amd64.tar.gz"
@@ -71,74 +71,74 @@ DOCKER_EXTRA_HOSTS=dc01.firma.local:10.0.10.10
 EOF
 printf 'APP_NAME = "SAMAUDIT"\nVERSION = "1.9.8"\n' > "$dir/app/version.py"
 touch "$dir/Dockerfile" "$dir/base-image.lock" "$dir/.samaudit-manifest" "$dir/samaudit-v1.9.8.zip"
-echo "SICHERUNG" > "$dir/backups/samaudit-1.9.8-20261001.tgz"
+echo "BACKUP" > "$dir/backups/samaudit-1.9.8-20261001.tgz"
 docker network create --driver bridge -o com.docker.network.bridge.name=br-samaudit samaudit-net >/dev/null
 docker run -d --name samaudit --network samaudit-net -v "$dir/data:/app/data" -v "$dir/certs:/app/certs:ro" \
   -e DEMO_MODE=true -e DOMAIN_FQDN=demo.local --read-only --tmpfs /tmp "$src" >/dev/null
-wait_healthy || fail "Alte Installation startet nicht"
-# Datenbank wie von einer Version vor 2.0 (ohne Versionsangabe)
+wait_healthy || fail "old installation does not start"
+# database as from a version before 2.0 (without version entry)
 db_py "import sqlite3; c = sqlite3.connect('/app/data/samaudit.db'); c.execute(\"DELETE FROM kv WHERE key='app_version'\"); c.commit()"
 
-# 1a) Umstieg scheitert (Port belegt) → die bisherige Installation muss wieder laufen
+# 1a) migration fails (port in use) → the existing installation must run again
 python3 -m http.server 19400 >/dev/null 2>&1 &
 blocker=$!
 sleep 1
-if upd -y --load "$work/samaudit-$ver-amd64.tar.gz"; then kill "$blocker"; fail "Umstieg trotz belegtem Port als erfolgreich gemeldet"; fi
+if upd -y --load "$work/samaudit-$ver-amd64.tar.gz"; then kill "$blocker"; fail "migration reported as successful although the port is in use"; fi
 kill "$blocker"; wait "$blocker" 2>/dev/null || true
-wait_healthy || fail "nach gescheitertem Umstieg läuft die bisherige Installation nicht"
-[ -z "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' samaudit)" ] || fail "gescheiterter Umstieg: nicht der bisherige Container"
-docker inspect samaudit-alt >/dev/null 2>&1 && fail "gescheiterter Umstieg: samaudit-alt bleibt liegen"
-grep -q "^SAMAUDIT_VERSION=$ver" "$dir/.env" && fail "gescheiterter Umstieg: SAMAUDIT_VERSION nicht zurückgesetzt"
-echo "1a) gescheiterter Umstieg: ok"
+wait_healthy || fail "after the failed migration the existing installation is not running"
+[ -z "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' samaudit)" ] || fail "failed migration: not the existing container"
+docker inspect samaudit-alt >/dev/null 2>&1 && fail "failed migration: samaudit-alt is left behind"
+grep -q "^SAMAUDIT_VERSION=$ver" "$dir/.env" && fail "failed migration: SAMAUDIT_VERSION not reset"
+echo "1a) failed migration: ok"
 
-upd -y --load "$work/samaudit-$ver-amd64.tar.gz" || fail "Umstieg mit update.sh fehlgeschlagen"
-[ -n "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' samaudit)" ] || fail "Container läuft nicht unter Compose"
-[ -f "$dir/docker-compose.yml" ] || fail "docker-compose.yml wurde nicht angelegt"
-grep -q "dc01.firma.local:10.0.10.10" "$dir/docker-compose.override.yml" || fail "DOCKER_EXTRA_HOSTS nicht übernommen"
-docker exec samaudit getent hosts dc01.firma.local | grep 10.0.10.10 >/dev/null || fail "Override-Datei wirkt nicht"
-curl -sfk https://localhost:19400/healthz | grep "\"$ver\"" >/dev/null || fail "healthz liefert nicht Version $ver"
-sudo sh -c "ls '$dir/data/backups/' | grep '^samaudit-vor-$ver-' >/dev/null" || fail "keine Sicherung vor-$ver angelegt"
-docker logs samaudit 2>&1 | grep "Hinweis: .*docker-compose" >/dev/null && fail "Compose-Hinweis trotz aktueller Datei"
-echo "1) Umstieg: ok"
+upd -y --load "$work/samaudit-$ver-amd64.tar.gz" || fail "migration with update.sh failed"
+[ -n "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' samaudit)" ] || fail "container is not running under Compose"
+[ -f "$dir/docker-compose.yml" ] || fail "docker-compose.yml was not created"
+grep -q "dc01.firma.local:10.0.10.10" "$dir/docker-compose.override.yml" || fail "DOCKER_EXTRA_HOSTS not taken over"
+docker exec samaudit getent hosts dc01.firma.local | grep 10.0.10.10 >/dev/null || fail "override file has no effect"
+curl -sfk https://localhost:19400/healthz | grep "\"$ver\"" >/dev/null || fail "healthz does not report version $ver"
+sudo sh -c "ls '$dir/data/backups/' | grep '^samaudit-vor-$ver-' >/dev/null" || fail "no backup vor-$ver created"
+docker logs samaudit 2>&1 | grep "Note: .*docker-compose" >/dev/null && fail "Compose note although the file is current"
+echo "1) migration: ok"
 
 # --------------------------------------------------------------------------- 2) broken new version
-if upd -y --load "$work/samaudit-9.9.9-amd64.tar.gz"; then fail "kaputte Version wurde als erfolgreich gemeldet"; fi
-wait_healthy || fail "nach dem Rückfall läuft SAMAUDIT nicht"
-[ "$(docker inspect -f '{{.Image}}' samaudit)" = "$(docker image inspect -f '{{.Id}}' "$repo:previous")" ] || fail "Rückfall: nicht die vorige Version"
-grep -q "^SAMAUDIT_VERSION=$ver\$" "$dir/.env" || fail "Rückfall: SAMAUDIT_VERSION nicht zurückgesetzt"
+if upd -y --load "$work/samaudit-9.9.9-amd64.tar.gz"; then fail "broken version was reported as successful"; fi
+wait_healthy || fail "after the rollback SAMAUDIT is not running"
+[ "$(docker inspect -f '{{.Image}}' samaudit)" = "$(docker image inspect -f '{{.Id}}' "$repo:previous")" ] || fail "rollback: not the previous version"
+grep -q "^SAMAUDIT_VERSION=$ver\$" "$dir/.env" || fail "rollback: SAMAUDIT_VERSION not reset"
 [ "$(db_py "from app import datastate; from app.config import settings; print(datastate._read_meta(settings.db_path)['app_version'])")" = "$ver" ] \
-  || fail "Rückfall: Datenbank nicht auf den Stand vor 9.9.9 zurückgespielt"
-(cd "$dir" && docker compose up -d >/dev/null 2>&1); wait_healthy || fail "nach dem Rückfall startet docker compose up -d nicht die vorige Version"
-echo "2) Rückfall: ok"
+  || fail "rollback: database not restored to the state before 9.9.9"
+(cd "$dir" && docker compose up -d >/dev/null 2>&1); wait_healthy || fail "after the rollback docker compose up -d does not start the previous version"
+echo "2) rollback: ok"
 
 # --------------------------------------------------------------------------- 3) restore
-(cd "$dir" && docker compose up -d >/dev/null 2>&1); wait_healthy || fail "Neustart mit $ver"
+(cd "$dir" && docker compose up -d >/dev/null 2>&1); wait_healthy || fail "restart with $ver"
 name="$(db_py "from app import datastate; import os; print(os.path.basename(datastate.backup_now('e2e')))")"
-upd -y --restore "$name" | tee "$work/restore.log" || fail "update.sh --restore fehlgeschlagen"
-grep -q "Zurückgespielt: $name" "$work/restore.log" || fail "Sicherung wurde nicht zurückgespielt"
-echo "3) Zurückspielen: ok"
+upd -y --restore "$name" | tee "$work/restore.log" || fail "update.sh --restore failed"
+grep -q "Restored: $name" "$work/restore.log" || fail "backup was not restored"
+echo "3) restore: ok"
 
 # --------------------------------------------------------------------------- 4) database of a newer version
 db_py "import sqlite3; c = sqlite3.connect('/app/data/samaudit.db'); c.execute(\"UPDATE kv SET value='99.0.0' WHERE key='app_version'\"); c.commit()"
 docker restart samaudit >/dev/null
-for _ in $(seq 1 20); do docker logs samaudit 2>&1 | grep "START ABGEBROCHEN" >/dev/null && break; sleep 2; done
-docker logs samaudit 2>&1 | grep "START ABGEBROCHEN: Die Datenbank stammt von SAMAUDIT 99.0.0" >/dev/null || fail "Rückschritt wurde nicht erkannt"
-upd -y --restore "$name" >/dev/null || fail "Zurückspielen nach Rückschritt fehlgeschlagen"
-echo "4) Schutz vor Rückschritt: ok"
+for _ in $(seq 1 20); do docker logs samaudit 2>&1 | grep "START REFUSED" >/dev/null && break; sleep 2; done
+docker logs samaudit 2>&1 | grep "START REFUSED: The database comes from SAMAUDIT 99.0.0" >/dev/null || fail "downgrade was not detected"
+upd -y --restore "$name" >/dev/null || fail "restore after downgrade failed"
+echo "4) downgrade protection: ok"
 
 # --------------------------------------------------------------------------- 5) cleanup
-upd --cleanup -y || fail "update.sh --cleanup fehlgeschlagen"
+upd --cleanup -y || fail "update.sh --cleanup failed"
 for f in app Dockerfile base-image.lock .samaudit-manifest samaudit-v1.9.8.zip; do
-  [ ! -e "$dir/$f" ] || fail "--cleanup hat $f nicht entfernt"
+  [ ! -e "$dir/$f" ] || fail "--cleanup did not remove $f"
 done
-sudo test -f "$dir/data/samaudit.db" || fail "--cleanup: Datenbank fehlt"
-grep -q SICHERUNG "$dir/backups/samaudit-1.9.8-20261001.tgz" || fail "--cleanup: alte Sicherung fehlt"
-for f in .env docker-compose.yml docker-compose.override.yml update.sh; do [ -e "$dir/$f" ] || fail "--cleanup: $f fehlt"; done
-echo "5) Aufräumen: ok"
+sudo test -f "$dir/data/samaudit.db" || fail "--cleanup: database missing"
+grep -q BACKUP "$dir/backups/samaudit-1.9.8-20261001.tgz" || fail "--cleanup: old backup missing"
+for f in .env docker-compose.yml docker-compose.override.yml update.sh; do [ -e "$dir/$f" ] || fail "--cleanup: $f missing"; done
+echo "5) cleanup: ok"
 
 # --------------------------------------------------------------------------- 6) nothing to do
-upd -y --load "$work/samaudit-$ver-amd64.tar.gz" | tee "$work/again.log" || fail "erneutes Laden fehlgeschlagen"
-grep -q "nichts zu tun" "$work/again.log" || fail "gleiche Version: es wurde trotzdem neu gestartet"
-echo "6) Gleiche Version: ok"
+upd -y --load "$work/samaudit-$ver-amd64.tar.gz" | tee "$work/again.log" || fail "loading again failed"
+grep -q "nothing to do" "$work/again.log" || fail "same version: it was restarted anyway"
+echo "6) same version: ok"
 
-printf '### Update-Weg mit Docker Compose\nUmstieg, Rückfall, Zurückspielen, Rückschritt-Schutz, Aufräumen: alles in Ordnung.\n' >> "$summary"
+printf '### Update path with Docker Compose\nMigration, rollback, restore, downgrade protection, cleanup: all fine.\n' >> "$summary"
