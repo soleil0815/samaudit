@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.1.4",
+    "date": "2026-11-04",
+    "items": [
+      {
+        "type": "notice",
+        "de": "Die Prüfer-Gruppe heißt jetzt standardmäßig SAMAUDIT-Users. Bestehende Installationen müssen nichts ändern: Ist ALLOWED_GROUPS in der .env gesetzt, gilt wie bisher genau diese Gruppe; ohne Einstellung wird auch der bisherige Name SAMAUDIT-Benutzer weiter angenommen.",
+        "en": "The auditor group is now called SAMAUDIT-Users by default. Existing installations need no change: if ALLOWED_GROUPS is set in .env, exactly that group applies as before; without the setting the former name SAMAUDIT-Benutzer is still accepted."
+      }
+    ]
+  },
+  {
     "version": "2.1.3",
     "date": "2026-11-04",
     "items": [

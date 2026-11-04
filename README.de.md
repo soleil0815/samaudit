@@ -45,7 +45,7 @@ docker compose up -d
 
 `https://<server>:9400` öffnen. Beim ersten Start erzeugt SAMAUDIT ein selbstsigniertes Zertifikat, daher warnt der Browser einmal ([eigenes Zertifikat verwenden](#eigenes-https-zertifikat)).
 
-**Vor der ersten Anmeldung** die Prüfer-Gruppe `SAMAUDIT-Benutzer` im AD anlegen und die *normalen* Benutzerkonten aufnehmen, die die Berichte sehen dürfen – Admin-Konten werden grundsätzlich abgewiesen ([Einzelheiten](#wer-darf-sich-anmelden)):
+**Vor der ersten Anmeldung** die Prüfer-Gruppe `SAMAUDIT-Benutzer` (oder `SAMAUDIT-Users`) im AD anlegen und die *normalen* Benutzerkonten aufnehmen, die die Berichte sehen dürfen – Admin-Konten werden grundsätzlich abgewiesen ([Einzelheiten](#wer-darf-sich-anmelden)):
 
 ```powershell
 New-ADGroup -Name "SAMAUDIT-Benutzer" -GroupScope Global -GroupCategory Security
@@ -92,7 +92,7 @@ Ohne `curl`: Die beiden Dateien hängen auch an jedem [Release](https://github.c
 | | |
 |---|---|
 | **Anmeldung** | Mit dem eigenen **normalen** Domänenkonto direkt gegen den Domänencontroller (LDAPS). **Kein Dienstkonto, kein Admin-Konto.** |
-| **Zugriff** | Nur Mitglieder der Prüfer-Gruppe (`ALLOWED_GROUPS`, Standard `SAMAUDIT-Benutzer`). Privilegierte Konten werden immer abgewiesen. Geprüft über die effektiven Gruppen (`tokenGroups`, inkl. Verschachtelung). |
+| **Zugriff** | Nur Mitglieder der Prüfer-Gruppe (`ALLOWED_GROUPS`, Standard `SAMAUDIT-Benutzer` oder `SAMAUDIT-Users`). Privilegierte Konten werden immer abgewiesen. Geprüft über die effektiven Gruppen (`tokenGroups`, inkl. Verschachtelung). |
 | **Scan** | Manuell per Knopfdruck mit den Rechten des angemeldeten Prüfers. Vor jedem Scan wird die Berechtigung erneut geprüft. |
 | **Domänentyp** | Windows AD oder Samba AD wird automatisch erkannt. |
 | **Bewertung** | Vier Bereiche (Veraltete Objekte, Privilegierte Konten, Vertrauensstellungen, Anomalien), je 0–100 Punkte. Gesamtwert = höchster Bereichswert. |
@@ -317,7 +317,7 @@ Alle Werte werden in der `.env` gesetzt (Schreibweise `NAME=wert`, Vorlage mit E
 | `PIN_RESET_WEB` | `false` | gemerkte DC-Zertifikate in der Weboberfläche zurücksetzen erlauben (sonst nur `docker exec samaudit python -m app.pins reset`) |
 | `LDAP_CA_FILE` | – | CA-Zertifikat (PEM) im Ordner `certs`, nur für `verify` |
 | `LDAP_TIMEOUT` | `10` | Sekunden |
-| `ALLOWED_GROUPS` | `SAMAUDIT-Benutzer` | Prüfer-Gruppe(n): Name, DN, SID oder `RID:x` |
+| `ALLOWED_GROUPS` | `SAMAUDIT-Users` und `SAMAUDIT-Benutzer` | Prüfer-Gruppe(n): Name, DN, SID oder `RID:x`. Ohne Einstellung gelten beide Namen; mit Einstellung genau die angegebenen Gruppen. |
 | `DENIED_GROUPS` | – | zusätzlich gesperrte Gruppen (die eingebauten Sperren gelten immer) |
 | `PORT` | `9400` | Port der Weboberfläche auf dem Server (im Container immer 9400) |
 | `TLS_ENABLED` | `true` | HTTPS im Container. Hinter einem Reverse-Proxy: `false`, `TRUSTED_PROXIES=<Proxy-IP>`, `COOKIE_SECURE=true` |

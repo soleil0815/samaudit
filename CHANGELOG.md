@@ -4,6 +4,12 @@
 
 Program versions. Weekly security updates (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.1.4 – English auditor group name
+
+- **New default auditor group `SAMAUDIT-Users`** (was `SAMAUDIT-Benutzer`), so English-speaking admins know what to create.
+- **Nothing to do for existing installations:** if `ALLOWED_GROUPS` is set in `.env`, exactly that group applies as before. Without the setting, both `SAMAUDIT-Users` and the former `SAMAUDIT-Benutzer` are accepted. Privileged accounts are still always rejected.
+- `.env.example` no longer sets the group explicitly; the sign-in and privacy pages list all accepted groups.
+
 ## 2.1.3 – first public version
 
 - **SAMAUDIT is now open source** at [github.com/soleil0815/samaudit](https://github.com/soleil0815/samaudit).

@@ -33,7 +33,7 @@
   <h3>Cookies und Browser-Speicher</h3>
   <p>Nur technisch notwendige Cookies: Sitzung, Schutz vor Formular-Missbrauch (CSRF), gewählte Sprache und die zuletzt gesehene Version der Neuigkeiten (nur die Versionsnummer). Die gewählte Darstellung (hell/dunkel) wird nur im eigenen Browser gespeichert. Es gibt keine Werbe- oder Statistik-Cookies, daher ist kein Einwilligungsbanner nötig.</p>
   <h3>Zugriff</h3>
-  <p>Nur Mitglieder der Prüfer-Gruppe ({{ settings.allowed_groups|join(', ') }}); Administrator-Konten sind ausgeschlossen. Alle Anmeldungen und Aktionen werden protokolliert.</p>
+  <p>Nur Mitglieder der Prüfer-Gruppe ({{ settings.accepted_groups|join(', ') }}); Administrator-Konten sind ausgeschlossen. Alle Anmeldungen und Aktionen werden protokolliert.</p>
   <h3>Ihre Rechte</h3>
   <p>Betroffene haben das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung und Widerspruch (Art. 15–21 DSGVO) sowie auf Beschwerde bei einer Aufsichtsbehörde. Wenden Sie sich dazu an die verantwortliche Stelle.</p>
 {% else %}
@@ -58,7 +58,7 @@
   <h3>Cookies and browser storage</h3>
   <p>Only technically necessary cookies: session, CSRF protection, language and the last version of “What’s new” you saw (version number only). The chosen theme is stored in your browser only. No advertising or statistics cookies, so no consent banner is required.</p>
   <h3>Access</h3>
-  <p>Members of the auditor group only ({{ settings.allowed_groups|join(', ') }}); administrator accounts are excluded. All sign-ins and actions are logged.</p>
+  <p>Members of the auditor group only ({{ settings.accepted_groups|join(', ') }}); administrator accounts are excluded. All sign-ins and actions are logged.</p>
   <h3>Your rights</h3>
   <p>Data subjects have the right of access, rectification, erasure, restriction and objection (Art. 15–21 GDPR) and may lodge a complaint with a supervisory authority. Please contact the controller.</p>
 {% endif %}

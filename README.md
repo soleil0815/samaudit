@@ -46,11 +46,11 @@ docker compose up -d
 
 Open `https://<server>:9400`. On first start SAMAUDIT creates a self-signed certificate, so the browser warns once ([use your own certificate](#your-own-https-certificate)).
 
-**Before the first sign-in** create the auditor group `SAMAUDIT-Benutzer` in AD and add the *normal* user accounts that may see the reports – admin accounts are always rejected, by design ([details](#who-may-sign-in)):
+**Before the first sign-in** create the auditor group `SAMAUDIT-Users` in AD and add the *normal* user accounts that may see the reports – admin accounts are always rejected, by design ([details](#who-may-sign-in)):
 
 ```powershell
-New-ADGroup -Name "SAMAUDIT-Benutzer" -GroupScope Global -GroupCategory Security
-Add-ADGroupMember -Identity "SAMAUDIT-Benutzer" -Members "j.doe"
+New-ADGroup -Name "SAMAUDIT-Users" -GroupScope Global -GroupCategory Security
+Add-ADGroupMember -Identity "SAMAUDIT-Users" -Members "j.doe"
 ```
 
 **Just want to look?** Set `DEMO_MODE=true` in `.env`, run `docker compose up -d` and sign in with `demo` / `demo` – no domain needed. Set it back to `false` for real use.
@@ -93,7 +93,7 @@ Without `curl`: the two files are also attached to every [release](https://githu
 | | |
 |---|---|
 | **Sign-in** | With your own **normal** domain account directly against the domain controller (LDAPS). **No service account, no admin account.** |
-| **Access** | Only members of the auditor group (`ALLOWED_GROUPS`, default `SAMAUDIT-Benutzer`). Privileged accounts are always rejected. Checked via the effective groups (`tokenGroups`, including nesting). |
+| **Access** | Only members of the auditor group (`ALLOWED_GROUPS`, default `SAMAUDIT-Users`). Privileged accounts are always rejected. Checked via the effective groups (`tokenGroups`, including nesting). |
 | **Scan** | Started manually with the rights of the signed-in auditor. Authorisation is re-checked before every scan. |
 | **Domain type** | Windows AD or Samba AD is detected automatically. |
 | **Scoring** | Four areas (stale objects, privileged accounts, trusts, anomalies), 0–100 points each. Overall score = highest area score. |
@@ -167,14 +167,14 @@ SAMAUDIT is deliberately **not** used with admin accounts. Signing in to a web a
 
 Windows AD:
 ```powershell
-New-ADGroup -Name "SAMAUDIT-Benutzer" -GroupScope Global -GroupCategory Security -Description "May use SAMAUDIT"
-Add-ADGroupMember -Identity "SAMAUDIT-Benutzer" -Members "j.doe"
+New-ADGroup -Name "SAMAUDIT-Users" -GroupScope Global -GroupCategory Security -Description "May use SAMAUDIT"
+Add-ADGroupMember -Identity "SAMAUDIT-Users" -Members "j.doe"
 ```
 
 Samba AD:
 ```bash
-samba-tool group add "SAMAUDIT-Benutzer" --description="May use SAMAUDIT"
-samba-tool group addmembers "SAMAUDIT-Benutzer" j.doe
+samba-tool group add "SAMAUDIT-Users" --description="May use SAMAUDIT"
+samba-tool group addmembers "SAMAUDIT-Users" j.doe
 ```
 
 The group name can be changed with `ALLOWED_GROUPS` (e.g. `SAMAUDIT-Users`).
@@ -323,7 +323,7 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 | `PIN_RESET_WEB` | `false` | allow resetting remembered DC certificates in the web interface (otherwise only `docker exec samaudit python -m app.pins reset`) |
 | `LDAP_CA_FILE` | – | CA certificate (PEM) in the `certs` folder, only for `verify` |
 | `LDAP_TIMEOUT` | `10` | seconds |
-| `ALLOWED_GROUPS` | `SAMAUDIT-Benutzer` | auditor group(s): name, DN, SID or `RID:x` |
+| `ALLOWED_GROUPS` | `SAMAUDIT-Users` | auditor group(s): name, DN, SID or `RID:x`. Without the setting, the former name `SAMAUDIT-Benutzer` is accepted as well. |
 | `DENIED_GROUPS` | – | additional blocked groups (the built-in blocks always apply) |
 | `PORT` | `9400` | port of the web interface on the server (always 9400 inside the container) |
 | `TLS_ENABLED` | `true` | HTTPS inside the container. Behind a reverse proxy: `false`, `TRUSTED_PROXIES=<proxy IP>`, `COOKIE_SECURE=true` |

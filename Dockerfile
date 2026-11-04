@@ -12,7 +12,7 @@ FROM ${PYTHON_IMAGE}
 
 ARG DEBIAN_SNAPSHOT=20261102T000000Z
 ARG DEBIAN_CODENAME=trixie
-ARG APP_VERSION=2.1.3
+ARG APP_VERSION=2.1.4
 # version of this image: program version, or "<program version>-s<n>" for a security update
 ARG IMAGE_VERSION=
 LABEL org.opencontainers.image.title="SAMAUDIT" \

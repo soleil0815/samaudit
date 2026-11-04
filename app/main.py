@@ -240,7 +240,7 @@ async def login_submit(request: Request):
             db.audit("act_login_failed", username[:80], ip, "demo")
             return RedirectResponse("/login?e=bad_credentials", status_code=303)
         auth.release_attempt(username, ip, mark)
-        sess = auth.create("demo", "Demo-Prüfer", "demo@firma.local", "demo", ["SAMAUDIT-Benutzer"], password, ip)
+        sess = auth.create("demo", "Demo-Prüfer", "demo@firma.local", "demo", ["SAMAUDIT-Users"], password, ip)
         db.set_kv("domain_type", "windows")
     else:
         from .ldapsrc import AuthError, authenticate

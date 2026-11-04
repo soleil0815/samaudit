@@ -12,7 +12,7 @@ Das Handbuch hat zwei Teile: **Teil A** für Prüferinnen und Prüfer, die SAMAU
 2. Im Anmeldefeld steht, an welcher **Domäne** Sie sich anmelden.
 3. Mit Ihrem **normalen** Domänenkonto anmelden – als `benutzer`, `DOMÄNE\benutzer` oder `benutzer@domäne`.
 
-Anmelden darf nur, wer Mitglied der Prüfer-Gruppe ist (Standard `SAMAUDIT-Benutzer`).
+Anmelden darf nur, wer Mitglied der Prüfer-Gruppe ist (Standard `SAMAUDIT-Benutzer` oder `SAMAUDIT-Users`).
 
 > **Admin-Konten werden immer abgewiesen** – auch wenn sie in der Prüfer-Gruppe sind. Das ist Absicht: So wird nie ein Passwort eines hochprivilegierten Kontos in eine Weboberfläche eingegeben. Verwenden Sie Ihr normales Arbeitskonto.
 
@@ -148,7 +148,7 @@ Alle Einstellungen stehen in der Datei `.env` (Vorlage mit Erklärungen: `.env.e
 |---|---|---|
 | `DOMAIN_FQDN` | – | DNS-Name der Domäne (Pflicht) |
 | `DC_HOSTS` | `DOMAIN_FQDN` | feste DCs, mit `;` getrennt |
-| `ALLOWED_GROUPS` | `SAMAUDIT-Benutzer` | Prüfer-Gruppe(n) |
+| `ALLOWED_GROUPS` | `SAMAUDIT-Users` und `SAMAUDIT-Benutzer` | Prüfer-Gruppe(n); ohne Einstellung gelten beide Namen |
 | `DENIED_GROUPS` | – | zusätzlich gesperrte Gruppen |
 | `PUBLIC_HOSTNAME` | – | Name, unter dem SAMAUDIT aufgerufen wird |
 | `PORT` | `9400` | Port der Weboberfläche auf dem Server |

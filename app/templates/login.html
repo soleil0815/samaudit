@@ -28,7 +28,7 @@
           {% if fqdn_ %}<span>{% if dt_ == 'samba' %}Samba AD{% elif dt_ == 'windows' %}Windows AD{% else %}{{ 'Windows/Samba: automatische Erkennung' if lang == 'de' else 'Windows/Samba: detected automatically' }}{% endif %}{% if settings.netbios %} · {{ settings.netbios }}{% endif %} · {{ 'LDAPS' if settings.ldap_ssl else ('StartTLS' if settings.ldap_starttls else 'LDAP') }}</span>{% endif %}
         </div>
       </div>
-      <p class="hint">{{ t('login_hint', lang) }}<br><span class="muted small">{{ 'Prüfer-Gruppe' if lang == 'de' else 'Auditor group' }}: {{ settings.allowed_groups|join(', ') }}</span></p>
+      <p class="hint">{{ t('login_hint', lang) }}<br><span class="muted small">{{ 'Prüfer-Gruppe' if lang == 'de' else 'Auditor group' }}: {{ settings.accepted_groups|join(', ') }}</span></p>
       {% if settings.demo_mode %}<div class="alert warn">{{ t('demo_banner', lang) }} <b>demo / demo</b></div>{% endif %}
       {% if config_problems %}<div class="alert">{{ t('config_error', lang) }}: {{ 'Details im Container-Protokoll (docker logs samaudit)' if lang == 'de' else 'details in the container log (docker logs samaudit)' }}</div>{% endif %}
       {% if error %}<div class="alert" role="alert">{{ t(error, lang) }}</div>{% endif %}
