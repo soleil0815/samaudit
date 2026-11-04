@@ -4,6 +4,10 @@
 
 Programmversionen. Die wöchentlichen Sicherheitsupdates (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.1.6 – kompakter Kaffee-Knopf
+
+- Kompakter „Buy me a coffee“-Knopf (gelbe Pille mit dem offiziellen Becher-Symbol, lokal gespeichert) unten in der Seitenleiste auf allen Seiten, auch auf der Übersicht, und auf der Hilfe-Seite.
+
 ## 2.1.5 – Kaffee-Knopf
 
 - Der offizielle „Buy me a coffee“-Knopf steht unten in der Seitenleiste (alle Seiten außer der Übersicht) und auf der Hilfe-Seite, lokal gespeichert (keine Anfrage an deren Server; die Sicherheitsrichtlinie bleibt `img-src 'self'`).

@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.1.6",
+    "date": "2026-11-04",
+    "items": [
+      {
+        "type": "notice",
+        "de": "Der „Buy me a coffee“-Knopf ist jetzt kompakter und steht unten in der Seitenleiste auf allen Seiten, auch auf der Übersicht.",
+        "en": "The \"Buy me a coffee\" button is now more compact and sits at the bottom of the sidebar on every page, including the overview."
+      }
+    ]
+  },
+  {
     "version": "2.1.5",
     "date": "2026-11-04",
     "items": [
