@@ -8,7 +8,7 @@ Program versions. Weekly security updates (same program, new package versions on
 
 - **SAMAUDIT is now open source** at [github.com/soleil0815/samaudit](https://github.com/soleil0815/samaudit).
 - **English for operators and developers:** the server log, the messages of `update.sh` and of `restore`, the automatic texts on GitHub (security update entries, release notes, workflow messages) and all code comments are now in English. Example: `START REFUSED` instead of `START ABGEBROCHEN`. `update.sh` and `restore` still accept German answers (`j`/`ja`). The web interface, PDF and manual stay bilingual.
-- **Fix:** notes about missing settings (e.g. `DOMAIN_FQDN`) now follow the chosen interface language.
+- **Fix:** error messages when uploading your own certificate and some scan errors now follow the chosen interface language (previously German only).
 
 ## 2.1.2 – ready for open source
 

@@ -15,8 +15,8 @@
       },
       {
         "type": "fix",
-        "de": "Hinweise zu fehlenden Einstellungen (z. B. DOMAIN_FQDN) erscheinen in der Oberfläche jetzt in der gewählten Sprache.",
-        "en": "Notes about missing settings (e.g. DOMAIN_FQDN) now appear in the chosen interface language."
+        "de": "Fehlermeldungen beim Hochladen eines eigenen Zertifikats und einige Scan-Fehler erscheinen jetzt in der gewählten Sprache der Oberfläche (bisher nur deutsch).",
+        "en": "Error messages when uploading your own certificate and some scan errors now appear in the chosen interface language (previously German only)."
       }
     ]
   },
