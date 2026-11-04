@@ -131,6 +131,7 @@ from app.config import settings  # noqa: E402
 
 check(DONATE_URL in _rail("/scans") and "/static/img/bmc-cup.svg" in _rail("/scans"), "sidebar: coffee button on /scans")
 check(DONATE_URL in _rail("/"), "sidebar: coffee button on the overview")
+check(DONATE_URL == "https://buymeacoffee.com/soleil0815", "coffee link points to the current page")
 
 # --- Parsers and protections -------------------------------------------------
 from app import webcert  # noqa: E402

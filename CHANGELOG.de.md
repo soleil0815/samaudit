@@ -4,6 +4,10 @@
 
 Programmversionen. Die wöchentlichen Sicherheitsupdates (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.1.7 – neuer Kaffee-Link
+
+- Der „Buy me a coffee“-Link führt jetzt zu [buymeacoffee.com/soleil0815](https://buymeacoffee.com/soleil0815) (im Programm, in der README, in den Release-Texten und beim Sponsor-Knopf auf GitHub).
+
 ## 2.1.6 – kompakter Kaffee-Knopf
 
 - Kompakter „Buy me a coffee“-Knopf (gelbe Pille mit dem offiziellen Becher-Symbol, lokal gespeichert) unten in der Seitenleiste auf allen Seiten, auch auf der Übersicht, und auf der Hilfe-Seite.
