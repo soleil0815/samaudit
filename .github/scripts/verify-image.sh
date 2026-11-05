@@ -3,7 +3,7 @@
 # Checks a built image before anything is published:
 #   1. the Debian packages in the image match locks/os-packages.txt exactly (reproducible build)
 #   2. the automatic tests (tests/smoke.py) pass INSIDE the image
-#   3. pip and apt are no longer present
+#   3. pip, apt and the apt leftovers (libapt-pkg, sqv, debian-archive-keyring) are no longer present
 # and writes the package versions to the job summary.
 #
 #   .github/scripts/verify-image.sh IMAGE [--record]   --record: write the list instead of comparing
@@ -28,6 +28,9 @@ docker run --rm --entrypoint python -v "$PWD/tests:/app/tests:ro" "$image" tests
 
 if run sh -c 'command -v pip || command -v apt-get || command -v apt || python -c "import pip"' >/dev/null 2>&1; then
   fail "Package manager in the image" "pip or apt is still present in the image."
+fi
+if grep -E '^(libapt-pkg[^ ]*|sqv|debian-archive-keyring) ' "${RUNNER_TEMP:-/tmp}/os-packages.txt" >/dev/null; then
+  fail "apt leftovers in the image" "libapt-pkg, sqv or debian-archive-keyring is still installed."
 fi
 
 {

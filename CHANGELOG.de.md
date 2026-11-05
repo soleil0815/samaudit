@@ -4,6 +4,10 @@
 
 Programmversionen. Die wöchentlichen Sicherheitsupdates (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.1.8 – schlankeres Image
+
+- Die Reste von apt (`libapt-pkg`, `sqv`, `debian-archive-keyring`) sind aus dem Image entfernt. apt und pip waren schon weg; diese drei blieben ungenutzt zurück und konnten nur Warnungen in Scans auslösen. `verify-image.sh` prüft, dass sie wegbleiben.
+
 ## 2.1.7 – neuer Kaffee-Link
 
 - Der „Buy me a coffee“-Link führt jetzt zu [buymeacoffee.com/soleil0815](https://buymeacoffee.com/soleil0815) (im Programm, in der README, in den Release-Texten und beim Sponsor-Knopf auf GitHub).

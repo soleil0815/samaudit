@@ -186,6 +186,18 @@ class Workflows(unittest.TestCase):
         self.assertIn("releases/latest/download", script)
         self.assertIn('exit "$fail"', script)
 
+    def test_apt_and_its_leftovers_are_removed(self):
+        docker = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("--force-depends apt;", docker)
+        for pkg in ("libapt-pkg*", "sqv", "debian-archive-keyring"):
+            self.assertIn(pkg, docker)
+        lock = {line.split()[0] for line in (ROOT / "locks/os-packages.txt").read_text().splitlines() if line.strip()}
+        for pkg in ("apt", "sqv", "debian-archive-keyring"):
+            self.assertNotIn(pkg, lock)
+        self.assertFalse([p for p in lock if p.startswith("libapt-pkg")])
+        verify = (ROOT / ".github/scripts/verify-image.sh").read_text(encoding="utf-8")
+        self.assertIn("apt leftovers in the image", verify)
+
     def test_owner_merges_and_publishing_needs_a_manual_start(self):
         wf = workflow("docker-image.yml")
         self.assertNotIn("automerge", wf["jobs"], "pull requests are merged by the owner, never automatically")
