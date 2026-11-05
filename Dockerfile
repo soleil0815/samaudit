@@ -12,7 +12,7 @@ FROM ${PYTHON_IMAGE}
 
 ARG DEBIAN_SNAPSHOT=20261102T000000Z
 ARG DEBIAN_CODENAME=trixie
-ARG APP_VERSION=2.1.7
+ARG APP_VERSION=2.1.8
 # version of this image: program version, or "<program version>-s<n>" for a security update
 ARG IMAGE_VERSION=
 LABEL org.opencontainers.image.title="SAMAUDIT" \
@@ -61,6 +61,9 @@ RUN set -eu; \
     python -m pip uninstall -y pip; \
     rm -rf /usr/local/lib/python3*/ensurepip /root/.cache; \
     dpkg --purge --force-remove-essential --force-remove-protected --force-depends apt; \
+    # leftovers of apt that nothing uses any more (they would only show up in vulnerability scans)
+    leftovers="$(dpkg-query -W -f '${Package}\n' 'libapt-pkg*' sqv debian-archive-keyring 2>/dev/null || true)"; \
+    [ -z "$leftovers" ] || dpkg --purge --force-depends $leftovers; \
     rm -rf /etc/apt /var/lib/apt /var/cache/apt /var/log/apt; \
     dpkg-query -W -f '${Package} ${Version}\n' | sort > /app/os-packages.txt
 

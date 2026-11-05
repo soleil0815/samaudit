@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.1.8",
+    "date": "2026-11-05",
+    "items": [
+      {
+        "type": "security",
+        "de": "Schlankeres Image: Die Reste der Paketverwaltung apt (libapt-pkg, sqv, debian-archive-keyring) sind entfernt. Sie wurden nicht benutzt, konnten aber Sicherheitswarnungen in Scans auslösen.",
+        "en": "Leaner image: the leftovers of the apt package manager (libapt-pkg, sqv, debian-archive-keyring) are removed. They were unused but could trigger warnings in vulnerability scans."
+      }
+    ]
+  },
+  {
     "version": "2.1.7",
     "date": "2026-11-04",
     "items": [
