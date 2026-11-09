@@ -18,6 +18,7 @@ set -euo pipefail
 
 TRIVY_VERSION=0.75.0
 TRIVY_SHA256=c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f   # trivy_0.75.0_Linux-64bit.tar.gz
+TRIVY_SHA256_ARM64=a1ee9f6ffb7d112b64ff726a2a0717c21175c1114361391f4a132956751a13b3   # trivy_0.75.0_Linux-ARM64.tar.gz
 
 image="${1:?usage: trivy.sh IMAGE}"
 bin="${RUNNER_TEMP:-/tmp}/trivy-$TRIVY_VERSION"
@@ -27,10 +28,18 @@ mkdir -p "$bin" "$out"
 if [ -n "${TRIVY_BIN:-}" ]; then
   trivy="$TRIVY_BIN"                      # self-tests: a stand-in for trivy
 elif [ ! -x "$bin/trivy" ]; then
+  # the release for this runner: the release jobs scan each platform on its own hardware
+  case "$(uname -m)" in
+    x86_64) asset=Linux-64bit; sum="$TRIVY_SHA256" ;;
+    aarch64|arm64) asset=Linux-ARM64; sum="$TRIVY_SHA256_ARM64" ;;
+    *) echo "::error::No pinned Trivy release for $(uname -m)"; exit 1 ;;
+  esac
   tgz="$bin/trivy.tgz"
-  curl -sSfL --retry 3 -o "$tgz" \
-    "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
-  echo "${TRIVY_SHA256}  $tgz" | sha256sum -c - || { echo "::error::Trivy download does not match the pinned checksum"; exit 1; }
+  # --retry-all-errors: GitHub's release download answers now and then with 502/504
+  curl -sSfL --retry 4 --retry-all-errors --retry-delay 10 -o "$tgz" \
+    "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_${asset}.tar.gz" \
+    || { echo "::error title=Trivy download failed::trivy_${TRIVY_VERSION}_${asset}.tar.gz could not be downloaded (GitHub not reachable?) – start the run again later"; exit 1; }
+  echo "${sum}  $tgz" | sha256sum -c - || { echo "::error::Trivy download does not match the pinned checksum"; exit 1; }
   tar xzf "$tgz" -C "$bin" trivy
 fi
 trivy="${trivy:-$bin/trivy}"
