@@ -2,7 +2,14 @@
 
 *Deutsche Version: [CHANGELOG.de.md](CHANGELOG.de.md)*
 
-Program versions. Weekly security updates (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
+Program versions. Monthly security updates on patch day, the second Tuesday (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
+
+## 2.1.9 – findings of an OWASP ZAP scan
+
+- **CSP without `'unsafe-inline'`:** all 71 inline `style="…"` attributes moved into CSS classes, so the Content Security Policy now forbids inline styles as well as inline scripts. Pages are pixel-identical (checked page by page).
+- **Language cookie `samaudit_lang` is `HttpOnly`** (it never needed to be readable by scripts).
+- **Sign-in form:** the anti-CSRF field is now called `csrf_token`, so scanners recognise it (the protection itself was already there; forms opened before the update still work).
+- Other ZAP notes were false positives: the private IP on the Help page is the example address `10.0.10.10` from the manual.
 
 ## 2.1.8 – leaner image
 

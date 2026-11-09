@@ -3,14 +3,14 @@
 {% block content %}
 <section class="panel panel-pad progress-card" data-scan-status="/api/scan/{{ scan.id }}" data-report="/report/{{ scan.id }}">
   <h1>{{ t('scan_running', lang) }}</h1>
-  <p class="muted" style="margin-top:8px">{{ t('scan_hint', lang) }}</p>
-  <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><i style="width: {{ scan.progress }}%"></i></div>
-  <div style="display:flex;justify-content:space-between;gap:12px">
+  <p class="muted u-mt8">{{ t('scan_hint', lang) }}</p>
+  <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><i class="w-{{ [[(scan.progress or 0)|int, 0]|max, 100]|min }}"></i></div>
+  <div class="u-row-between">
     <span class="phase">{{ t(scan.phase or 'phase_start', lang) }}</span><span class="num muted" data-pct>{{ scan.progress }} %</span>
   </div>
-  <div class="alert" data-error {% if scan.status != 'error' %}hidden{% endif %} style="margin-top:18px;text-align:left">
+  <div class="alert u-mt18 u-tl" data-error {% if scan.status != 'error' %}hidden{% endif %}>
     <b>{{ t('scan_failed', lang) }}:</b> <span>{% set ek = 'err_' ~ (scan.error or '') %}{{ t(ek, lang) if scan.error and t(ek, lang) != ek else (scan.error or '') }}</span>
   </div>
-  <p style="margin-top:18px"><a href="/">{{ t('back', lang) }}</a></p>
+  <p class="u-mt18"><a href="/">{{ t('back', lang) }}</a></p>
 </section>
 {% endblock %}

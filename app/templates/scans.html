@@ -2,7 +2,7 @@
 {# SPDX-License-Identifier: AGPL-3.0-or-later #}
 {% block content %}
 <div class="page-head"><div><h1>{{ t('nav_scans', lang) }}</h1></div></div>
-<section class="panel"><div class="panel-body" style="padding:10px 18px 14px">
+<section class="panel"><div class="panel-body u-pad-10-18-14">
 {% if scans %}{% set allow_delete = True %}{% include "_scan_table.html" %}{% else %}<p class="empty">{{ t('no_scans', lang) }}</p>{% endif %}
 </div></section>
 {% endblock %}

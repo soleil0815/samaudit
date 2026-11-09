@@ -111,8 +111,13 @@ class Workflows(unittest.TestCase):
     def test_schedules(self):
         sec = workflow("security-update.yml")["on"]
         cron = sec["schedule"][0]["cron"].split()
-        self.assertEqual(cron[4], "1", "security update must run on Mondays")
+        self.assertEqual(cron[2:], ["*", "*", "2"], "security update starts every Tuesday …")
         self.assertLessEqual(int(cron[1]), 6, "security update must run early in the morning")
+        jobs = workflow("security-update.yml")["jobs"]
+        self.assertIn("sh tools/patchday.sh", jobs["patchday"]["steps"][1]["run"], "… and only patch day goes on")
+        self.assertIn("needs.patchday.outputs.due == 'true'", jobs["prepare"]["if"])
+        self.assertEqual(sec["schedule"][1]["cron"].split()[4], "1", "base support check stays on Mondays")
+        self.assertIn(sec["schedule"][1]["cron"], jobs["base-support"]["if"])
         self.assertIn("workflow_dispatch", sec)
         daily = workflow("scan-published.yml")["on"]
         d = daily["schedule"][0]["cron"].split()
@@ -416,6 +421,24 @@ class TrivyGate(unittest.TestCase):
             self.assertIsNotNone(m, f".trivyignore needs 'ID exp:YYYY-MM-DD  # reason': {entry}")
             self.assertGreater(dt.date.fromisoformat(m.group(2)), dt.date.today(), f"expired: {entry}")
 
+
+
+class PatchDayTests(unittest.TestCase):
+    """tools/patchday.sh: true exactly on the second Tuesday of every month (Microsoft's Patch Tuesday)."""
+
+    def run_sh(self, day: str) -> int:
+        return subprocess.run(["sh", str(ROOT / "tools" / "patchday.sh"), day], capture_output=True).returncode
+
+    def test_second_tuesday_only(self):
+        start = dt.date(2026, 11, 1)
+        days = [start + dt.timedelta(n) for n in range(800)]
+        got = [d for d in days if self.run_sh(d.isoformat()) == 0]
+        self.assertEqual(got, [d for d in days if d.weekday() == 1 and 8 <= d.day <= 14])
+        self.assertEqual(got[0], dt.date(2026, 11, 10))
+
+    def test_bad_input(self):
+        for bad in ("2026-13-01", "morgen", "2026-1-5"):
+            self.assertEqual(self.run_sh(bad), 2, bad)
 
 if __name__ == "__main__":
     unittest.main()

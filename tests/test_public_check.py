@@ -28,25 +28,28 @@ esac
 '''
 
 FAKE_CURL = r'''#!/usr/bin/env bash
-# release files: present unless listed in $FAKE_MISSING; "releases/latest" redirects to $FAKE_TAG
+# release files: 200 unless listed in $FAKE_MISSING (404) or $FAKE_DOWN (504); "releases/latest" redirects to $FAKE_TAG
 out=""; url=""; wout=""
 while [ $# -gt 0 ]; do
-  case "$1" in -o) out="$2"; shift ;; -w) wout="$2"; shift ;; --retry|--retry-delay) shift ;; -*) ;; *) url="$1" ;; esac
+  case "$1" in -o) out="$2"; shift ;; -w) wout="$2"; shift ;; --retry|--retry-delay|--connect-timeout) shift ;; -*) ;; *) url="$1" ;; esac
   shift
 done
 case "$url" in
   */releases/latest) [ -n "$wout" ] && printf 'https://github.com/o/r/releases/tag/v%s' "$FAKE_TAG"; exit 0 ;;
   */releases/latest/download/*)
-    f="${url##*/}"
-    case " $FAKE_MISSING " in *" $f "*) exit 22 ;; esac
-    [ -n "$out" ] && echo data > "$out"; exit 0 ;;
+    f="${url##*/}"; code=200
+    case " $FAKE_MISSING " in *" $f "*) code=404 ;; esac
+    case " $FAKE_DOWN " in *" $f "*) code=504 ;; esac
+    [ "$code" = 200 ] && [ -n "$out" ] && echo data > "$out"
+    [ -n "$wout" ] && printf '%s' "$code"
+    exit 0 ;;
 esac
 exit 22
 '''
 
 
 class PublicCheck(unittest.TestCase):
-    def run_check(self, image="public", missing="", tag="2.1.7"):
+    def run_check(self, image="public", missing="", tag="2.1.7", down=""):
         tmp = Path(tempfile.mkdtemp(prefix="public-check-"))
         for name, body in (("docker", FAKE_DOCKER), ("curl", FAKE_CURL)):
             p = tmp / name
@@ -54,7 +57,7 @@ class PublicCheck(unittest.TestCase):
             p.chmod(p.stat().st_mode | stat.S_IEXEC)
         summary = tmp / "summary.md"
         env = {**os.environ, "PATH": f"{tmp}:{os.environ['PATH']}", "FAKE_IMAGE": image, "FAKE_MISSING": missing,
-               "FAKE_TAG": tag, "GITHUB_STEP_SUMMARY": str(summary)}
+               "FAKE_TAG": tag, "FAKE_DOWN": down, "GITHUB_STEP_SUMMARY": str(summary)}
         env.pop("DOCKER_CONFIG", None)
         r = subprocess.run(["bash", str(SCRIPT), "Owner/Repo"], capture_output=True, text=True, env=env)
         return r, summary.read_text() if summary.exists() else ""
@@ -80,6 +83,13 @@ class PublicCheck(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("::error title=Release file missing::", r.stdout)
         self.assertIn("env.example", r.stdout)
+        self.assertIn("HTTP 404", r.stdout)
+
+    def test_github_outage_is_only_a_warning(self):
+        r, _ = self.run_check(down="env.example SHA256SUMS")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("::warning title=GitHub download temporarily unavailable::", r.stdout)
+        self.assertNotIn("::error", r.stdout)
 
     def test_version_mismatch_is_only_a_warning(self):
         r, _ = self.run_check(tag="2.1.6")

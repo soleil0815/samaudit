@@ -1,6 +1,6 @@
 # Security updates
 
-Automatic weekly security updates: **same program, only newer packages** within the base (Python series, Debian release, major versions of the packages). Numbering: `<program version>-s<counter>`, e.g. `1.9.7-s1`; a new program version resets the counter. Program changes are listed in [CHANGELOG.md](CHANGELOG.md) (Deutsch: [CHANGELOG.de.md](CHANGELOG.de.md)).
+Automatic monthly security updates on patch day (the second Tuesday of the month): **same program, only newer packages** within the base (Python series, Debian release, major versions of the packages). Numbering: `<program version>-s<counter>`, e.g. `1.9.7-s1`; a new program version resets the counter. Program changes are listed in [CHANGELOG.md](CHANGELOG.md) (Deutsch: [CHANGELOG.de.md](CHANGELOG.de.md)).
 
 <!-- entries -->
 

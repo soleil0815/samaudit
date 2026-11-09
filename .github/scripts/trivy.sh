@@ -35,8 +35,8 @@ elif [ ! -x "$bin/trivy" ]; then
     *) echo "::error::No pinned Trivy release for $(uname -m)"; exit 1 ;;
   esac
   tgz="$bin/trivy.tgz"
-  # --retry-all-errors: GitHub's release download answers now and then with 502/504
-  curl -sSfL --retry 4 --retry-all-errors --retry-delay 10 -o "$tgz" \
+  # GitHub's release download answers now and then with 502/504: retry patiently before giving up
+  curl -sSfL --retry 6 --retry-delay 15 --retry-all-errors --connect-timeout 20 -o "$tgz" \
     "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_${asset}.tar.gz" \
     || { echo "::error title=Trivy download failed::trivy_${TRIVY_VERSION}_${asset}.tar.gz could not be downloaded (GitHub not reachable?) – start the run again later"; exit 1; }
   echo "${sum}  $tgz" | sha256sum -c - || { echo "::error::Trivy download does not match the pinned checksum"; exit 1; }

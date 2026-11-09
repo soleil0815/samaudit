@@ -473,3 +473,153 @@ td.mono, .mono { font-family: var(--f-mono); font-size: 12.5px; word-break: brea
   box-shadow: 0 0 0 2px var(--accent-strong), 0 4px 12px rgba(0, 0, 0, .25); }
 .bmc-btn img { display: block; width: 14px; height: 16px; }
 .rail .bmc-btn { margin: 0 0 12px 2px; align-self: flex-start; width: max-content; }
+
+/* ---------------------------------------------------------------------------------------------
+   Utilities instead of inline style="…" attributes, so the Content Security Policy can forbid
+   inline styles (style-src 'self' without 'unsafe-inline'). !important keeps the former
+   precedence of an inline style over component rules.
+   --------------------------------------------------------------------------------------------- */
+.u-m0 { margin: 0 !important; }
+.u-m-6-0-0 { margin: 6px 0 0 !important; }
+.u-m-10-0-0 { margin: 10px 0 0 !important; }
+.u-m-10-0-4 { margin: 10px 0 4px !important; }
+.u-m-14-0 { margin: 14px 0 !important; }
+.u-m-14-0-0 { margin: 14px 0 0 !important; }
+.u-m-20-0-0 { margin: 20px 0 0 !important; }
+.u-mt8 { margin-top: 8px !important; }
+.u-mt12 { margin-top: 12px !important; }
+.u-mt14 { margin-top: 14px !important; }
+.u-mt18 { margin-top: 18px !important; }
+.u-mt22 { margin-top: 22px !important; }
+.u-mt28 { margin-top: 28px !important; }
+.u-mb16 { margin-bottom: 16px !important; }
+.u-pad-8-18 { padding: 8px 18px !important; }
+.u-pad-10-20 { padding: 10px 20px !important; }
+.u-pad-10-18-14 { padding: 10px 18px 14px !important; }
+.u-fs15 { font-size: 15px !important; }
+.u-fs16 { font-size: 16px !important; }
+.u-fw700 { font-weight: 700 !important; }
+.u-font-body-small { font: 400 12.5px var(--f-body) !important; }
+.u-ci { color: inherit !important; }
+.u-link-inherit { color: inherit !important; text-decoration: underline !important; }
+.u-ink2 { color: var(--ink-2) !important; }
+.u-tl { text-align: left !important; }
+.u-langtop { text-align: right !important; margin: 0 0 -18px !important; }
+.u-row-between { display: flex !important; justify-content: space-between !important; gap: 12px !important; }
+.u-narrow-1180 { max-width: 1180px !important; margin: 0 auto !important; }
+.u-narrow-980 { max-width: 980px !important; margin: 0 auto !important; }
+.u-narrow-860 { max-width: 860px !important; margin: 0 auto !important; }
+
+/* category and severity colour for components that use var(--c) */
+.c-stale { --c: var(--c-stale) !important; }
+.c-privileged { --c: var(--c-privileged) !important; }
+.c-trusts { --c: var(--c-trusts) !important; }
+.c-anomalies { --c: var(--c-anomalies) !important; }
+.sevc-critical { --c: var(--sev-critical) !important; }
+.sevc-high { --c: var(--sev-high) !important; }
+.sevc-medium { --c: var(--sev-medium) !important; }
+.sevc-low { --c: var(--sev-low) !important; }
+.sevc-info { --c: var(--sev-info) !important; }
+
+/* bar widths 0–100 % (doubled class beats ".progress-bar i"; a width set by script still wins) */
+.w-0.w-0 { width: 0%; }
+.w-1.w-1 { width: 1%; }
+.w-2.w-2 { width: 2%; }
+.w-3.w-3 { width: 3%; }
+.w-4.w-4 { width: 4%; }
+.w-5.w-5 { width: 5%; }
+.w-6.w-6 { width: 6%; }
+.w-7.w-7 { width: 7%; }
+.w-8.w-8 { width: 8%; }
+.w-9.w-9 { width: 9%; }
+.w-10.w-10 { width: 10%; }
+.w-11.w-11 { width: 11%; }
+.w-12.w-12 { width: 12%; }
+.w-13.w-13 { width: 13%; }
+.w-14.w-14 { width: 14%; }
+.w-15.w-15 { width: 15%; }
+.w-16.w-16 { width: 16%; }
+.w-17.w-17 { width: 17%; }
+.w-18.w-18 { width: 18%; }
+.w-19.w-19 { width: 19%; }
+.w-20.w-20 { width: 20%; }
+.w-21.w-21 { width: 21%; }
+.w-22.w-22 { width: 22%; }
+.w-23.w-23 { width: 23%; }
+.w-24.w-24 { width: 24%; }
+.w-25.w-25 { width: 25%; }
+.w-26.w-26 { width: 26%; }
+.w-27.w-27 { width: 27%; }
+.w-28.w-28 { width: 28%; }
+.w-29.w-29 { width: 29%; }
+.w-30.w-30 { width: 30%; }
+.w-31.w-31 { width: 31%; }
+.w-32.w-32 { width: 32%; }
+.w-33.w-33 { width: 33%; }
+.w-34.w-34 { width: 34%; }
+.w-35.w-35 { width: 35%; }
+.w-36.w-36 { width: 36%; }
+.w-37.w-37 { width: 37%; }
+.w-38.w-38 { width: 38%; }
+.w-39.w-39 { width: 39%; }
+.w-40.w-40 { width: 40%; }
+.w-41.w-41 { width: 41%; }
+.w-42.w-42 { width: 42%; }
+.w-43.w-43 { width: 43%; }
+.w-44.w-44 { width: 44%; }
+.w-45.w-45 { width: 45%; }
+.w-46.w-46 { width: 46%; }
+.w-47.w-47 { width: 47%; }
+.w-48.w-48 { width: 48%; }
+.w-49.w-49 { width: 49%; }
+.w-50.w-50 { width: 50%; }
+.w-51.w-51 { width: 51%; }
+.w-52.w-52 { width: 52%; }
+.w-53.w-53 { width: 53%; }
+.w-54.w-54 { width: 54%; }
+.w-55.w-55 { width: 55%; }
+.w-56.w-56 { width: 56%; }
+.w-57.w-57 { width: 57%; }
+.w-58.w-58 { width: 58%; }
+.w-59.w-59 { width: 59%; }
+.w-60.w-60 { width: 60%; }
+.w-61.w-61 { width: 61%; }
+.w-62.w-62 { width: 62%; }
+.w-63.w-63 { width: 63%; }
+.w-64.w-64 { width: 64%; }
+.w-65.w-65 { width: 65%; }
+.w-66.w-66 { width: 66%; }
+.w-67.w-67 { width: 67%; }
+.w-68.w-68 { width: 68%; }
+.w-69.w-69 { width: 69%; }
+.w-70.w-70 { width: 70%; }
+.w-71.w-71 { width: 71%; }
+.w-72.w-72 { width: 72%; }
+.w-73.w-73 { width: 73%; }
+.w-74.w-74 { width: 74%; }
+.w-75.w-75 { width: 75%; }
+.w-76.w-76 { width: 76%; }
+.w-77.w-77 { width: 77%; }
+.w-78.w-78 { width: 78%; }
+.w-79.w-79 { width: 79%; }
+.w-80.w-80 { width: 80%; }
+.w-81.w-81 { width: 81%; }
+.w-82.w-82 { width: 82%; }
+.w-83.w-83 { width: 83%; }
+.w-84.w-84 { width: 84%; }
+.w-85.w-85 { width: 85%; }
+.w-86.w-86 { width: 86%; }
+.w-87.w-87 { width: 87%; }
+.w-88.w-88 { width: 88%; }
+.w-89.w-89 { width: 89%; }
+.w-90.w-90 { width: 90%; }
+.w-91.w-91 { width: 91%; }
+.w-92.w-92 { width: 92%; }
+.w-93.w-93 { width: 93%; }
+.w-94.w-94 { width: 94%; }
+.w-95.w-95 { width: 95%; }
+.w-96.w-96 { width: 96%; }
+.w-97.w-97 { width: 97%; }
+.w-98.w-98 { width: 98%; }
+.w-99.w-99 { width: 99%; }
+.w-100.w-100 { width: 100%; }
