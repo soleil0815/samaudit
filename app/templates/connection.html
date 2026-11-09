@@ -6,36 +6,36 @@
 <section class="panel panel-pad">
   <dl class="facts wide">
     <div><dt>{{ t('domain', lang) }}</dt><dd>{{ settings.domain_fqdn or '–' }}</dd></div>
-    <div><dt>{{ t('type', lang) }}</dt><dd>{% set dt = domain_type() %}{{ 'Samba AD' if dt == 'samba' else ('Windows AD' if dt == 'windows' else '–') }}{% if settings.domain_type == 'auto' %} <small class="muted" style="font:400 12.5px var(--f-body)">({{ t('auto_detected', lang) }})</small>{% endif %}</dd></div>
-    <div><dt>{{ t('dc', lang) }}</dt><dd style="font-size:15px">{% for h in settings.dc_hosts %}{{ h }}<br>{% else %}–{% endfor %}</dd></div>
-    <div><dt>LDAP</dt><dd style="font-size:15px">{{ 'LDAPS' if settings.ldap_ssl else ('StartTLS' if settings.ldap_starttls else 'LDAP') }} :{{ settings.ldap_port }}</dd></div>
-    <div><dt>{{ t('cert_mode', lang) }}</dt><dd style="font-size:15px">{{ t('mode_' ~ settings.ldap_cert_mode, lang) }}</dd></div>
-    <div><dt>{{ t('tz', lang) }}</dt><dd style="font-size:15px">{{ settings.tz }}</dd></div>
+    <div><dt>{{ t('type', lang) }}</dt><dd>{% set dt = domain_type() %}{{ 'Samba AD' if dt == 'samba' else ('Windows AD' if dt == 'windows' else '–') }}{% if settings.domain_type == 'auto' %} <small class="muted u-font-body-small">({{ t('auto_detected', lang) }})</small>{% endif %}</dd></div>
+    <div><dt>{{ t('dc', lang) }}</dt><dd class="u-fs15">{% for h in settings.dc_hosts %}{{ h }}<br>{% else %}–{% endfor %}</dd></div>
+    <div><dt>LDAP</dt><dd class="u-fs15">{{ 'LDAPS' if settings.ldap_ssl else ('StartTLS' if settings.ldap_starttls else 'LDAP') }} :{{ settings.ldap_port }}</dd></div>
+    <div><dt>{{ t('cert_mode', lang) }}</dt><dd class="u-fs15">{{ t('mode_' ~ settings.ldap_cert_mode, lang) }}</dd></div>
+    <div><dt>{{ t('tz', lang) }}</dt><dd class="u-fs15">{{ settings.tz }}</dd></div>
   </dl>
 </section>
 
 <section class="section" id="webcert">
   <h2>{{ t('webcert_title', lang) }}</h2>
   <div class="panel panel-pad">
-  {% if not settings.tls_enabled %}<p class="muted" style="margin:0">{{ t('webcert_off', lang) }}</p>
+  {% if not settings.tls_enabled %}<p class="muted u-m0">{{ t('webcert_off', lang) }}</p>
   {% else %}
     {% if cert_msg %}<div class="alert ok" role="status">{{ t(cert_msg, lang) }}</div>{% endif %}
     {% if cert_err %}<div class="alert" role="alert">{{ cert_err }}</div>{% endif %}
     {% if webcert.error %}<div class="alert">{{ t('webcert_error', lang) }} {{ webcert.error.text(lang) if webcert.error.text is defined else webcert.error }}</div>{% endif %}
     {% for w in webcert.warnings or [] %}<div class="alert {{ '' if w == 'cert_expired' else 'warn' }}">{{ t(w, lang) }}</div>{% endfor %}
     <dl class="facts wide">
-      <div><dt>{{ t('webcert_source', lang) }}</dt><dd style="font-size:15px">
+      <div><dt>{{ t('webcert_source', lang) }}</dt><dd class="u-fs15">
         {%- if webcert.source == 'upload' %}{{ t('webcert_upload_src', lang) }}
         {%- elif webcert.source == 'folder' %}{{ t('webcert_folder_src', lang) }}
         {%- else %}{{ t('webcert_self', lang) }}{% endif %}
         {%- if webcert.file %}<br><small class="mono">{{ webcert.file }}</small>{% endif %}
         {%- if webcert.uploaded_at %}<br><small>{{ webcert.uploaded_at|dt(lang) }}{% if webcert.uploaded_by %} · {{ t('webcert_by', lang) }} {{ webcert.uploaded_by }}{% endif %}</small>{% endif %}</dd></div>
-      <div><dt>{{ t('subject', lang) }}</dt><dd style="font-size:15px">{{ webcert.subject or '–' }}</dd></div>
-      <div><dt>{{ t('webcert_issuer', lang) }}</dt><dd style="font-size:15px">{{ webcert.issuer or '–' }}</dd></div>
-      <div><dt>{{ t('valid_until', lang) }}</dt><dd style="font-size:15px">{{ (webcert.not_after or '')[:10] }}{% if webcert.days_left is defined %} <small>({{ webcert.days_left }} {{ t('days', lang) }})</small>{% endif %}</dd></div>
-      <div><dt>{{ t('webcert_names', lang) }}</dt><dd style="font-size:15px">{{ (webcert.sans or [])|join(', ') or '–' }}</dd></div>
+      <div><dt>{{ t('subject', lang) }}</dt><dd class="u-fs15">{{ webcert.subject or '–' }}</dd></div>
+      <div><dt>{{ t('webcert_issuer', lang) }}</dt><dd class="u-fs15">{{ webcert.issuer or '–' }}</dd></div>
+      <div><dt>{{ t('valid_until', lang) }}</dt><dd class="u-fs15">{{ (webcert.not_after or '')[:10] }}{% if webcert.days_left is defined %} <small>({{ webcert.days_left }} {{ t('days', lang) }})</small>{% endif %}</dd></div>
+      <div><dt>{{ t('webcert_names', lang) }}</dt><dd class="u-fs15">{{ (webcert.sans or [])|join(', ') or '–' }}</dd></div>
     </dl>
-    <p class="small muted" style="margin:14px 0 0">{{ t('fingerprint', lang) }}: <span class="mono">{{ webcert.fingerprint or '–' }}</span></p>
+    <p class="small muted u-m-14-0-0">{{ t('fingerprint', lang) }}: <span class="mono">{{ webcert.fingerprint or '–' }}</span></p>
 
     <form class="cert-upload" method="post" action="/connection/cert" enctype="multipart/form-data">
       <h3>{{ t('webcert_upload', lang) }}</h3>
@@ -56,7 +56,7 @@
       </div>
     </form>
     {% if webcert.source == 'upload' %}
-    <form method="post" action="/connection/cert/remove" data-confirm="{{ t('webcert_remove_confirm', lang) }}" style="margin-top:12px">
+    <form class="u-mt12" method="post" action="/connection/cert/remove" data-confirm="{{ t('webcert_remove_confirm', lang) }}">
       <input type="hidden" name="csrf" value="{{ sess.csrf }}">
       <button class="btn btn-danger" type="submit">{{ t('webcert_remove', lang) }}</button>
     </form>
@@ -67,7 +67,7 @@
 
 <section class="section">
   <h2>{{ t('pins_title', lang) }}</h2>
-  <div class="panel"><div class="panel-body table-wrap" style="padding:10px 20px">
+  <div class="panel"><div class="panel-body table-wrap u-pad-10-20">
   {% if pins %}
   <table>
     <thead><tr><th>{{ t('dc', lang) }}</th><th>{{ t('subject', lang) }}</th><th>{{ t('fingerprint', lang) }}</th><th>{{ t('valid_until', lang) }}</th><th>{{ t('last_seen', lang) }}</th><th></th></tr></thead>
@@ -83,8 +83,8 @@
           <button class="btn btn-danger" type="submit">{{ t('pin_reset', lang) }}</button></form>{% endif %}</td>
       </tr>{% endfor %}</tbody>
   </table>
-  {% else %}<p class="muted" style="margin:14px 0">{{ t('pins_none', lang) }}</p>{% endif %}
-  {% if not settings.pin_reset_web %}<p class="muted small" style="margin:10px 0 4px">{{ t('pin_reset_cli', lang) }} <code>docker exec samaudit python -m app.pins reset &lt;{{ t('dc', lang) }}&gt;</code></p>{% endif %}
+  {% else %}<p class="muted u-m-14-0">{{ t('pins_none', lang) }}</p>{% endif %}
+  {% if not settings.pin_reset_web %}<p class="muted small u-m-10-0-4">{{ t('pin_reset_cli', lang) }} <code>docker exec samaudit python -m app.pins reset &lt;{{ t('dc', lang) }}&gt;</code></p>{% endif %}
   </div></div>
 </section>
 {% endblock %}

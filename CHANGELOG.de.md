@@ -4,6 +4,13 @@
 
 Programmversionen. Die wöchentlichen Sicherheitsupdates (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.1.9 – Funde eines OWASP-ZAP-Scans
+
+- **CSP ohne `'unsafe-inline'`:** alle 71 Inline-Stile (`style="…"`) sind in CSS-Klassen gewandert; die Sicherheitsrichtlinie verbietet jetzt Inline-Stile genauso wie Inline-Skripte. Die Seiten sehen pixelgenau gleich aus (Seite für Seite geprüft).
+- **Sprach-Cookie `samaudit_lang` ist `HttpOnly`** (kein Skript musste es je lesen).
+- **Anmeldeformular:** Das Schutzfeld gegen CSRF heißt jetzt `csrf_token`, damit Scanner es erkennen (der Schutz bestand schon; vor dem Update geöffnete Formulare funktionieren weiter).
+- Die übrigen ZAP-Hinweise waren Fehlalarme, z. B. die private IP auf der Hilfe-Seite ist die Beispieladresse `10.0.10.10` aus dem Handbuch.
+
 ## 2.1.8 – schlankeres Image
 
 - Die Reste von apt (`libapt-pkg`, `sqv`, `debian-archive-keyring`) sind aus dem Image entfernt. apt und pip waren schon weg; diese drei blieben ungenutzt zurück und konnten nur Warnungen in Scans auslösen. `verify-image.sh` prüft, dass sie wegbleiben.

@@ -2,7 +2,7 @@
 {# SPDX-License-Identifier: AGPL-3.0-or-later #}
 {% block content %}
 <div class="page-head"><div><h1>{{ t('nav_audit', lang) }}</h1><p>{{ t('audit_intro', lang) }}</p></div></div>
-<section class="panel"><div class="panel-body table-wrap" style="padding:8px 18px">
+<section class="panel"><div class="panel-body table-wrap u-pad-8-18">
 <table>
   <thead><tr><th>{{ t('time', lang) }}</th><th>{{ t('user', lang) }}</th><th>{{ t('action', lang) }}</th><th>{{ t('ip', lang) }}</th><th>{{ t('col_detail', lang) }}</th></tr></thead>
   <tbody>{% for e in entries %}

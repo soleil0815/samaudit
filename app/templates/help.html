@@ -3,22 +3,22 @@
 {% block title %}{{ t('nav_help', lang) }} – {{ APP_NAME }}{% endblock %}
 {% block body %}
 {% if sess %}{{ super() }}{% else %}
-<main style="max-width:1180px;margin:0 auto">
-  <p style="text-align:right;margin:0 0 -18px"><a href="/lang/de?next=/help" {% if lang == 'de' %}style="font-weight:700"{% endif %}>DE</a> · <a href="/lang/en?next=/help" {% if lang == 'en' %}style="font-weight:700"{% endif %}>EN</a></p>
-  {{ self.content() }}<p style="margin-top:28px"><a href="/login">← {{ t('login_title', lang) }}</a></p></main>
+<main class="u-narrow-1180">
+  <p class="u-langtop"><a href="/lang/de?next=/help" {% if lang == 'de' %}class="u-fw700"{% endif %}>DE</a> · <a href="/lang/en?next=/help" {% if lang == 'en' %}class="u-fw700"{% endif %}>EN</a></p>
+  {{ self.content() }}<p class="u-mt28"><a href="/login">← {{ t('login_title', lang) }}</a></p></main>
 {% endif %}
 {% endblock %}
 {% block content %}
 <div class="page-head"><div><h1>{{ t('nav_help', lang) }}</h1>
 <p>{{ 'Handbuch für Prüfer und Betrieb' if lang == 'de' else 'Manual for auditors and operators' }} · SAMAUDIT v{{ IMAGE_VERSION }}</p></div></div>
-<div class="panel panel-pad about-box" style="margin-bottom:16px">
+<div class="panel panel-pad about-box u-mb16">
   <b>{{ 'Über SAMAUDIT' if lang == 'de' else 'About SAMAUDIT' }}</b>
-  <p style="margin:6px 0 0">{% if lang == 'de' %}Freie Software unter der AGPL-3.0-or-later, ohne Gewähr.
+  <p class="u-m-6-0-0">{% if lang == 'de' %}Freie Software unter der AGPL-3.0-or-later, ohne Gewähr.
     Quellcode, Fehlermeldungen und Ideen: <a href="{{ SOURCE_URL }}" target="_blank" rel="noopener noreferrer">{{ SOURCE_URL|replace('https://', '') }}</a>.{% else %}Free software under the AGPL-3.0-or-later, without warranty.
     Source code, bug reports and ideas: <a href="{{ SOURCE_URL }}" target="_blank" rel="noopener noreferrer">{{ SOURCE_URL|replace('https://', '') }}</a>.{% endif %}</p>
-  <p style="margin:6px 0 0">{% if lang == 'de' %}SAMAUDIT ist kostenlos. Wenn es Ihnen hilft und Sie Danke sagen möchten:{% else %}SAMAUDIT is free. If it helps you and you would like to say thanks:{% endif %}
+  <p class="u-m-6-0-0">{% if lang == 'de' %}SAMAUDIT ist kostenlos. Wenn es Ihnen hilft und Sie Danke sagen möchten:{% else %}SAMAUDIT is free. If it helps you and you would like to say thanks:{% endif %}
   </p>
-  <p style="margin:10px 0 0"><a href="{{ DONATE_URL }}" target="_blank" rel="noopener noreferrer" class="bmc-btn" title="{{ 'Einen Kaffee spendieren' if lang == 'de' else 'Buy me a coffee' }}"><img src="/static/img/bmc-cup.svg" alt="" width="14" height="16">Buy me a coffee</a></p>
+  <p class="u-m-10-0-0"><a href="{{ DONATE_URL }}" target="_blank" rel="noopener noreferrer" class="bmc-btn" title="{{ 'Einen Kaffee spendieren' if lang == 'de' else 'Buy me a coffee' }}"><img src="/static/img/bmc-cup.svg" alt="" width="14" height="16">Buy me a coffee</a></p>
 </div>
 <div class="help-layout">
   <nav class="help-toc panel" aria-label="{{ 'Inhalt' if lang == 'de' else 'Contents' }}">

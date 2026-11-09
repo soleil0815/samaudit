@@ -3,9 +3,9 @@
 {% block title %}{{ t('nav_news', lang) }} – {{ APP_NAME }}{% endblock %}
 {% block body %}
 {% if sess %}{{ super() }}{% else %}
-<main style="max-width:980px;margin:0 auto">
-  <p style="text-align:right;margin:0 0 -18px"><a href="/lang/de?next=/news" {% if lang == 'de' %}style="font-weight:700"{% endif %}>DE</a> · <a href="/lang/en?next=/news" {% if lang == 'en' %}style="font-weight:700"{% endif %}>EN</a></p>
-  {{ self.content() }}<p style="margin-top:28px"><a href="/login">← {{ t('login_title', lang) }}</a></p></main>
+<main class="u-narrow-980">
+  <p class="u-langtop"><a href="/lang/de?next=/news" {% if lang == 'de' %}class="u-fw700"{% endif %}>DE</a> · <a href="/lang/en?next=/news" {% if lang == 'en' %}class="u-fw700"{% endif %}>EN</a></p>
+  {{ self.content() }}<p class="u-mt28"><a href="/login">← {{ t('login_title', lang) }}</a></p></main>
 {% endif %}
 {% endblock %}
 {% block content %}
