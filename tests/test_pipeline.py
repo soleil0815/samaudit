@@ -141,12 +141,28 @@ class Workflows(unittest.TestCase):
         for sid in ("verify", "trivy", "upload"):
             self.assertIn("changed == 'true'", prep["steps"][step_index(prep, sid)]["if"])
         self.assertIn("update-locks.sh", prep["steps"][step_index(prep, "locks")]["run"])
+        num = jobs["number"]
+        self.assertEqual(num["needs"], "prepare")
+        self.assertIn("changed == 'true'", num["if"])
+        self.assertLess(step_index(num, "version"), step_index(num, "commit"))
+        self.assertIn("next-version", num["steps"][step_index(num, "version")]["run"])
+        # each platform on its own runner, the same commit (git bundle), checked before anything is tagged
+        plat = jobs["platform"]
+        self.assertEqual(plat["needs"], "number")
+        self.assert_native_matrix(plat)
+        self.assertIn("publish-image.sh build", plat["steps"][step_index(plat, "check")]["run"])
         pub = jobs["publish"]
-        self.assertEqual(pub["needs"], "prepare")
-        self.assertIn("changed == 'true'", pub["if"])
+        self.assertEqual(pub["needs"], ["number", "platform"])
         order = [step_index(pub, s) for s in ("version", "commit", "publish", "release")]
         self.assertEqual(order, sorted(order))
-        self.assertIn("next-version", pub["steps"][step_index(pub, "version")]["run"])
+        self.assertIn("publish-image.sh tag", pub["steps"][step_index(pub, "publish")]["run"])
+
+    def assert_native_matrix(self, job):
+        self.assertEqual(job["runs-on"], "${{ matrix.runner }}")
+        include = {e["arch"]: e["runner"] for e in job["strategy"]["matrix"]["include"]}
+        self.assertEqual(include, {"amd64": "ubuntu-latest", "arm64": "ubuntu-24.04-arm"})
+        text = yaml.safe_dump(job)
+        self.assertNotIn("qemu", text.lower(), "no emulation – arm64 builds on an ARM runner")
 
     def test_release_step_order(self):
         jobs = workflow("docker-image.yml")["jobs"]
@@ -154,7 +170,23 @@ class Workflows(unittest.TestCase):
         order = [step_index(b, s) for s in ("build", "verify", "trivy", "e2e")]
         self.assertEqual(order, sorted(order))
         self.assertIn("e2e-update.sh", b["steps"][step_index(b, "e2e")]["run"])
-        self.assertEqual(sorted(jobs["publish"]["needs"]), ["build", "test"])
+        self.assertEqual(sorted(jobs["version"]["needs"]), ["build", "test"])
+        plat = jobs["platform"]
+        self.assertEqual(plat["needs"], "version")
+        self.assert_native_matrix(plat)
+        self.assertIn("publish-image.sh build", plat["steps"][step_index(plat, "check")]["run"])
+        self.assertEqual(jobs["publish"]["needs"], ["version", "platform"])
+        self.assertIn("publish-image.sh tag", jobs["publish"]["steps"][step_index(jobs["publish"], "publish")]["run"])
+
+    def test_publish_script_tags_only_both_checked_platforms(self):
+        s = (ROOT / ".github/scripts/publish-image.sh").read_text(encoding="utf-8")
+        tag = s[s.index('[ "$mode" = tag ]'):]
+        self.assertIn('No checked $arch image from this run', tag)
+        self.assertIn('"$image@${digests[amd64]}" "$image@${digests[arm64]}"', tag)
+        self.assertIn("instead of amd64 and arm64", tag)
+        self.assertNotIn("--no-cache", tag, "nothing is built when tagging")
+        t = (ROOT / ".github/scripts/trivy.sh").read_text(encoding="utf-8")
+        self.assertRegex(t, r"(?m)^TRIVY_SHA256_ARM64=[0-9a-f]{64}")
 
     def test_static_checks_run_before_the_tests(self):
         t = workflow("docker-image.yml")["jobs"]["test"]

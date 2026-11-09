@@ -16,7 +16,12 @@ fail() { echo "::error title=$1::$2"; printf '### %s\n%s\n' "$1" "$2" >> "$summa
 run() { docker run --rm --entrypoint "$1" "$image" "${@:2}"; }
 
 run cat /app/os-packages.txt > "${RUNNER_TEMP:-/tmp}/os-packages.txt"
-if [ "$record" = "--record" ]; then
+# locks/os-packages.txt is the amd64 list: Debian rebuilds ("+b2") can differ per platform. arm64 gets every other
+# check (tests, no package managers) – on its own hardware.
+arch="$(docker image inspect -f '{{.Architecture}}' "$image" 2>/dev/null || echo amd64)"
+if [ "$arch" != amd64 ] && [ "$record" != "--record" ]; then
+  echo "Debian package lock: compared on amd64 only ($arch image)"
+elif [ "$record" = "--record" ]; then
   mkdir -p locks && cp "${RUNNER_TEMP:-/tmp}/os-packages.txt" locks/os-packages.txt
 elif ! diff -u locks/os-packages.txt "${RUNNER_TEMP:-/tmp}/os-packages.txt" > "${RUNNER_TEMP:-/tmp}/os-diff.txt"; then
   fail "Build not reproducible" "The Debian packages in the image differ from locks/os-packages.txt:

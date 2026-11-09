@@ -5,7 +5,8 @@
 #                        run of update.sh with Docker Compose), Trivy – nothing is published.
 #                        Pull requests are merged by the repository owner, never automatically.
 #   manual start on main ("Run workflow", after the owner said "publish") -> if app/version.py
-#                        contains a NEW version: publish <version> (and latest if it is the highest
+#                        contains a NEW version: amd64 and arm64 are built and checked at the same time,
+#                        each on its own runner (no emulation); then publish <version> (and latest if it is the highest
 #                        version), git tag + GitHub release with the image files for installations
 #                        without internet. An existing version is never published again.
 #
@@ -60,9 +61,16 @@ jobs:
         run: python tests/smoke.py
 
   build:
-    # reproducible build from the lock files, checks inside the image, Trivy – nothing is published
+    # reproducible build from the lock files, checks inside the image, Trivy – nothing is published.
+    # amd64 and arm64 at the same time, each on its own runner: an ARM-only problem shows up here already.
     needs: test
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-latest }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
     steps:
@@ -71,7 +79,7 @@ jobs:
         with:
           persist-credentials: false
       - id: build
-        name: Build image (amd64, from the lock files)
+        name: Build image (${{ matrix.arch }}, from the lock files)
         run: docker build --pull -t samaudit-check:ci .
       - id: verify
         name: Check locks and run the tests inside the image
@@ -86,22 +94,21 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: trivy-report
+          name: trivy-report-check-${{ matrix.arch }}
           path: ${{ runner.temp }}/trivy-report/
           retention-days: 30
           if-no-files-found: ignore
 
-  publish:
+  version:
     # new program version: only when started by hand on main – published exactly once
     needs: [test, build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
-      contents: write      # git tag + GitHub release
-      packages: write      # ghcr.io
-    concurrency:
-      group: release       # shared with security-update.yml: never two publications at once
-      cancel-in-progress: false
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      new: ${{ steps.version.outputs.new }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -122,14 +129,95 @@ jobs:
           else
             echo "new=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: Set up QEMU (arm64)
-        if: steps.version.outputs.new == 'true'
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+
+  platform:
+    # each platform on its own hardware, both at the same time (no emulation – arm64 under QEMU was the slow part):
+    # build without cache, push untagged, check (locks, tests in the image, Trivy)
+    needs: version
+    if: needs.version.outputs.new == 'true'
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-latest }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write      # ghcr.io (untagged until both platforms passed)
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - id: check
+        name: Build without cache, push untagged, check (${{ matrix.arch }})
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          export IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          .github/scripts/publish-image.sh build "$VERSION" "$ARCH"
+      - name: Hand over the checked digest
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digest/${{ matrix.arch }}
+          retention-days: 1
+      - name: Upload scan report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-report-${{ matrix.arch }}
+          path: ${{ runner.temp }}/trivy-report/
+          retention-days: 30
+          if-no-files-found: ignore
+
+  publish:
+    # both platforms passed: image files, tags, git tag + GitHub release
+    needs: [version, platform]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && needs.version.outputs.new == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # git tag + GitHub release
+      packages: write      # ghcr.io
+    concurrency:
+      group: release       # shared with security-update.yml: never two publications at once
+      cancel-in-progress: false
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+      - id: version
+        name: Version to publish
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          NEW: ${{ needs.version.outputs.new }}
+        run: |
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "new=$NEW" >> "$GITHUB_OUTPUT"
       - name: Set up Docker Buildx
         if: steps.version.outputs.new == 'true'
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Checked digests of both platforms
+        if: steps.version.outputs.new == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: digest-*
+          path: ${{ runner.temp }}/digest
+          merge-multiple: true
       - id: publish
-        name: Build without cache, check, publish
+        name: Image files and tags (both platforms)
         if: steps.version.outputs.new == 'true'
         shell: bash
         env:
@@ -139,7 +227,7 @@ jobs:
           set -euo pipefail
           export IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          .github/scripts/publish-image.sh "$VERSION"
+          .github/scripts/publish-image.sh tag "$VERSION" "$RUNNER_TEMP/digest"
       - id: release
         name: Git tag and GitHub release
         if: steps.version.outputs.new == 'true'
