@@ -235,7 +235,7 @@ curl -k https://localhost:9400/healthz    # version and state
 
 ### Update
 
-**With a container manager (recommended):** let Dockhand, Watchtower, Tugtainer or similar update the container `samaudit`. With `SAMAUDIT_VERSION=latest` every new version and every weekly security update arrives automatically. **Recommendation: schedule updates at night** (e.g. 03:00) – a restart aborts a scan that is running (it is marked as aborted and can be started again).
+**With a container manager (recommended):** let Dockhand, Watchtower, Tugtainer or similar update the container `samaudit`. With `SAMAUDIT_VERSION=latest` every new version and every monthly security update (patch day) arrives automatically. **Recommendation: schedule updates at night** (e.g. 03:00) – a restart aborts a scan that is running (it is marked as aborted and can be started again).
 
 **By hand:**
 
@@ -358,7 +358,7 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 
 **The base** is defined in `tools/lock-policy.env`: Debian 13 "trixie" (part of the base image name, never a tag that changes silently) and Python 3.13. It is never changed automatically.
 
-**Weekly security update** (`.github/workflows/security-update.yml`, Mondays 03:17 UTC, manually via *Actions → Security update → Run workflow*):
+**Security update on patch day** (`.github/workflows/security-update.yml`, once a month on the second Tuesday – like Microsoft's Patch Tuesday, the same day in all programs – 03:17 UTC; manually at any time via *Actions → Security update → Run workflow*):
 
 1. determine new versions, **only within the base**: newest Python 3.13 release on Debian 13, all Debian packages as of that day (including those of the base image), every Python package within its major version – before 1.0 within its minor version. Calendar versions (tzdata, certifi) have no limit.
 2. Nothing changed: stop, nothing is published.
@@ -369,13 +369,13 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 
 **Daily checks** (`scan-published.yml`, 05:43 UTC): scans the published `latest` again, because vulnerabilities often become known after the build, and checks like an anonymous user that the image can be pulled (amd64 and arm64) and the quick-start files can be downloaded from the latest release.
 
-**Base warning** (every Monday, part of the security update): asks endoflife.date until when Python 3.13 and Debian 13 receive security updates. Less than 12 months: a notice at the run. Less than 6 months: the run turns red.
+**Base warning** (every Monday, in the security update workflow): asks endoflife.date until when Python 3.13 and Debian 13 receive security updates. Less than 12 months: a notice at the run. Less than 6 months: the run turns red.
 
 **When a run is red** – GitHub then sends an email (to the account that last changed the schedule). Nothing was published, `latest` stays on the last checked state; the reason is shown at the top of the run (annotation and summary).
 
 | Message | What to do |
 |---|---|
-| *Trivy found CRITICAL/HIGH vulnerabilities* | Debian or the package often ships the fix within days – wait for next Monday or start the run manually later. If it stays red: raise the affected package specifically (new program version) or, after assessing it, add the finding to `.trivyignore` with a reason and an expiry date. |
+| *Trivy found CRITICAL/HIGH vulnerabilities* | Debian or the package often ships the fix within days – wait for the next patch day or start the run manually later. If it stays red: raise the affected package specifically (new program version) or, after assessing it, add the finding to `.trivyignore` with a reason and an expiry date. |
 | *Security update: versions not determinable* / build failed | Usually a source was briefly unreachable – rerun. If it stays red, a new package version does not fit; check it specifically. |
 | Tests inside the image failed | A new package version behaves differently. Nothing published; check the package and limit it in `requirements.in` if needed. |
 | *Lift the base soon* (notice) | Plan the move to the next Python or Debian release. |
@@ -391,12 +391,12 @@ The container image is built on GitHub and published to the GitHub Container Reg
 |---|---|
 | pull request, push to `main` | self-tests, build from the pinned versions, tests inside the image, a real run of the update path with Docker Compose (switching, rollback, restore, cleanup), Trivy – nothing is published. Pull requests are merged by the owner, never automatically. |
 | manual start on `main` (*Actions → Container image → Run workflow*) | if `app/version.py` contains a new version: image `<version>` and `latest` (if it is the highest version), git tag `v<version>`, GitHub release (text from `app/docs/news.json`) with image files for amd64/arm64, `SHA256SUMS`, `docker-compose.yml`, `env.example` and `update.sh`. A version that is already published is never rebuilt or overwritten. |
-| Mondays 03:17 UTC | security update `<version>-s<n>` (see above) |
+| patch day (2nd Tuesday of the month) 03:17 UTC | security update `<version>-s<n>` (see above) |
 | daily 05:43 UTC | public access check and scan of the published `latest` |
 
 It builds for `linux/amd64` and `linux/arm64` without cache; the built image is first uploaded without a tag, exactly that image is checked (package list, tests, Trivy) and only then tagged. It carries SBOM and provenance attestations.
 
-**Publishing a new version:** raise the version in `app/version.py`, add an entry to `app/docs/news.json`, merge the pull request – then start the run *Container image* on `main` by hand. After a few minutes image (`latest` and `<version>`), tag and release are ready. Security updates appear every Monday without any action. Container managers watching `latest` pick up both by themselves.
+**Publishing a new version:** raise the version in `app/version.py`, add an entry to `app/docs/news.json`, merge the pull request – then start the run *Container image* on `main` by hand. After a few minutes image (`latest` and `<version>`), tag and release are ready. Security updates appear once a month on patch day without any action. Container managers watching `latest` pick up both by themselves.
 
 ## Support
 

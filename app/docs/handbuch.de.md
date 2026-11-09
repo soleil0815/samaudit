@@ -200,7 +200,7 @@ Oder in einem Schritt: `sh update.sh --restore --version=2.0.0`.
 
 ### Sicherheitsupdates und Versionen
 
-Alle Bestandteile des Images haben feste Versionen: Basisimage (Debian 13 „trixie“, Python 3.13) mit Prüfsumme, Debian-Pakete und Python-Pakete. Jeden Montag früh prüft GitHub, ob es innerhalb dieses Unterbaus neuere Pakete gibt. Wenn ja, wird ohne Cache neu gebaut, im Image getestet und mit Trivy auf Schwachstellen geprüft. Nur wenn alles bestanden ist, erscheint ein Sicherheitsupdate mit der Versionsnummer `<Version>-s<n>`, z. B. `2.0.0-s1`, und als `latest`. Die geänderten Pakete stehen in `CHANGELOG-SECURITY.md`. Gibt es nichts Neues, passiert nichts. Die laufende Version steht unten links und unter `/healthz` (Feld `image`).
+Alle Bestandteile des Images haben feste Versionen: Basisimage (Debian 13 „trixie“, Python 3.13) mit Prüfsumme, Debian-Pakete und Python-Pakete. Einmal im Monat am Patchday (zweiter Dienstag) prüft GitHub früh morgens, ob es innerhalb dieses Unterbaus neuere Pakete gibt. Wenn ja, wird ohne Cache neu gebaut, im Image getestet und mit Trivy auf Schwachstellen geprüft. Nur wenn alles bestanden ist, erscheint ein Sicherheitsupdate mit der Versionsnummer `<Version>-s<n>`, z. B. `2.0.0-s1`, und als `latest`. Die geänderten Pakete stehen in `CHANGELOG-SECURITY.md`. Gibt es nichts Neues, passiert nichts. Die laufende Version steht unten links und unter `/healthz` (Feld `image`).
 
 Wer `latest` verwendet (Container-Verwaltung oder `docker compose pull && docker compose up -d`), bekommt das Update. Wer bei einer Version bleiben will, gibt sie fest an.
 
@@ -210,7 +210,7 @@ Zusätzlich wird das veröffentlichte Image täglich gescannt, und jede Woche wi
 
 | Grund | Was tun |
 |---|---|
-| Trivy meldet CRITICAL/HIGH | Meist kommt die Korrektur in den nächsten Tagen – nächsten Montag abwarten oder den Lauf später unter *Actions → Security update → Run workflow* neu starten. Bleibt er rot: Paket gezielt anheben lassen oder den Fund bewerten und mit Begründung und Ablaufdatum in `.trivyignore` eintragen. |
+| Trivy meldet CRITICAL/HIGH | Meist kommt die Korrektur in den nächsten Tagen – nächsten Patchday abwarten oder den Lauf später unter *Actions → Security update → Run workflow* neu starten. Bleibt er rot: Paket gezielt anheben lassen oder den Fund bewerten und mit Begründung und Ablaufdatum in `.trivyignore` eintragen. |
 | *Security update: versions not determinable* / *Build failed* | Meist kurzzeitig eine Quelle nicht erreichbar – Lauf neu starten. Bleibt er rot, prüfen lassen. |
 | *Tests in the image failed* | Eine neue Paketversion passt nicht – prüfen lassen. |
 | Unterbau bald / jetzt anheben | Wechsel auf die nächste Python- bzw. Debian-Version planen und bewusst durchführen (`tools/lock-policy.env`, `tools/update-locks.sh --major`, neue Programmversion). |

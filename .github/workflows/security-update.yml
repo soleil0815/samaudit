@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Weekly security update – same program, newer packages, published as "<version>-s<n>".
+# Monthly security update on patch day – same program, newer packages, published as "<version>-s<n>".
 #
-#   Mondays 03:17 UTC (and manually: Actions -> Security update -> Run workflow)
+#   Patch day = the second Tuesday of the month (like Microsoft's Patch Tuesday, the same day in all programs),
+#   03:17 UTC; manually at any time: Actions -> Security update -> Run workflow. The schedule starts every Tuesday,
+#   tools/patchday.sh only lets the second one through (a cron line cannot say "second Tuesday").
 #   1. update all locks WITHIN the base (tools/update-locks.sh): same Python series, same Debian
 #      release, every package within its major version (0.x: minor); calendar versions unlimited
 #   2. nothing changed -> stop, nothing is published
@@ -10,20 +12,22 @@
 #      <version>-s<n> (and latest if it is the highest version), git tag + GitHub release
 #   A failure publishes nothing; the reason is shown at the run (annotation + summary).
 #
-#   Separately every week: how long do Python and Debian still get security updates
+#   Separately every Monday (job base-support): how long do Python and Debian still get security updates
 #   (endoflife.date)? Less than 12 months: hint; less than 6 months: red run.
 name: Security update
 
 on:
   schedule:
-    - cron: "17 3 * * 1"     # Mondays 03:17 UTC
+    - cron: "17 3 * * 2"     # Tuesdays 03:17 UTC: security update, only on patch day (job patchday)
+    - cron: "17 3 * * 1"     # Mondays 03:17 UTC: base support check only
   workflow_dispatch:
 
 permissions: {}
 
 jobs:
   base-support:
-    # end of security support of the base (Python series, Debian release)
+    # end of security support of the base (Python series, Debian release) – Mondays and by hand
+    if: github.event_name != 'schedule' || github.event.schedule == '17 3 * * 1'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -46,9 +50,39 @@ jobs:
           done
           exit $rc
 
+  patchday:
+    # scheduled: only the Tuesday run on patch day goes on; by hand: any day
+    if: github.event_name != 'schedule' || github.event.schedule == '17 3 * * 2'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      due: ${{ steps.check.outputs.due }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/patchday.sh
+          sparse-checkout-cone-mode: false
+      - name: Patch day?
+        id: check
+        shell: sh
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" != schedule ] || sh tools/patchday.sh; then
+            echo "due=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "due=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Security update::Not patch day – the security update runs on the second Tuesday of the month."
+          fi
+
   prepare:
     # new locks within the base, build without cache, tests in the image, Trivy
-    if: github.ref == 'refs/heads/main'
+    needs: patchday
+    if: needs.patchday.outputs.due == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read

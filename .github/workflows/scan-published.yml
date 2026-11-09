@@ -4,7 +4,7 @@
 #                  latest release without a GitHub account? (red run + notification if not)
 #   scan-latest:   vulnerability scan of the published image.
 # Reports vulnerabilities that became known only after the release (fixable HIGH/CRITICAL ->
-# red run with the list at the run). Nothing is built or published here – the next weekly
+# red run with the list at the run). Nothing is built or published here – the next
 # security update (or a manual start of "Security update") brings the fix if one is available.
 name: Daily checks
 
