@@ -41,12 +41,18 @@ else
 fi
 
 # 2) quick-start files of the latest release, anonymously
+# GitHub's download servers answer 5xx now and then; retry patiently, and report a lasting 5xx only as a
+# warning (GitHub outage) – a 4xx (file missing or not public) is an error.
 for f in docker-compose.yml env.example update.sh SHA256SUMS; do
   url="https://github.com/$repo/releases/latest/download/$f"
-  if curl -fsSL --retry 3 --retry-delay 5 -o "$work/$f" "$url" && [ -s "$work/$f" ]; then
+  code="$(curl -sSL --retry 6 --retry-delay 20 --retry-all-errors --connect-timeout 20 -o "$work/$f" -w '%{http_code}' "$url" || true)"
+  if [ "$code" = 200 ] && [ -s "$work/$f" ]; then
     ok "release file $f downloadable"
+  elif [ "${code:0:1}" = 5 ] || [ "$code" = 000 ]; then
+    echo "::warning title=GitHub download temporarily unavailable::$url answered ${code} after several tries – GitHub problem, not SAMAUDIT"
+    printf -- '- ⚠️ %s: GitHub answered %s (temporary)\n' "$f" "$code" >> "$summary"
   else
-    err "Release file missing" "$url cannot be downloaded – the quick start would fail"
+    err "Release file missing" "$url cannot be downloaded (HTTP ${code}) – the quick start would fail"
   fi
 done
 

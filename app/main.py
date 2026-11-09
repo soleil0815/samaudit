@@ -222,7 +222,7 @@ async def login_submit(request: Request):
     ip = client_ip(request)
     username = (form.get("username") or "").strip()
     password = form.get("password") or ""
-    if not auth.check_token(request.cookies.get(LOGIN_COOKIE), form.get("token")):
+    if not auth.check_token(request.cookies.get(LOGIN_COOKIE), form.get("csrf_token") or form.get("token")):  # "token": forms opened before 2.1.9
         return RedirectResponse("/login?e=csrf", status_code=303)
     mark = auth.reserve_attempt(username, ip)   # counts immediately – also for parallel requests
     if mark is None:
@@ -285,7 +285,7 @@ async def set_lang(request: Request):
     nxt = safe_next(request.query_params.get("next", "/"))
     resp = RedirectResponse(nxt, status_code=303)
     if code in ("de", "en"):
-        resp.set_cookie(LANG_COOKIE, code, max_age=365 * 86400, samesite="lax", secure=settings.cookie_secure)
+        resp.set_cookie(LANG_COOKIE, code, max_age=365 * 86400, httponly=True, samesite="lax", secure=settings.cookie_secure)
     return resp
 
 
@@ -548,7 +548,7 @@ class SecurityHeaders(BaseHTTPMiddleware):
         h["X-Content-Type-Options"] = "nosniff"
         h["Referrer-Policy"] = "same-origin"
         h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        h["Content-Security-Policy"] = ("default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        h["Content-Security-Policy"] = ("default-src 'self'; img-src 'self' data:; style-src 'self'; "
                                         "script-src 'self'; font-src 'self'; frame-ancestors 'none'; "
                                         "form-action 'self'; base-uri 'none'")
         if settings.cookie_secure:

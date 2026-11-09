@@ -17,7 +17,7 @@ from app.config import Settings  # noqa: E402
 
 
 def settings_with(**env):
-    base = {k: v for k, v in os.environ.items() if k != "ALLOWED_GROUPS"}
+    base = {k: v for k, v in os.environ.items() if k not in ("ALLOWED_GROUPS", "DEMO_MODE")}
     with mock.patch.dict(os.environ, {**base, **env}, clear=True):
         return Settings()
 

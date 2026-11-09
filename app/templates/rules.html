@@ -5,7 +5,7 @@
 {% for c in CATEGORIES %}
 <section class="section">
   <h2>{{ t('cat_' ~ c, lang) }}</h2>
-  <div class="panel"><div class="panel-body table-wrap" style="padding:8px 18px">
+  <div class="panel"><div class="panel-body table-wrap u-pad-8-18">
   <table>
     <thead><tr><th>{{ t('rule_id', lang) }}</th><th>{{ 'Prüfung' if lang == 'de' else 'Check' }}</th><th>{{ t('severity', lang) }}</th><th>{{ t('max_points', lang) }}</th><th>{{ t('platform', lang) }}</th></tr></thead>
     <tbody>{% for r in rules if r.category == c %}

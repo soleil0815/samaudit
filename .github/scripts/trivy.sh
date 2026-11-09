@@ -28,7 +28,8 @@ if [ -n "${TRIVY_BIN:-}" ]; then
   trivy="$TRIVY_BIN"                      # self-tests: a stand-in for trivy
 elif [ ! -x "$bin/trivy" ]; then
   tgz="$bin/trivy.tgz"
-  curl -sSfL --retry 3 -o "$tgz" \
+  # GitHub release downloads fail now and then with 5xx: retry patiently before giving up
+  curl -sSfL --retry 6 --retry-delay 15 --retry-all-errors --connect-timeout 20 -o "$tgz" \
     "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
   echo "${TRIVY_SHA256}  $tgz" | sha256sum -c - || { echo "::error::Trivy download does not match the pinned checksum"; exit 1; }
   tar xzf "$tgz" -C "$bin" trivy

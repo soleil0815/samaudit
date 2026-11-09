@@ -3,7 +3,7 @@
 {% block title %}{{ t('nav_privacy', lang) }} – {{ APP_NAME }}{% endblock %}
 {% block body %}
 {% if sess %}{{ super() }}{% else %}
-<main style="max-width:860px;margin:0 auto">{{ self.content() }}<p style="margin-top:28px"><a href="/login">← {{ t('login_title', lang) }}</a></p></main>
+<main class="u-narrow-860">{{ self.content() }}<p class="u-mt28"><a href="/login">← {{ t('login_title', lang) }}</a></p></main>
 {% endif %}
 {% endblock %}
 {% block content %}

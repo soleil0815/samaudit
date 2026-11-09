@@ -10,10 +10,10 @@
     <h1 class="domain">{{ fqdn_ or '–' }}</h1>
     <p class="lead">{{ 'Sicherheit der Domäne prüfen, bewerten und gezielt verbessern – mit normalen Benutzerrechten, ganz ohne Admin-Konto.' if lang == 'de' else 'Check, score and improve the security of your domain – with normal user rights, no admin account needed.' }}</p>
     <div class="steps" aria-hidden="true">
-      <div class="step" style="--c: var(--c-stale)"><i></i><b>{{ 'Altlasten' if lang == 'de' else 'Stale' }}</b><span>{{ 'Konten, Systeme' if lang == 'de' else 'Accounts, systems' }}</span></div>
-      <div class="step" style="--c: var(--c-privileged)"><i></i><b>{{ 'Privilegien' if lang == 'de' else 'Privileges' }}</b><span>{{ 'Admins, Rechte, PKI' if lang == 'de' else 'Admins, rights, PKI' }}</span></div>
-      <div class="step" style="--c: var(--c-trusts)"><i></i><b>{{ 'Vertrauen' if lang == 'de' else 'Trusts' }}</b><span>{{ 'Andere Domänen' if lang == 'de' else 'Other domains' }}</span></div>
-      <div class="step" style="--c: var(--c-anomalies)"><i></i><b>{{ 'Anomalien' if lang == 'de' else 'Anomalies' }}</b><span>{{ 'Richtlinien, GPOs' if lang == 'de' else 'Policies, GPOs' }}</span></div>
+      <div class="step c-stale"><i></i><b>{{ 'Altlasten' if lang == 'de' else 'Stale' }}</b><span>{{ 'Konten, Systeme' if lang == 'de' else 'Accounts, systems' }}</span></div>
+      <div class="step c-privileged"><i></i><b>{{ 'Privilegien' if lang == 'de' else 'Privileges' }}</b><span>{{ 'Admins, Rechte, PKI' if lang == 'de' else 'Admins, rights, PKI' }}</span></div>
+      <div class="step c-trusts"><i></i><b>{{ 'Vertrauen' if lang == 'de' else 'Trusts' }}</b><span>{{ 'Andere Domänen' if lang == 'de' else 'Other domains' }}</span></div>
+      <div class="step c-anomalies"><i></i><b>{{ 'Anomalien' if lang == 'de' else 'Anomalies' }}</b><span>{{ 'Richtlinien, GPOs' if lang == 'de' else 'Policies, GPOs' }}</span></div>
     </div>
   </section>
   <section>
@@ -32,7 +32,7 @@
       {% if settings.demo_mode %}<div class="alert warn">{{ t('demo_banner', lang) }} <b>demo / demo</b></div>{% endif %}
       {% if config_problems %}<div class="alert">{{ t('config_error', lang) }}: {{ 'Details im Container-Protokoll (docker logs samaudit)' if lang == 'de' else 'details in the container log (docker logs samaudit)' }}</div>{% endif %}
       {% if error %}<div class="alert" role="alert">{{ t(error, lang) }}</div>{% endif %}
-      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="csrf_token" value="{{ token }}">
       <div class="field">
         <label for="username">{{ t('username', lang) }}</label>
         <div class="ctrl">{{ icon('user') }}<input id="username" name="username" required autofocus autocapitalize="off" spellcheck="false" placeholder="{{ t('username_ph', lang) }}" maxlength="256"></div>
@@ -44,7 +44,7 @@
       <button class="btn btn-primary" type="submit" data-busy="{{ t('login_btn', lang) }} …">{{ t('login_btn', lang) }}</button>
       <div class="login-foot">
         <span>{{ t('login_footer', lang) }}</span>
-        <span>{{ 'Open Source unter' if lang == 'de' else 'Open source under' }} AGPL-3.0-or-later (<a href="{{ SOURCE_URL }}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline">{{ 'Quellcode' if lang == 'de' else 'source code' }}</a>) · <a href="/help" style="color:inherit;text-decoration:underline">{{ t('nav_help', lang) }}</a> · <a href="/privacy" style="color:inherit;text-decoration:underline">{{ t('nav_privacy', lang) }}</a> · <a href="https://helfi.space" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline">helfi.space</a></span>
+        <span>{{ 'Open Source unter' if lang == 'de' else 'Open source under' }} AGPL-3.0-or-later (<a class="u-link-inherit" href="{{ SOURCE_URL }}" target="_blank" rel="noopener noreferrer">{{ 'Quellcode' if lang == 'de' else 'source code' }}</a>) · <a class="u-link-inherit" href="/help">{{ t('nav_help', lang) }}</a> · <a class="u-link-inherit" href="/privacy">{{ t('nav_privacy', lang) }}</a> · <a class="u-link-inherit" href="https://helfi.space" target="_blank" rel="noopener noreferrer">helfi.space</a></span>
         <span class="langs"><a href="/lang/de?next=/login" class="{{ 'on' if lang == 'de' }}">DE</a><a href="/lang/en?next=/login" class="{{ 'on' if lang == 'en' }}">EN</a></span>
       </div>
     </form>

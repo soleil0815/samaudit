@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.1.9",
+    "date": "2026-11-09",
+    "items": [
+      {
+        "type": "security",
+        "de": "Strengere Sicherheitsrichtlinie der Weboberfläche: Inline-Stile sind jetzt ebenfalls verboten (CSP ohne 'unsafe-inline'). Das Sprach-Cookie ist HttpOnly, und das Schutzfeld des Anmeldeformulars heißt csrf_token, damit Scanner wie OWASP ZAP es erkennen. Aussehen und Bedienung sind unverändert.",
+        "en": "Stricter security policy of the web interface: inline styles are now forbidden as well (CSP without 'unsafe-inline'). The language cookie is HttpOnly, and the protection field of the sign-in form is called csrf_token so that scanners like OWASP ZAP recognise it. Look and behaviour are unchanged."
+      }
+    ]
+  },
+  {
     "version": "2.1.8",
     "date": "2026-11-05",
     "items": [

@@ -20,20 +20,20 @@
     <div>
       <div class="cat-scores">
         {% for c in CATEGORIES %}{% set v = scores[c] %}
-        <a class="cat-row" href="#cat-{{ c }}" style="--c: var(--c-{{ c }})">
+        <a class="cat-row c-{{ c }}" href="#cat-{{ c }}">
           <span class="dot"></span>
           <span class="lbl">{{ t('cat_' ~ c, lang) }}<small>{{ by_cat[c]|length }} {{ t('findings', lang) }}</small></span>
           <span class="val score {{ level_class(v) }}">{{ v }}</span>
-          <span class="meter"><i class="{{ level_class(v) }}" style="width: {{ [v, 2]|max }}%"></i></span>
+          <span class="meter"><i class="{{ level_class(v) }} w-{{ [[v|int, 2]|max, 100]|min }}"></i></span>
         </a>
         {% endfor %}
       </div>
-      <p style="margin:20px 0 0;color:var(--ink-2)">{{ t('summary_text', lang, n=fails|length, c=(by_cat.values()|select|list|length), crit=sev_counts.critical, high=sev_counts.high) }}</p>
+      <p class="u-m-20-0-0 u-ink2">{{ t('summary_text', lang, n=fails|length, c=(by_cat.values()|select|list|length), crit=sev_counts.critical, high=sev_counts.high) }}</p>
     </div>
   </div>
 </section>
 
-<div class="grid g-2" style="margin-top:18px">
+<div class="grid g-2 u-mt18">
   <section class="panel">
     <div class="panel-head"><h2>{{ t('top_findings', lang) }}</h2></div>
     <div class="panel-body">
@@ -52,21 +52,21 @@
         <div><dt>{{ t('groups', lang) }}</dt><dd class="num">{{ ov.groups }}</dd></div>
         <div><dt>{{ t('func_level', lang) }}</dt><dd>{{ ov.domain_level }}</dd></div>
         <div><dt>LAPS</dt><dd class="num">{% if ov.laps.total %}{{ (100 * ov.laps.covered / ov.laps.total)|round|int }} %{% else %}–{% endif %}</dd></div>
-        <div><dt>{{ t('last_backup', lang) }}</dt><dd class="num" style="font-size:15px">{{ tv('@v_never', lang) if ov.last_backup == 'never' else (ov.last_backup or '–') }}</dd></div>
+        <div><dt>{{ t('last_backup', lang) }}</dt><dd class="num u-fs15">{{ tv('@v_never', lang) if ov.last_backup == 'never' else (ov.last_backup or '–') }}</dd></div>
       </dl>
-      <p class="small muted" style="margin-top:12px">{{ ov.netbios }} ({{ 'Samba AD' if ov.domain_type == 'samba' else 'Windows AD' }}), SID {{ ov.sid }}, {{ t('scanned_with', lang)|lower }} {{ ov.dc_host }}{% if ov.vendor %} ({{ ov.vendor }}){% endif %}{% if ov.unprivileged %}<br>{{ t('scan_rights', lang) }}{% endif %}</p>
+      <p class="small muted u-mt12">{{ ov.netbios }} ({{ 'Samba AD' if ov.domain_type == 'samba' else 'Windows AD' }}), SID {{ ov.sid }}, {{ t('scanned_with', lang)|lower }} {{ ov.dc_host }}{% if ov.vendor %} ({{ ov.vendor }}){% endif %}{% if ov.unprivileged %}<br>{{ t('scan_rights', lang) }}{% endif %}</p>
     </div>
   </section>
 </div>
 
 <nav class="toc" aria-label="{{ t('details', lang) }}">
-  {% for c in CATEGORIES %}<a href="#cat-{{ c }}" style="--c: var(--c-{{ c }})"><i></i>{{ t('cat_' ~ c, lang) }}<b class="score {{ level_class(scores[c]) }}">{{ scores[c] }}</b></a>{% endfor %}
+  {% for c in CATEGORIES %}<a class="c-{{ c }}" href="#cat-{{ c }}"><i></i>{{ t('cat_' ~ c, lang) }}<b class="score {{ level_class(scores[c]) }}">{{ scores[c] }}</b></a>{% endfor %}
   <a href="#overview">{{ t('overview', lang) }}</a>
   <a href="#passed">{{ t('passed', lang) }}</a>
 </nav>
 
 {% if ov.warnings or ov.sysvol.status == 'error' %}
-<div class="alert warn" style="margin-top:18px"><b>{{ t('warnings', lang) }}:</b>
+<div class="alert warn u-mt18"><b>{{ t('warnings', lang) }}:</b>
   {% if ov.sysvol.status == 'error' %}{{ t('sysvol_status', lang) }}: {{ tv(ov.sysvol.error, lang) }}. {% endif %}
   {% for w in ov.warnings %}{{ w }}{% if not loop.last %}; {% endif %}{% endfor %}
 </div>
@@ -75,12 +75,12 @@
 <!-- Findings per area -->
 {% for c in CATEGORIES %}
 <section class="section" id="cat-{{ c }}">
-  <h2 style="--c: var(--c-{{ c }})"><span class="dot"></span>{{ t('cat_' ~ c, lang) }} <span class="score {{ level_class(scores[c]) }}">{{ scores[c] }}</span></h2>
+  <h2 class="c-{{ c }}"><span class="dot"></span>{{ t('cat_' ~ c, lang) }} <span class="score {{ level_class(scores[c]) }}">{{ scores[c] }}</span></h2>
   <p class="cat-intro">{{ t('catd_' ~ c, lang) }}</p>
   <div class="panel findings">
   {% for f in by_cat[c] %}{% set r = f.rule %}
     <details class="finding" id="{{ f.rule_id }}">
-      <summary style="--c: var(--sev-{{ f.severity }})">
+      <summary class="sevc-{{ f.severity }}">
         <span class="stripe"></span>
         <span>
           <span class="ftitle">{{ r.title[lang] }}</span> {% if f.new %}<span class="tag-new">{{ t('new_since', lang) }}</span>{% endif %}
@@ -101,7 +101,7 @@
         {% if f['items'] and f.columns %}
         <div class="full">
           <div class="items-tools">
-            <h4 style="margin:0">{{ t('affected', lang) }} ({{ f.count }})</h4>
+            <h4 class="u-m0">{{ t('affected', lang) }} ({{ f.count }})</h4>
             {% if f['items']|length > 8 %}<input type="search" placeholder="{{ t('filter', lang) }}" data-filter="tbl-{{ f.rule_id }}" aria-label="{{ t('filter', lang) }}">{% endif %}
           </div>
           <div class="items"><table id="tbl-{{ f.rule_id }}">
@@ -115,7 +115,7 @@
       </div>
     </details>
   {% else %}
-    <p class="panel-pad muted" style="margin:0">{{ t('no_findings', lang) }}</p>
+    <p class="panel-pad muted u-m0">{{ t('no_findings', lang) }}</p>
   {% endfor %}
   </div>
 </section>
@@ -170,16 +170,16 @@
 
 <!-- Passed / not checkable -->
 <section class="section" id="passed">
-  <h2>{{ t('passed', lang) }} <span class="muted num" style="font-size:16px">{{ passed|length }}</span></h2>
+  <h2>{{ t('passed', lang) }} <span class="muted num u-fs16">{{ passed|length }}</span></h2>
   <div class="panel panel-pad"><ul class="pass-list">{% for f in passed %}<li>{{ f.rule.title[lang] }}</li>{% endfor %}</ul></div>
   {% if resolved %}
-  <h2 style="margin-top:22px">{{ t('resolved_since', lang) }}</h2>
+  <h2 class="u-mt22">{{ t('resolved_since', lang) }}</h2>
   <div class="panel panel-pad"><ul class="pass-list">{% for r in resolved %}<li>{{ r.title[lang] }}</li>{% endfor %}</ul></div>
   {% endif %}
   {% if na %}
-  <h2 style="margin-top:22px">{{ t('not_checked', lang) }} <span class="muted num" style="font-size:16px">{{ na|length }}</span></h2>
+  <h2 class="u-mt22">{{ t('not_checked', lang) }} <span class="muted num u-fs16">{{ na|length }}</span></h2>
   <div class="panel panel-pad"><ul class="pass-list na">{% for f in na %}<li>{{ f.rule.title[lang] }} <span class="muted small">– {{ t(f.note, lang) if f.note else '' }}</span></li>{% endfor %}</ul></div>
   {% endif %}
-  <p class="small muted" style="margin-top:18px">{{ t('scope_note', lang) }}</p>
+  <p class="small muted u-mt18">{{ t('scope_note', lang) }}</p>
 </section>
 {% endblock %}
