@@ -2,7 +2,7 @@
 
 *Deutsche Version: [CHANGELOG.de.md](CHANGELOG.de.md)*
 
-Program versions. Weekly security updates (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
+Program versions. Monthly security updates on patch day, the second Tuesday (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
 ## 2.1.9 – findings of an OWASP ZAP scan
 

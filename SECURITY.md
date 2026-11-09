@@ -8,7 +8,7 @@ SAMAUDIT is a **hobby project**, maintained without warranty and without guarant
 
 ## Supported versions
 
-Fixes are provided for the **current version only** (container image `latest` or the newest version number). In addition, a security update (`<version>-s<n>`) with updated Debian and Python packages within the base is published every week, tested and scanned for vulnerabilities; the published image is scanned daily – please always run the current version.
+Fixes are provided for the **current version only** (container image `latest` or the newest version number). In addition, a security update (`<version>-s<n>`) with updated Debian and Python packages within the base is published once a month on patch day (the second Tuesday), tested and scanned for vulnerabilities; the published image is scanned daily – please always run the current version.
 
 ## Reporting a vulnerability
 
@@ -31,7 +31,7 @@ SAMAUDIT ist ein **Hobbyprojekt** und wird ohne Gewähr und ohne zugesagte Reakt
 
 ## Unterstützte Versionen
 
-Korrekturen gibt es nur für die **jeweils aktuelle Version** (Container-Image `latest` bzw. die neueste Versionsnummer). Zusätzlich erscheint jede Woche ein Sicherheitsupdate (`<Version>-s<n>`) mit aktualisierten Debian- und Python-Paketen innerhalb des Unterbaus, getestet und auf Schwachstellen geprüft; das veröffentlichte Image wird täglich gescannt – bitte immer die aktuelle Version verwenden.
+Korrekturen gibt es nur für die **jeweils aktuelle Version** (Container-Image `latest` bzw. die neueste Versionsnummer). Zusätzlich erscheint einmal im Monat am Patchday (zweiter Dienstag) ein Sicherheitsupdate (`<Version>-s<n>`) mit aktualisierten Debian- und Python-Paketen innerhalb des Unterbaus, getestet und auf Schwachstellen geprüft; das veröffentlichte Image wird täglich gescannt – bitte immer die aktuelle Version verwenden.
 
 | Version | Unterstützt |
 |---|---|

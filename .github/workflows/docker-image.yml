@@ -9,7 +9,7 @@
 #                        version), git tag + GitHub release with the image files for installations
 #                        without internet. An existing version is never published again.
 #
-# Weekly security updates ("<version>-s<n>"): security-update.yml. Daily scan: scan-published.yml.
+# Monthly security updates on patch day ("<version>-s<n>"): security-update.yml. Daily scan: scan-published.yml.
 # All actions are pinned to commit hashes; every job has only the permissions it needs.
 name: Container image
 

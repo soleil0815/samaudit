@@ -2,7 +2,7 @@
 
 *English version: [CHANGELOG.md](CHANGELOG.md)*
 
-Programmversionen. Die wöchentlichen Sicherheitsupdates (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
+Programmversionen. Die monatlichen Sicherheitsupdates am Patchday, dem zweiten Dienstag (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
 ## 2.1.9 – Funde eines OWASP-ZAP-Scans
 

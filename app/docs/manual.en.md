@@ -200,7 +200,7 @@ Or in one step: `sh update.sh --restore --version=2.0.0`.
 
 ### Security updates and versions
 
-Every component of the image has a pinned version: the base image (Debian 13 "trixie", Python 3.13) with its checksum, the Debian packages and the Python packages. Early every Monday GitHub checks whether there are newer packages within this base. If so, it rebuilds without cache, tests inside the image and scans with Trivy. Only if everything passes is a security update published with the version `<version>-s<n>`, e.g. `2.0.0-s1`, and as `latest`. The changed packages are listed in `CHANGELOG-SECURITY.md`. If there is nothing new, nothing happens. The running version is shown bottom left and at `/healthz` (field `image`).
+Every component of the image has a pinned version: the base image (Debian 13 "trixie", Python 3.13) with its checksum, the Debian packages and the Python packages. Early on patch day – the second Tuesday of every month – GitHub checks whether there are newer packages within this base. If so, it rebuilds without cache, tests inside the image and scans with Trivy. Only if everything passes is a security update published with the version `<version>-s<n>`, e.g. `2.0.0-s1`, and as `latest`. The changed packages are listed in `CHANGELOG-SECURITY.md`. If there is nothing new, nothing happens. The running version is shown bottom left and at `/healthz` (field `image`).
 
 Anyone using `latest` (container manager or `docker compose pull && docker compose up -d`) gets the update. To stay on a version, specify it explicitly.
 
@@ -210,7 +210,7 @@ In addition, the published image is scanned daily, and every week it is checked 
 
 | Reason | What to do |
 |---|---|
-| Trivy reports CRITICAL/HIGH | The fix usually arrives within days – wait for next Monday or rerun later via *Actions → Security update → Run workflow*. If it stays red: have the package raised specifically, or assess the finding and add it to `.trivyignore` with a reason and an expiry date. |
+| Trivy reports CRITICAL/HIGH | The fix usually arrives within days – wait for the next patch day or rerun later via *Actions → Security update → Run workflow*. If it stays red: have the package raised specifically, or assess the finding and add it to `.trivyignore` with a reason and an expiry date. |
 | *Security update: versions not determinable* / *Build failed* | Usually a source was briefly unreachable – rerun. If it stays red, have it checked. |
 | *Tests in the image failed* | A new package version does not fit – have it checked. |
 | Lift the base soon / now | Plan and deliberately carry out the move to the next Python or Debian release (`tools/lock-policy.env`, `tools/update-locks.sh --major`, new program version). |
