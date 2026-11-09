@@ -6,7 +6,7 @@
 
 Self-hosted web application that reads a Windows or Samba AD domain, runs **115 security checks** and presents the result as a risk score (0–100), a detailed report with remediation advice, and a PDF export – in English or German. It runs as a single Docker container, signs in with a normal (non-admin) domain account and sends no data anywhere.
 
-> **Status: beta – hobby project, no warranty.** SAMAUDIT was built for the author's own use and has mainly been tested with test data; results may be incomplete or wrong and do not replace expert review. Feedback is welcome, but no support or response times are promised. Please report security vulnerabilities privately (see [SECURITY.md](SECURITY.md)).
+> **Status: beta – built for my own use, use at your own responsibility.** I built SAMAUDIT primarily for myself, because I wanted exactly this kind of tool for my own environment. I use it myself, so I usually notice bugs quickly and fix them promptly. It has mainly been tested with test data – results may be incomplete or wrong and do not replace expert review. If you would like to use SAMAUDIT too: you are welcome to – at your own responsibility. There is no warranty and no liability (sections 15 and 16 of the [license](LICENSE)). Bug reports and suggestions for improvement are welcome – preferably as an [issue](https://github.com/soleil0815/samaudit/issues); please report security vulnerabilities privately (see [SECURITY.md](SECURITY.md)). I cannot promise support or response times.
 
 ![Overview: risk score, rating of the four areas and the most important findings](docs/images/en-overview.webp)
 *Overview after a scan – risk score, the four areas and the findings to address first*
