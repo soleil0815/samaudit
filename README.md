@@ -369,6 +369,8 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 
 **Daily checks** (`scan-published.yml`, 05:43 UTC): scans the published `latest` again, because vulnerabilities often become known after the build, and checks like an anonymous user that the image can be pulled (amd64 and arm64) and the quick-start files can be downloaded from the latest release.
 
+**ZAP scan in the code audit** (`zap-scan.yml`): Once a month, one week before patch day (Tuesday 01:43 UTC; by hand at any time: *Actions → ZAP scan → Run workflow*), GitHub starts the program in a throwaway container with test data and lets [ZAP](https://www.zaproxy.org/) crawl and attack it without logging in (passive and active scan, never against real servers). The code audit two days later checks every finding against the code and fixes confirmed vulnerabilities before patch day. The scan does not run on normal pull requests.
+
 **Base warning** (every Monday, in the security update workflow): asks endoflife.date until when Python 3.13 and Debian 13 receive security updates. Less than 12 months: a notice at the run. Less than 6 months: the run turns red.
 
 **When a run is red** – GitHub then sends an email (to the account that last changed the schedule). Nothing was published, `latest` stays on the last checked state; the reason is shown at the top of the run (annotation and summary).
@@ -393,6 +395,7 @@ The container image is built on GitHub and published to the GitHub Container Reg
 | manual start on `main` (*Actions → Container image → Run workflow*) | if `app/version.py` contains a new version: image `<version>` and `latest` (if it is the highest version), git tag `v<version>`, GitHub release (text from `app/docs/news.json`) with image files for amd64/arm64, `SHA256SUMS`, `docker-compose.yml`, `env.example` and `update.sh`. A version that is already published is never rebuilt or overwritten. |
 | patch day (2nd Tuesday of the month) 03:17 UTC | security update `<version>-s<n>` (see above) |
 | daily 05:43 UTC | public access check and scan of the published `latest` |
+| Tuesday one week before patch day 01:43 UTC | [ZAP](https://www.zaproxy.org/) scan without login against a throwaway container (`zap-scan.yml`); the code audit two days later checks the findings |
 
 It builds for `linux/amd64` and `linux/arm64` without cache; the built image is first uploaded without a tag, exactly that image is checked (package list, tests, Trivy) and only then tagged. It carries SBOM and provenance attestations.
 

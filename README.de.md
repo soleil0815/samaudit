@@ -363,6 +363,8 @@ Alle Werte werden in der `.env` gesetzt (Schreibweise `NAME=wert`, Vorlage mit E
 
 **Tägliche Prüfung** (`scan-published.yml`, 05:43 UTC): scannt das veröffentlichte `latest` erneut, weil Schwachstellen oft erst nach dem Bau bekannt werden, und prüft wie ein anonymer Nutzer, dass sich das Image (amd64 und arm64) holen und die Dateien der Kurzanleitung aus dem neuesten Release herunterladen lassen.
 
+**ZAP-Scan im Code-Audit** (`zap-scan.yml`): Einmal im Monat, eine Woche vor dem Patchday (Dienstag 01:43 UTC; von Hand jederzeit: *Actions → ZAP scan → Run workflow*), startet GitHub das Programm in einem Wegwerf-Container mit Testdaten und lässt [ZAP](https://www.zaproxy.org/) es ohne Anmeldung durchsuchen und angreifen (passiver und aktiver Scan, nie gegen echte Server). Der Code-Audit zwei Tage danach prüft jeden Fund am Code und behebt bestätigte Schwachstellen vor dem Patchday. Bei normalen Pull Requests läuft der Scan nicht.
+
 **Unterbau-Warnung** (jeden Montag, im Workflow des Sicherheitsupdates): fragt bei endoflife.date ab, bis wann Python 3.13 und Debian 13 Sicherheitsupdates bekommen. Weniger als 12 Monate: Hinweis am Lauf. Weniger als 6 Monate: der Lauf wird rot.
 
 **Wenn ein Lauf rot ist** – GitHub schickt dann eine E-Mail (an das Konto, das den Zeitplan zuletzt geändert hat). Es wurde nichts veröffentlicht, `latest` bleibt auf dem letzten geprüften Stand; der Grund steht oben am Lauf (Annotation und Zusammenfassung).
@@ -387,6 +389,7 @@ Das Container-Image wird auf GitHub gebaut und in der GitHub Container Registry 
 | manueller Start auf `main` (*Actions → Container image → Run workflow*) | wenn `app/version.py` eine neue Version enthält: Image `<Version>` und `latest` (falls höchste Version), Git-Tag `v<Version>`, GitHub-Release (Text aus `app/docs/news.json`) mit Image-Dateien für amd64/arm64, `SHA256SUMS`, `docker-compose.yml`, `env.example` und `update.sh`. Eine schon veröffentlichte Version wird nie neu gebaut oder überschrieben. |
 | Patchday (zweiter Dienstag im Monat) 03:17 UTC | Sicherheitsupdate `<Version>-s<n>` (siehe oben) |
 | täglich 05:43 UTC | Prüfung der öffentlichen Erreichbarkeit und Scan des veröffentlichten `latest` |
+| Dienstag eine Woche vor dem Patchday 01:43 UTC | [ZAP](https://www.zaproxy.org/)-Scan ohne Anmeldung gegen einen Wegwerf-Container (`zap-scan.yml`); die Funde prüft der Code-Audit zwei Tage danach |
 
 Gebaut wird für `linux/amd64` und `linux/arm64`, ohne Cache; das gebaute Image wird zuerst ohne Tag hochgeladen, genau dieses wird geprüft (Paketliste, Tests, Trivy) und erst dann mit Tags versehen. Es enthält SBOM und Provenance-Angaben.
 
