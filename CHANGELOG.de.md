@@ -4,6 +4,10 @@
 
 Programmversionen. Die monatlichen Sicherheitsupdates am Patchday, dem zweiten Dienstag (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.1.10 – Kaffee-Kasten
+
+- Der „Buy me a coffee“-Knopf ist aus der Seitenleiste in einen Kasten unten auf jeder angemeldeten Seite und auf der Hilfe gewandert: „Gefällt dir SAMAUDIT? Über einen Kaffee freue ich mich.“ mit gelbem Knopf. Das Bild kommt weiterhin lokal.
+
 ## 2.1.9 – Funde eines OWASP-ZAP-Scans
 
 - **CSP ohne `'unsafe-inline'`:** alle 71 Inline-Stile (`style="…"`) sind in CSS-Klassen gewandert; die Sicherheitsrichtlinie verbietet jetzt Inline-Stile genauso wie Inline-Skripte. Die Seiten sehen pixelgenau gleich aus (Seite für Seite geprüft).

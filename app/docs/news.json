@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.1.10",
+    "date": "2026-11-13",
+    "items": [
+      {
+        "type": "notice",
+        "de": "Der Kaffee-Knopf sitzt jetzt als Kasten unten auf jeder Seite („Gefällt dir SAMAUDIT? Über einen Kaffee freue ich mich.“) statt in der Seitenleiste. Wie bisher wird nichts aus dem Internet nachgeladen.",
+        "en": "The coffee button is now a card at the bottom of every page (\"Enjoying SAMAUDIT? A coffee is always appreciated.\") instead of in the sidebar. As before, nothing is loaded from the internet."
+      }
+    ]
+  },
+  {
     "version": "2.1.9",
     "date": "2026-11-09",
     "items": [

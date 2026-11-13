@@ -43,9 +43,6 @@
       <a href="/help" {% if path == '/help' %}aria-current="page"{% endif %}>{{ icon('help') }}{{ t('nav_help', lang) }}</a>
     </nav>
     <div class="rail-foot">
-      {# voluntary support – local image, nothing is loaded from the internet #}
-      {% if sess %}<a href="{{ DONATE_URL }}" target="_blank" rel="noopener noreferrer" class="bmc-btn"
-         title="{{ 'Einen Kaffee spendieren' if lang == 'de' else 'Buy me a coffee' }}"><img src="/static/img/bmc-cup.svg" alt="" width="14" height="16">Buy me a coffee</a>{% endif %}
       {% if sess %}<div class="who-row">
         <div class="who">{{ sess.display }}<small>{{ sess.groups|join(', ') }}</small></div>
         <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ sess.csrf }}"><button class="logout-btn" type="submit" title="{{ t('logout', lang) }}" aria-label="{{ t('logout', lang) }}">{{ icon('logout') }}</button></form>
@@ -61,6 +58,11 @@
   <main>
     {% if settings.demo_mode %}<div class="demo-bar">{{ t('demo_banner', lang) }}</div>{% endif %}
     {% block content %}{% endblock %}
+    {# voluntary support – local image, nothing is loaded from the internet #}
+    {% if sess %}{% block coffee %}<aside class="coffee-card" aria-label="{{ 'Unterstützen' if lang == 'de' else 'Support' }}">
+      <span>{{ 'Gefällt dir SAMAUDIT? Über einen Kaffee freue ich mich.' if lang == 'de' else 'Enjoying SAMAUDIT? A coffee is always appreciated.' }}</span>
+      <a href="{{ DONATE_URL }}" target="_blank" rel="noopener noreferrer" class="bmc-btn"><img src="/static/img/bmc-cup.svg" alt="" width="16" height="18">{{ 'Einen Kaffee spendieren' if lang == 'de' else 'Buy me a coffee' }}</a>
+    </aside>{% endblock %}{% endif %}
   </main>
 </div>
 {% endblock %}

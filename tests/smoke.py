@@ -114,7 +114,7 @@ for _tpl in ("dashboard.html", "login.html"):
     _src = open(os.path.join(ROOT, "app", "templates", _tpl), encoding="utf-8").read()
     check("DONATE_URL" not in _src and "buymeacoffee" not in _src, f"no donation link in {_tpl}")
 
-# sidebar: coffee button on every signed-in page, including the overview "/"
+# coffee card at the bottom of every signed-in page, including the overview "/"; no longer in the sidebar
 from types import SimpleNamespace  # noqa: E402
 
 from app.main import templates  # noqa: E402
@@ -122,15 +122,23 @@ from app.main import templates  # noqa: E402
 _sess = SimpleNamespace(display="Demo", groups=["SAMAUDIT-Users"], csrf="x")
 
 
-def _rail(path: str) -> str:
+def _page(path: str, lang: str = "en", sess=_sess) -> str:
     return templates.env.get_template("base.html").render(
-        sess=_sess, path=path, lang="en", settings=settings, news_unseen=[], request=None)
+        sess=sess, path=path, lang=lang, settings=settings, news_unseen=[], request=None)
 
 
 from app.config import settings  # noqa: E402
 
-check(DONATE_URL in _rail("/scans") and "/static/img/bmc-cup.svg" in _rail("/scans"), "sidebar: coffee button on /scans")
-check(DONATE_URL in _rail("/"), "sidebar: coffee button on the overview")
+for _p in ("/", "/scans", "/rules"):
+    _html = _page(_p)
+    _main = _html[_html.index("<main"):]
+    check('class="coffee-card"' in _main and DONATE_URL in _main and "/static/img/bmc-cup.svg" in _main,
+          f"coffee card at the bottom of {_p}")
+    check(DONATE_URL not in _html[_html.index('<aside class="rail"'):_html.index("<main")], f"no coffee button in the sidebar on {_p}")
+check("Einen Kaffee spendieren" in _page("/", "de") and "Gefällt dir SAMAUDIT?" in _page("/", "de"), "coffee card: German text")
+check("Buy me a coffee" in _page("/") and "Enjoying SAMAUDIT?" in _page("/"), "coffee card: English text")
+check("coffee-card" not in _page("/connection", sess=None), "coffee card only for signed-in users (and the help page)")
+check(_help.count('class="coffee-card"') == 1, "help: exactly one coffee card")
 check(DONATE_URL == "https://buymeacoffee.com/soleil0815", "coffee link points to the current page")
 
 # --- Parsers and protections -------------------------------------------------
