@@ -4,6 +4,10 @@
 
 Program versions. Monthly security updates on patch day, the second Tuesday (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.1.10 – coffee card
+
+- The "Buy me a coffee" button moved from the sidebar into a card at the bottom of every signed-in page and of the help page: "Enjoying SAMAUDIT? A coffee is always appreciated." with a yellow button. The image is still served locally.
+
 ## 2.1.9 – findings of an OWASP ZAP scan
 
 - **CSP without `'unsafe-inline'`:** all 71 inline `style="…"` attributes moved into CSS classes, so the Content Security Policy now forbids inline styles as well as inline scripts. Pages are pixel-identical (checked page by page).

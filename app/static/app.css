@@ -465,14 +465,18 @@ td.mono, .mono { font-family: var(--f-mono); font-size: 12.5px; word-break: brea
 @media (max-width: 640px) { .news-entry li { grid-template-columns: 1fr; gap: 4px; } }
 
 /* "Buy me a coffee" button (local cup icon, nothing is loaded from the internet) */
-.bmc-btn { display: inline-flex; align-items: center; gap: 7px; padding: 5px 13px 5px 10px; border-radius: 999px;
-  background: #FFDD00; color: #0D0C22; border: 1.5px solid #0D0C22; box-shadow: 0 0 0 2px var(--accent);
-  font-weight: 500; font-size: 13px; line-height: 1.2; text-decoration: none; white-space: nowrap;
-  transition: transform .15s, box-shadow .15s; }
-.bmc-btn:hover, .bmc-btn:focus-visible { color: #0D0C22; text-decoration: none; transform: translateY(-1px);
-  box-shadow: 0 0 0 2px var(--accent-strong), 0 4px 12px rgba(0, 0, 0, .25); }
-.bmc-btn img { display: block; width: 14px; height: 16px; }
-.rail .bmc-btn { margin: 0 0 12px 2px; align-self: flex-start; width: max-content; }
+/* voluntary support: card at the bottom of every signed-in page and of the help page */
+.coffee-card { display: flex; align-items: center; justify-content: space-between; gap: 14px 24px; flex-wrap: wrap;
+  margin: 40px 0 0; padding: 16px 20px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); color: var(--ink-2); font-size: 15px; }
+.bmc-btn { display: inline-flex; align-items: center; gap: 10px; padding: 9px 18px; border-radius: 9px;
+  background: #FFDD00; color: #0D0C22; border: 1px solid #e3c400;
+  font-weight: 700; font-size: 15px; line-height: 1.2; text-decoration: none; white-space: nowrap;
+  transition: transform .15s, box-shadow .15s, background .15s; }
+.bmc-btn:hover, .bmc-btn:focus-visible { color: #0D0C22; background: #ffe433; text-decoration: none;
+  transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 0, 0, .2); }
+.bmc-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bmc-btn img { display: block; width: 16px; height: 18px; }
 
 /* ---------------------------------------------------------------------------------------------
    Utilities instead of inline style="…" attributes, so the Content Security Policy can forbid
