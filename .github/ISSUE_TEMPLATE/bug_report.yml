@@ -33,6 +33,13 @@ body:
     attributes:
       label: Steps to reproduce / Schritte zum Nachvollziehen
   - type: textarea
+    id: diag
+    attributes:
+      label: Diagnostics package / Diagnosepaket (optional, from 2.2.0)
+      description: |
+        Activity log → Diagnostics package, or `docker compose run --rm -T samaudit diag > samaudit-diagnose.json`. Names and addresses are already replaced by placeholders – please look through it anyway, then drag the file here.
+        Protokoll → Diagnosepaket oder obiger Befehl. Namen und Adressen sind bereits ersetzt – bitte trotzdem kurz durchsehen, dann die Datei hierher ziehen.
+  - type: textarea
     id: logs
     attributes:
       label: Log excerpt / Protokollauszug (docker compose logs)

@@ -17,6 +17,8 @@ log = logging.getLogger("samaudit")
 
 
 def main() -> None:
+    from app import diag
+    diag.install_log_buffer()   # last warnings/errors in memory for the diagnostics package
     os.makedirs(settings.data_dir, exist_ok=True)
     # before anything else: only one instance, detect a downgrade, back up before a version change
     from app import datastate

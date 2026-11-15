@@ -465,6 +465,10 @@ td.mono, .mono { font-family: var(--f-mono); font-size: 12.5px; word-break: brea
 @media (max-width: 640px) { .news-entry li { grid-template-columns: 1fr; gap: 4px; } }
 
 /* "Buy me a coffee" button (local cup icon, nothing is loaded from the internet) */
+/* diagnostics package preview */
+.diag-pre { margin: 0; padding: 16px 20px; max-height: 65vh; overflow: auto; white-space: pre;
+  font: 12.5px/1.5 var(--f-mono); color: var(--ink); }
+
 /* voluntary support: card at the bottom of every signed-in page and of the help page */
 .coffee-card { display: flex; align-items: center; justify-content: space-between; gap: 14px 24px; flex-wrap: wrap;
   margin: 40px 0 0; padding: 16px 20px; border: 1px solid var(--line); border-radius: 12px;

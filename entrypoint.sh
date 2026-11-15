@@ -12,6 +12,8 @@ CERTS_RUN=/tmp/certs
 
 # "restore": play back a database backup (docker compose run --rm samaudit restore [file])
 if [ "${1:-}" = "restore" ]; then shift; set -- python -m app.restore "$@"; fi
+# "diag": anonymous diagnostics package (docker compose run --rm -T samaudit diag > samaudit-diagnose.json)
+if [ "${1:-}" = "diag" ]; then shift; set -- python -m app.diag "$@"; fi
 
 if [ "$(id -u)" = "0" ]; then
   mkdir -p "$DATA"
