@@ -405,6 +405,8 @@ It builds for `linux/amd64` and `linux/arm64` without cache; the built image is 
 
 SAMAUDIT is free and stays free. If it saves you time and you would like to say thanks, you can buy me a coffee: **[buymeacoffee.com/soleil0815](https://buymeacoffee.com/soleil0815)**. Bug reports and ideas are just as welcome – see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+**Diagnostics package:** for a bug report, attach the anonymous package from **Activity log → Diagnostics package** (or `docker compose run --rm -T samaudit diag > samaudit-diagnose.json`). Names, addresses and IDs are replaced by placeholders, passwords and report contents are never included – still, please look through it first.
+
 ## Licence and use
 
 Website: [helfi.space](https://helfi.space)

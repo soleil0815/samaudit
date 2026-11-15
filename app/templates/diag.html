@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{# SPDX-License-Identifier: AGPL-3.0-or-later #}
+{% block title %}{{ t('diag_title', lang) }} – {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>{{ t('diag_title', lang) }}</h1><p>{{ t('diag_intro', lang) }}</p></div>
+  {% if diag_text %}<a class="btn btn-primary" href="/audit/diag.json" download>{{ t('diag_download', lang) }}</a>{% endif %}</div>
+{% if diag_error %}<div class="alert">{{ t(diag_error, lang) }}</div>{% endif %}
+{% if diag_text %}
+<p class="small u-mb16">{{ t('diag_check', lang) }}</p>
+<section class="panel"><pre class="diag-pre">{{ diag_text }}</pre></section>
+{% endif %}
+<p class="small u-mt28">{{ t('diag_cli', lang) }}<br>
+<code>docker compose run --rm -T samaudit diag &gt; samaudit-diagnose.json</code></p>
+{% endblock %}

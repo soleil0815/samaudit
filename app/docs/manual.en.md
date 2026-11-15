@@ -82,6 +82,8 @@ All 115 checks with ID, area, severity and description. IDs start with `STL-` (s
 
 All sign-ins (including rejected ones), scans, PDF exports, deletions, certificate changes and blocked network connections with time, user and IP address. Entries are deleted automatically after the configured retention period (default 90 days).
 
+**Diagnostics package:** the button at the top right shows an anonymous troubleshooting package and downloads it as a JSON file. It contains the program state, settings (without names, only values such as ports and periods), reachability of the DCs, certificate state, the last five scans (per check only result, severity, points and count) and the latest warnings and errors. Names, addresses and IDs are replaced by placeholders (`domain-1`, `dc-1`, `ip-1`, `user-1` …), consistently within the package. Passwords, certificates and the contents of findings are never included. Before producing it, SAMAUDIT checks the package again for all known real names; if one is left, no package is produced. Still, look through it before passing it on. The download is recorded in the activity log.
+
 ### What's new
 
 Bottom left, **What's new** lists what changed with each version: new **features**, **security** improvements, **fixes** and **notices** about new Active Directory risks (e.g. deprecations by Microsoft). If there is something you have not seen yet, a small dot appears next to it (orange for security topics) and the overview shows a slim line once. **×** or visiting the page clears both. The news ships with the update – SAMAUDIT loads nothing from the internet for it. Only a cookie in your browser remembers which version you last saw.
@@ -247,6 +249,7 @@ SAMAUDIT sends no data to third parties, loads nothing from the internet and del
 | No DC reachable | DNS inside the container: add `dns`/`extra_hosts` in `docker-compose.override.yml` (see Installation), then `docker compose up -d`. |
 | Many checks "not checkable (SMB)" | Allow TCP 445 to the DCs or set `SMB_CHECKS=false`. |
 | View logs | `docker compose logs -f` |
+| Diagnostics package without the web interface | `docker compose run --rm -T samaudit diag > samaudit-diagnose.json` – with the server log: `docker compose logs --no-color --tail 500 samaudit \| docker compose run --rm -T samaudit diag --log - > samaudit-diagnose.json` |
 | Check version | `curl -k https://localhost:9400/healthz` |
 
 ---

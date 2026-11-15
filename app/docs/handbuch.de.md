@@ -82,6 +82,8 @@ Alle 115 Prüfungen mit Kennung, Bereich, Schweregrad und Beschreibung. Die Kenn
 
 Alle Anmeldungen (auch abgewiesene), Scans, PDF-Exporte, Löschungen, Zertifikatsänderungen und blockierte Netzwerkverbindungen mit Zeit, Benutzer und IP-Adresse. Einträge werden nach der eingestellten Frist automatisch gelöscht (Standard 90 Tage).
 
+**Diagnosepaket:** Der Knopf oben rechts zeigt ein anonymes Paket zur Fehlersuche an und lädt es als JSON-Datei herunter. Es enthält Programmstand, Einstellungen (ohne Namen, nur Werte wie Ports und Fristen), die Erreichbarkeit der DCs, den Zertifikatsstatus, die letzten fünf Scans (je Prüfung nur Ergebnis, Schwere, Punkte und Anzahl) und die letzten Warnungen und Fehler. Namen, Adressen und Kennungen sind durch Platzhalter ersetzt (`domain-1`, `dc-1`, `ip-1`, `user-1` …), im ganzen Paket gleich. Kennwörter, Zertifikate und die Inhalte der Befunde sind nie enthalten. Vor dem Erzeugen prüft SAMAUDIT das Paket noch einmal auf alle bekannten echten Namen; bleibt einer stehen, wird kein Paket erzeugt. Sehen Sie es trotzdem kurz durch, bevor Sie es weitergeben. Der Download steht im Protokoll.
+
 ### Neuigkeiten
 
 Links unten unter **Neuigkeiten** steht, was sich mit jeder Version geändert hat: neue **Funktionen**, **Sicherheit**sverbesserungen, **Fehlerbehebungen** und **Hinweise** auf neue Risiken im Active Directory (z. B. Abschaltungen durch Microsoft). Gibt es Neues, das Sie noch nicht gesehen haben, zeigt ein kleiner Punkt daneben das an (orange bei Sicherheitsthemen), und auf der Übersicht erscheint einmalig eine schmale Zeile. Mit **×** oder einem Besuch der Seite verschwindet beides. Die Neuigkeiten kommen mit dem Update mit – SAMAUDIT lädt dafür nichts aus dem Internet. Gemerkt wird nur in einem Cookie Ihres Browsers, welche Version Sie zuletzt gesehen haben.
@@ -247,6 +249,7 @@ SAMAUDIT überträgt keine Daten an Dritte, lädt nichts aus dem Internet und l�
 | Kein DC erreichbar | DNS im Container: `dns`/`extra_hosts` in der `docker-compose.override.yml` eintragen (siehe Installation), dann `docker compose up -d`. |
 | Viele Prüfungen „nicht prüfbar (SMB)“ | TCP 445 zu den DCs freigeben oder `SMB_CHECKS=false`. |
 | Logs ansehen | `docker compose logs -f` |
+| Diagnosepaket ohne Weboberfläche | `docker compose run --rm -T samaudit diag > samaudit-diagnose.json` – mit Server-Log: `docker compose logs --no-color --tail 500 samaudit \| docker compose run --rm -T samaudit diag --log - > samaudit-diagnose.json` |
 | Version prüfen | `curl -k https://localhost:9400/healthz` |
 
 ---

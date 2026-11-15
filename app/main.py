@@ -444,6 +444,37 @@ async def audit_page(request: Request):
     return render(request, "audit.html", {"entries": db.audit_entries(500)})
 
 
+async def _diag_package():
+    from . import diag
+    try:
+        return await run_in_threadpool(diag.build, "web"), None
+    except diag.LeakError as e:
+        log.error("Diagnostics package not produced: %s", e)
+        return None, "diag_leak"
+    except Exception:  # noqa: BLE001
+        log.exception("Diagnostics package failed")
+        return None, "diag_failed"
+
+
+@require
+async def diag_page(request: Request):
+    """Preview: shows exactly what the package contains before it is downloaded."""
+    from . import diag
+    pkg, err = await _diag_package()
+    return render(request, "diag.html", {"diag_text": diag.dumps(pkg) if pkg else "", "diag_error": err})
+
+
+@require
+async def diag_download(request: Request):
+    from . import diag
+    pkg, err = await _diag_package()
+    if not pkg:
+        return render(request, "diag.html", {"diag_text": "", "diag_error": err}, 500)
+    db.audit("act_diag", request.state.sess.user, client_ip(request), diag.filename(pkg))
+    return Response(diag.dumps(pkg), media_type="application/json; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{diag.filename(pkg)}"'})
+
+
 async def health(request: Request):
     return JSONResponse({"ok": True, "version": VERSION, "image": IMAGE_VERSION})
 
@@ -606,6 +637,8 @@ routes = [
     Route("/report/{id:int}/delete", scan_delete, methods=["POST"]),
     Route("/rules", rules_page),
     Route("/audit", audit_page),
+    Route("/audit/diag", diag_page),
+    Route("/audit/diag.json", diag_download),
     Route("/healthz", health),
     Route("/connection", connection_page),
     Route("/privacy", privacy_page),

@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.2.0",
+    "date": "2026-11-15",
+    "items": [
+      {
+        "type": "feature",
+        "de": "Neues Diagnosepaket unter Protokoll: eine anonyme JSON-Datei zur Fehlersuche mit Programmstand, Einstellungen, Erreichbarkeit der DCs, den letzten Scans (nur Ergebnisse je Prüfung) und den letzten Warnungen. Namen, Adressen und Kennungen sind durch Platzhalter wie domain-1 oder dc-1 ersetzt; vor dem Download sehen Sie genau, was drinsteht. Ohne Weboberfläche: docker compose run --rm -T samaudit diag > samaudit-diagnose.json",
+        "en": "New diagnostics package under Activity log: an anonymous JSON file for troubleshooting with program state, settings, reachability of the DCs, the last scans (only the result per check) and the latest warnings. Names, addresses and IDs are replaced by placeholders such as domain-1 or dc-1; before downloading you see exactly what it contains. Without the web interface: docker compose run --rm -T samaudit diag > samaudit-diagnose.json"
+      }
+    ]
+  },
+  {
     "version": "2.1.10",
     "date": "2026-11-13",
     "items": [

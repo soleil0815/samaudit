@@ -15,6 +15,7 @@
 | **Nachvollziehbarkeit** | Protokoll aller Anmeldungen (auch abgewiesener), Scans, Exporte, Löschungen und blockierten Verbindungen. |
 | **Cookies** | Nur technisch notwendige (Sitzung, CSRF, Sprache, zuletzt gesehene Version der Neuigkeiten) – kein Einwilligungsbanner erforderlich (§ 25 Abs. 2 TDDDG). |
 | **Transparenz** | Öffentliche Seite `/privacy` („Datenschutz“) mit Zweck, Datenarten, Speicherdauer und Rechten; Kontakt über `PRIVACY_CONTACT`. |
+| **Diagnosepaket** | Nur auf Knopfdruck eines Prüfers (Protokoll) oder per Befehl auf dem Server; wird nirgends hin gesendet. Namen, Adressen und Kennungen sind durch Platzhalter ersetzt, Inhalte von Befunden, Kennwörter und Zertifikate nie enthalten; eine Schlussprüfung verhindert das Paket, wenn ein bekannter echter Name stehen bliebe. Warnungen dafür liegen nur im Arbeitsspeicher. |
 | **Löschung auf Anforderung** | Einzelne Berichte unter „Berichte“ löschbar; vollständige Löschung durch Entfernen des Ordners `data`. |
 
 ## 2. Vorlage für das Verzeichnis von Verarbeitungstätigkeiten (Art. 30 DSGVO)

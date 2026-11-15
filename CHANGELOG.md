@@ -4,6 +4,13 @@
 
 Program versions. Monthly security updates on patch day, the second Tuesday (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.2.0 – diagnostics package
+
+- **Activity log → Diagnostics package:** preview and download of an anonymous JSON file for troubleshooting: program and settings state (values only, no names), reachability of the DCs (LDAP, LDAPS, SMB), certificate state, the last five scans (per check: result, severity, points, count, note code), the latest warnings and errors (kept in memory only) and counts from the activity log. The download is recorded in the activity log.
+- **Command line:** `docker compose run --rm -T samaudit diag > samaudit-diagnose.json`, optionally with the server log via `--log -`.
+- **Anonymous by design:** allowlist per field, consistent placeholders (`domain-1`, `dc-1`, `ip-1`, `user-1` …) for every name known from the database and settings, patterns for IP and e-mail addresses, DNs and SIDs, and a final check that refuses to produce the package if a real name remains. Passwords, certificates and finding contents are never read into it.
+- **Kept in step with the program:** tests fail when a new setting, database column, key/value entry, overview field or item key is added without deciding how it goes into the package.
+
 ## 2.1.10 – coffee card
 
 - The "Buy me a coffee" button moved from the sidebar into a card at the bottom of every signed-in page and of the help page: "Enjoying SAMAUDIT? A coffee is always appreciated." with a yellow button. The image is still served locally.

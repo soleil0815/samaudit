@@ -399,6 +399,8 @@ Gebaut wird für `linux/amd64` und `linux/arm64`, ohne Cache; das gebaute Image 
 
 SAMAUDIT ist kostenlos und bleibt es. Wenn es Ihnen Zeit spart und Sie Danke sagen möchten, können Sie mir einen Kaffee spendieren: **[buymeacoffee.com/soleil0815](https://buymeacoffee.com/soleil0815)**. Fehlermeldungen und Ideen sind genauso willkommen – siehe [CONTRIBUTING.md](CONTRIBUTING.md).
 
+**Diagnosepaket:** Für eine Fehlermeldung bitte das anonyme Paket unter **Protokoll → Diagnosepaket** anhängen (oder `docker compose run --rm -T samaudit diag > samaudit-diagnose.json`). Namen, Adressen und Kennungen sind durch Platzhalter ersetzt, Kennwörter und Berichtsinhalte nie enthalten – bitte trotzdem vorher kurz durchsehen.
+
 ## Lizenz und Nutzung
 
 Webseite: [helfi.space](https://helfi.space)
