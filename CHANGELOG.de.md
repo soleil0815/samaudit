@@ -4,6 +4,10 @@
 
 Programmversionen. Die monatlichen Sicherheitsupdates am Patchday, dem zweiten Dienstag (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.3.1 – Tabellen
+
+- Lange Werte ohne Leerzeichen (Eingaben im Protokoll, DNs) brechen um, statt die Tabelle zu verbreitern; Zeit und Regelkennung bleiben in einer Zeile; Spaltenköpfe dürfen umbrechen (mit Silbentrennung); Aktionen in der Berichtsliste rücken bei Platzmangel untereinander.
+
 ## 2.3.0 – neues Aussehen
 
 - Oberfläche im Stil von WhatsOnMyNet: ruhige Flächen wie bei einer Mac-App mit feinen Linien und leichten Schatten, Systemschrift (Inter als Ersatz; die Webschrift Poppins entfällt), Blau statt Violett als Akzentfarbe, durchscheinende Seitenleiste, flache Knöpfe, Schweregrade und Neuigkeiten-Arten als dezente Pillen, Kennzahlen als zusammenhängende Leiste. Der Risikowert bleibt eine dunkle Kachel.

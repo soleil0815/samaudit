@@ -4,6 +4,10 @@
 
 Program versions. Monthly security updates on patch day, the second Tuesday (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.3.1 – tables
+
+- Long values without spaces (user input in the activity log, DNs) wrap instead of widening the table; time and rule ID stay on one line; column headers may wrap (hyphenated); report-list actions wrap when space is short.
+
 ## 2.3.0 – new look
 
 - Interface restyled to match WhatsOnMyNet: calm Mac-like surfaces with hairlines and soft shadows, system font (Inter as fallback; the Poppins web font is gone), blue accent instead of violet, translucent sidebar, flat buttons, severities and news types as soft pills, key figures as one connected strip. The risk score stays a dark tile.

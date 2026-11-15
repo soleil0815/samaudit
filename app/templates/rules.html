@@ -9,7 +9,7 @@
   <table>
     <thead><tr><th>{{ t('rule_id', lang) }}</th><th>{{ 'Prüfung' if lang == 'de' else 'Check' }}</th><th>{{ t('severity', lang) }}</th><th>{{ t('max_points', lang) }}</th><th>{{ t('platform', lang) }}</th></tr></thead>
     <tbody>{% for r in rules if r.category == c %}
-      <tr><td class="mono">{{ r.id }}</td><td><b>{{ r.title[lang] }}</b><br><span class="small muted">{{ r.desc[lang] }}</span></td>
+      <tr><td class="mono nowrap">{{ r.id }}</td><td><b>{{ r.title[lang] }}</b><br><span class="small muted">{{ r.desc[lang] }}</span></td>
         <td><span class="sev sev-{{ r.severity }}">{{ t('sev_' ~ r.severity, lang) }}</span></td><td class="num">{{ r.points }}</td>
         <td class="small">{{ r.platforms|join(', ')|replace('windows', 'Windows')|replace('samba', 'Samba') }}</td></tr>
     {% endfor %}</tbody>

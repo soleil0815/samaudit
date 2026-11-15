@@ -40,6 +40,13 @@ class Look(unittest.TestCase):
         logo = base[base.index("{% macro logo"):base.index("{%- endmacro %}", base.index("{% macro logo"))]
         self.assertNotIn("fill=\"#", logo)
 
+    def test_long_values_wrap_in_tables(self):
+        self.assertIn("td.wrap { overflow-wrap: anywhere;", CSS)
+        audit = (ROOT / "app/templates/audit.html").read_text(encoding="utf-8")
+        self.assertIn('<td class="wrap">{{ e.user', audit)
+        self.assertIn('<td class="small wrap">{{ e.detail', audit)
+        self.assertIn("overflow-wrap: anywhere", CSS[CSS.index("td.mono, .mono"):CSS.index("td.mono, .mono") + 160])
+
 
 if __name__ == "__main__":
     unittest.main()
