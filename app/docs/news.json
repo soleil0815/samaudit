@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.3.1",
+    "date": "2026-11-15",
+    "items": [
+      {
+        "type": "fix",
+        "de": "Tabellen: Lange Einträge ohne Leerzeichen (z. B. seltsame Benutzernamen fehlgeschlagener Anmeldungen im Protokoll) brechen jetzt um, statt die Tabelle über den Rand zu schieben. Spaltenköpfe dürfen umbrechen, Aktionen in der Berichtsliste rücken bei Platzmangel untereinander.",
+        "en": "Tables: long entries without spaces (e.g. odd user names of failed sign-ins in the activity log) now wrap instead of pushing the table past the edge. Column headers may wrap, actions in the report list stack when space is short."
+      }
+    ]
+  },
+  {
     "version": "2.3.0",
     "date": "2026-11-15",
     "items": [

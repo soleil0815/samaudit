@@ -202,15 +202,21 @@ main { padding: 34px 44px 64px; max-width: 1260px; width: 100%; min-width: 0; }
 /* ---------- Tables ---------- */
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th { text-align: left; font-weight: 600; color: var(--ink-3); font-size: 12.5px; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { text-align: left; font-weight: 600; color: var(--ink-3); font-size: 12.5px; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: bottom; }
 td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+/* long values without spaces (DNs, user input in the activity log) must wrap instead of widening the table */
+td { overflow-wrap: break-word; }
+td.wrap { overflow-wrap: anywhere; min-width: 8ch; }
+td .sev, td .btn { white-space: nowrap; }
+th { hyphens: auto; -webkit-hyphens: auto; }
 tr:last-child td { border-bottom: 0; }
 tbody tr:hover td { background: var(--surface-2); }
-td.mono, .mono { font-family: var(--f-mono); font-size: 12.5px; word-break: normal; overflow-wrap: break-word; }
-td.mono:first-child { white-space: nowrap; }
+td.mono, .mono { font-family: var(--f-mono); font-size: 12.5px; word-break: normal; overflow-wrap: anywhere; }
+td.nowrap { white-space: nowrap; }
 .score { font: 700 15px/1 var(--f-display); font-variant-numeric: tabular-nums; }
 .score.lv-0 { color: var(--lv-0); } .score.lv-1 { color: var(--lv-1); } .score.lv-2 { color: var(--lv-2); } .score.lv-3 { color: var(--lv-3); }
-.row-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: flex-end; align-items: center; }
+.row-actions a { white-space: nowrap; }
 
 /* ---------- Key figures ---------- */
 .facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0; border-top: 1px solid var(--line); margin: 0; }
