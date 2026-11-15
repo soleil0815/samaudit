@@ -28,7 +28,7 @@
   {%- endif -%}
 {%- endmacro %}
 {% macro logo(cls='') -%}
-<span class="logo-tile {{ cls }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 4.5 5.3v5.9c0 5 3.2 8.6 7.5 10.3 4.3-1.7 7.5-5.3 7.5-10.3V5.3Z" fill="#fff"/><path d="m8.6 11.9 2.4 2.4 4.4-4.6" fill="none" stroke="#6366e6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+<span class="logo-tile {{ cls }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="shield" d="M12 2.5 4.5 5.3v5.9c0 5 3.2 8.6 7.5 10.3 4.3-1.7 7.5-5.3 7.5-10.3V5.3Z"/><path class="check" d="m8.6 11.9 2.4 2.4 4.4-4.6"/></svg></span>
 {%- endmacro %}
 {% block body %}
 <div class="shell">
@@ -48,9 +48,8 @@
         <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ sess.csrf }}"><button class="logout-btn" type="submit" title="{{ t('logout', lang) }}" aria-label="{{ t('logout', lang) }}">{{ icon('logout') }}</button></form>
       </div>{% endif %}
       <div class="switches">
-        <a href="/lang/de?next={{ path }}" class="{{ 'on' if lang == 'de' }}" hreflang="de">DE</a>
-        <a href="/lang/en?next={{ path }}" class="{{ 'on' if lang == 'en' }}" hreflang="en">EN</a>
-        <button type="button" data-theme-btn data-label-dark="{{ 'Dunkel' if lang == 'de' else 'Dark' }}" data-label-light="{{ 'Hell' if lang == 'de' else 'Light' }}" aria-label="{{ t('theme', lang) }}">{{ 'Dunkel' if lang == 'de' else 'Dark' }}</button>
+        <span class="seg" role="group" aria-label="{{ 'Sprache' if lang == 'de' else 'Language' }}"><a href="/lang/de?next={{ path }}" class="{{ 'on' if lang == 'de' }}" hreflang="de">DE</a><a href="/lang/en?next={{ path }}" class="{{ 'on' if lang == 'en' }}" hreflang="en">EN</a></span>
+        <span class="seg" role="group" aria-label="{{ t('theme', lang) }}"><button type="button" data-theme-set="system" aria-pressed="false">{{ 'System' }}</button><button type="button" data-theme-set="light" aria-pressed="false">{{ 'Hell' if lang == 'de' else 'Light' }}</button><button type="button" data-theme-set="dark" aria-pressed="false">{{ 'Dunkel' if lang == 'de' else 'Dark' }}</button></span>
       </div>
       <span class="tzinfo"><a href="/news" class="news-link{{ ' has-new' if news_unseen }}{{ ' has-sec' if news_unseen|selectattr('security')|list }}" {% if path == '/news' %}aria-current="page"{% endif %}>{{ t('nav_news', lang) }}{% if news_unseen %}<span class="news-dot" title="{{ t('news_unread', lang) }}"></span>{% endif %}</a> · <a class="u-ci" href="/privacy">{{ t('nav_privacy', lang) }}</a> · {{ t('tz', lang) }}: {{ settings.tz }}<br><a class="u-ci" href="https://helfi.space" target="_blank" rel="noopener noreferrer">helfi.space</a></span>
     </div>

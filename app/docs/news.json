@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.3.0",
+    "date": "2026-11-15",
+    "items": [
+      {
+        "type": "feature",
+        "de": "Neues, ruhigeres Aussehen im Stil von WhatsOnMyNet: hell und dunkel gleichwertig, Systemschrift, blaue Akzentfarbe, durchscheinende Seitenleiste, Schweregrade als dezente Farbpillen; der Risikowert bleibt eine dunkle Kachel. Hell oder dunkel richtet sich jetzt nach dem System – unten links lässt sich System, Hell oder Dunkel wählen. Auch der PDF-Bericht nutzt die neuen Farben.",
+        "en": "New, calmer look in the style of WhatsOnMyNet: light and dark on equal terms, system font, blue accent, translucent sidebar, severities as subtle colour pills; the risk score stays a dark tile. Light or dark now follows the system – bottom left offers System, Light or Dark. The PDF report uses the new colours too."
+      }
+    ]
+  },
+  {
     "version": "2.2.0",
     "date": "2026-11-15",
     "items": [

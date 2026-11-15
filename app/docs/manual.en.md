@@ -90,7 +90,7 @@ Bottom left, **What's new** lists what changed with each version: new **features
 
 ### Language, appearance, privacy
 
-Bottom left: **DE / EN** switches the language, **Dark / Light** the appearance. **Privacy** shows which data SAMAUDIT processes, how long it is kept and who is responsible – this page is available without signing in.
+Bottom left: **DE / EN** switches the language, **System / Light / Dark** the appearance (default: as the operating system is set; the browser remembers the choice). **Privacy** shows which data SAMAUDIT processes, how long it is kept and who is responsible – this page is available without signing in.
 
 ### Sign-in messages
 

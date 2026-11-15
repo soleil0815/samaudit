@@ -51,16 +51,16 @@ def _fonts() -> tuple[str, str, str, str]:
 
 
 # Colours (light print)
-INK = colors.HexColor("#16202b")
-INK2 = colors.HexColor("#485667")
-INK3 = colors.HexColor("#758293")
-LINE = colors.HexColor("#d6dce3")
-LINE2 = colors.HexColor("#e6eaee")
-SURF2 = colors.HexColor("#f4f6f8")
-ACCENT = colors.HexColor("#5b5fe0")
-ACCENT_LIGHT = colors.HexColor("#8b8ff8")
-NAVY = colors.HexColor("#121729")
-CAT = {"stale": colors.HexColor("#1f9d68"), "privileged": colors.HexColor("#5b5fe0"),
+INK = colors.HexColor("#1D1D1F")
+INK2 = colors.HexColor("#424245")
+INK3 = colors.HexColor("#6E6E73")
+LINE = colors.HexColor("#D2D2D7")
+LINE2 = colors.HexColor("#E6E6EA")
+SURF2 = colors.HexColor("#F5F5F7")
+ACCENT = colors.HexColor("#0071E3")
+ACCENT_LIGHT = colors.HexColor("#64B5FF")
+NAVY = colors.HexColor("#1C1C1E")
+CAT = {"stale": colors.HexColor("#1f9d68"), "privileged": colors.HexColor("#5856D6"),
        "trusts": colors.HexColor("#c48a00"), "anomalies": colors.HexColor("#d23f3f")}
 
 
@@ -69,7 +69,7 @@ def head_font(bold=True) -> str:
 SEV = {"critical": colors.HexColor("#b42318"), "high": colors.HexColor("#c9541a"),
        "medium": colors.HexColor("#a87d00"), "low": colors.HexColor("#3b78b0"), "info": colors.HexColor("#6b7785")}
 LV = [colors.HexColor("#2e7d5b"), colors.HexColor("#6f8f2a"), colors.HexColor("#c9541a"), colors.HexColor("#b42318")]
-TICK_OFF = colors.HexColor("#d3d9e0")
+TICK_OFF = colors.HexColor("#E0E0E5")
 
 PAGE_W, PAGE_H = A4
 MARGIN = 18 * mm
@@ -93,8 +93,8 @@ def draw_seal(c, cx, cy, radius, score, lang, fonts, dark_bg=False):
     n, filled = 50, round(s / 100 * 50)
     r_out, r_in = radius, radius - 12
     c.saveState()
-    c.setFillColor(colors.white if not dark_bg else colors.HexColor("#1e2a37"))
-    c.setStrokeColor(LINE if not dark_bg else colors.HexColor("#2c3846"))
+    c.setFillColor(colors.white if not dark_bg else colors.HexColor("#242427"))
+    c.setStrokeColor(LINE if not dark_bg else colors.HexColor("#3A3A3D"))
     c.circle(cx, cy, r_in - 8, stroke=1, fill=1)
     c.setLineCap(1)
     for i in range(n):
@@ -102,37 +102,33 @@ def draw_seal(c, cx, cy, radius, score, lang, fonts, dark_bg=False):
         long_tick = i % 5 == 0
         r1 = r_in - (3.5 if long_tick else 0)
         c.setLineWidth(2.6)
-        c.setStrokeColor(lv_color(s) if i < filled else (TICK_OFF if not dark_bg else colors.HexColor("#2c3846")))
+        c.setStrokeColor(lv_color(s) if i < filled else (TICK_OFF if not dark_bg else colors.HexColor("#3A3A3D")))
         c.line(cx + r1 * math.cos(ang), cy + r1 * math.sin(ang), cx + r_out * math.cos(ang), cy + r_out * math.sin(ang))
     c.setFillColor(INK if not dark_bg else colors.white)
     c.setFont(bold, radius * 0.62)
     c.drawCentredString(cx, cy - radius * 0.12, str(s))
     c.setFont(body, radius * 0.15)
-    c.setFillColor(INK2 if not dark_bg else colors.HexColor("#c7d1dc"))
+    c.setFillColor(INK2 if not dark_bg else colors.HexColor("#D1D1D6"))
     c.drawCentredString(cx, cy - radius * 0.42, t(f"level_{level_key(s)}", lang))
     c.restoreState()
 
 
 def draw_logo(c, x, y, size):
-    """Violet tile with a white shield (as in the web interface)."""
+    """Dark tile with a blue shield (as in the web interface)."""
     c.saveState()
-    c.setFillColor(colors.HexColor("#6f72ee"))
-    c.roundRect(x, y, size, size, size * 0.28, stroke=0, fill=1)
-    c.setFillColor(colors.HexColor("#8b8ff8"))
-    c.roundRect(x, y + size * 0.5, size, size * 0.5, size * 0.28, stroke=0, fill=1)
-    c.setFillColor(colors.HexColor("#7b7ef4"))
-    c.rect(x, y + size * 0.45, size, size * 0.12, stroke=0, fill=1)
+    c.setFillColor(colors.HexColor("#1C1C1E"))
+    c.roundRect(x, y, size, size, size * 0.25, stroke=0, fill=1)
     s = size / 24.0
     c.translate(x, y + size)
     c.scale(s, -s)
     p = c.beginPath()
-    p.moveTo(12, 4.8); p.lineTo(6.6, 6.8); p.lineTo(6.6, 11.1)
-    p.curveTo(6.6, 14.7, 8.9, 17.3, 12, 18.6); p.curveTo(15.1, 17.3, 17.4, 14.7, 17.4, 11.1)
-    p.lineTo(17.4, 6.8); p.close()
-    c.setFillColor(colors.white)
+    p.moveTo(12, 3.6); p.lineTo(5.6, 6); p.lineTo(5.6, 11.1)
+    p.curveTo(5.6, 15.4, 8.3, 18.5, 12, 20); p.curveTo(15.7, 18.5, 18.4, 15.4, 18.4, 11.1)
+    p.lineTo(18.4, 6); p.close()
+    c.setFillColor(colors.HexColor("#64B5FF"))
     c.drawPath(p, stroke=0, fill=1)
-    c.setStrokeColor(colors.HexColor("#6366e6")); c.setLineWidth(1.6); c.setLineCap(1); c.setLineJoin(1)
-    p2 = c.beginPath(); p2.moveTo(9.7, 11.6); p2.lineTo(11.4, 13.3); p2.lineTo(14.5, 10.1)
+    c.setStrokeColor(colors.HexColor("#1C1C1E")); c.setLineWidth(1.9); c.setLineCap(1); c.setLineJoin(1)
+    p2 = c.beginPath(); p2.moveTo(9.3, 11.7); p2.lineTo(11.3, 13.7); p2.lineTo(15, 9.9)
     c.drawPath(p2, stroke=1, fill=0)
     c.restoreState()
 
@@ -219,30 +215,27 @@ def build_pdf(data: dict, lang: str = "de") -> bytes:
         c.saveState()
         c.setFillColor(NAVY)
         c.rect(0, PAGE_H - 118 * mm, PAGE_W, 118 * mm, stroke=0, fill=1)
-        for i, a in enumerate((0.10, 0.07, 0.05, 0.03)):  # soft glow at the top left
-            c.setFillColor(colors.Color(0.35, 0.38, 0.75, alpha=a))
-            c.circle(0, PAGE_H, (90 - i * 18) * mm, stroke=0, fill=1)
         draw_logo(c, MARGIN, PAGE_H - MARGIN - 11 * mm, 11 * mm)
         c.setFillColor(colors.white)
-        c.setFont(head_font(False), 11.5)
-        c.drawString(MARGIN + 14.5 * mm, PAGE_H - MARGIN - 6.9 * mm, " ".join(APP_NAME.upper()))
-        wm = c.stringWidth(" ".join(APP_NAME.upper()), head_font(False), 11.5)
+        c.setFont(head_font(), 13)
+        c.drawString(MARGIN + 14.5 * mm, PAGE_H - MARGIN - 7.0 * mm, APP_NAME)
+        wm = c.stringWidth(APP_NAME, head_font(), 13)
         badge = f"v{VERSION}"
         c.setFont(mono, 7.5)
         bw = c.stringWidth(badge, mono, 7.5) + 6
         bx = MARGIN + 14.5 * mm + wm + 3 * mm
-        c.setFillColor(colors.HexColor("#2a2f5c"))
+        c.setFillColor(colors.HexColor("#3A3A3D"))
         c.roundRect(bx, PAGE_H - MARGIN - 7.9 * mm, bw, 4.4 * mm, 1.2 * mm, stroke=0, fill=1)
-        c.setFillColor(colors.HexColor("#c9cbff"))
+        c.setFillColor(colors.HexColor("#D1D1D6"))
         c.drawString(bx + 3, PAGE_H - MARGIN - 6.8 * mm, badge)
-        c.setFillColor(colors.HexColor("#aab1c8"))
+        c.setFillColor(colors.HexColor("#AEAEB2"))
         c.setFont(body, 10)
         c.drawString(MARGIN, PAGE_H - 58 * mm, t("report", lang))
         c.setFillColor(colors.white)
         c.setFont(head_font(), 34)
         c.drawString(MARGIN, PAGE_H - 74 * mm, domain)
         c.setFont(body, 12)
-        c.setFillColor(colors.HexColor("#aab1c8"))
+        c.setFillColor(colors.HexColor("#AEAEB2"))
         c.drawString(MARGIN, PAGE_H - 83 * mm, t("tagline", lang))
         c.setFont(body, 10.5)
         c.drawString(MARGIN, PAGE_H - 97 * mm, f"{t('generated', lang)} {date_str}   {t('started_by', lang)}: {scan.get('started_by') or '–'}")
@@ -253,7 +246,7 @@ def build_pdf(data: dict, lang: str = "de") -> bytes:
         draw_seal(c, PAGE_W - MARGIN - 34 * mm, PAGE_H - 70 * mm, 30 * mm, scan.get("score_global"), lang, fonts,
                   dark_bg=True)
         c.setFont(body, 9)
-        c.setFillColor(colors.HexColor("#c7d1dc"))
+        c.setFillColor(colors.HexColor("#D1D1D6"))
         c.drawCentredString(PAGE_W - MARGIN - 34 * mm, PAGE_H - 108 * mm, t("risk_score", lang))
         # Areas
         y = PAGE_H - 140 * mm

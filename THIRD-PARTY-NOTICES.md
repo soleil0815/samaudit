@@ -32,7 +32,7 @@ ruff (MIT), mypy (MIT), PyYAML (MIT) – `requirements-dev.txt`; Trivy (Apache-2
 | Font | Licence | File |
 |---|---|---|
 | Inter | SIL Open Font License 1.1 | `app/static/fonts/LICENSE-Inter.txt` |
-| Poppins | SIL Open Font License 1.1 | `app/static/fonts/LICENSE-Poppins.txt`, `app/pdf_fonts/LICENSE-Poppins.txt` |
+| Poppins (PDF only) | SIL Open Font License 1.1 | `app/pdf_fonts/LICENSE-Poppins.txt` |
 | Carlito | SIL Open Font License 1.1 | `app/pdf_fonts/LICENSE-Carlito.txt` |
 | DejaVu Sans Mono | Bitstream Vera / DejaVu licence (free) | `app/pdf_fonts/LICENSE-DejaVu.txt` |
 

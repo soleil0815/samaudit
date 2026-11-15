@@ -4,6 +4,14 @@
 
 Programmversionen. Die monatlichen Sicherheitsupdates am Patchday, dem zweiten Dienstag (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.3.0 – neues Aussehen
+
+- Oberfläche im Stil von WhatsOnMyNet: ruhige Flächen wie bei einer Mac-App mit feinen Linien und leichten Schatten, Systemschrift (Inter als Ersatz; die Webschrift Poppins entfällt), Blau statt Violett als Akzentfarbe, durchscheinende Seitenleiste, flache Knöpfe, Schweregrade und Neuigkeiten-Arten als dezente Pillen, Kennzahlen als zusammenhängende Leiste. Der Risikowert bleibt eine dunkle Kachel.
+- Hell oder dunkel richtet sich standardmäßig nach dem Betriebssystem; **System / Hell / Dunkel** als Umschalter unten links (je Browser gemerkt). Eine frühere Wahl „Hell“ bleibt erhalten.
+- Neues Logo: dunkle, abgerundete Kachel mit blauem Schild (auch Favicon und PDF).
+- PDF-Bericht: neutrale Grautöne, blaue Akzentfarbe, dunkles Deckblatt im selben Stil.
+- Bildschirmfotos im README erneuert.
+
 ## 2.2.0 – Diagnosepaket
 
 - **Protokoll → Diagnosepaket:** Vorschau und Download einer anonymen JSON-Datei zur Fehlersuche: Programm- und Einstellungsstand (nur Werte, keine Namen), Erreichbarkeit der DCs (LDAP, LDAPS, SMB), Zertifikatsstatus, die letzten fünf Scans (je Prüfung Ergebnis, Schwere, Punkte, Anzahl, Hinweiscode), die letzten Warnungen und Fehler (nur im Arbeitsspeicher) und Zählwerte aus dem Protokoll. Der Download wird protokolliert.

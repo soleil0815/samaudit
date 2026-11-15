@@ -446,4 +446,4 @@ tools/clean-history.sh  Git-Historie ohne persönliche Namen/E-Mail-Adressen neu
 DATENSCHUTZ.md                    Datenschutz-Unterlagen
 ```
 
-Schriften: Inter und Poppins (Oberfläche), Carlito, Poppins und DejaVu Sans Mono (PDF) – SIL Open Font License bzw. freie Lizenz, Lizenztexte liegen bei.
+Schriften: Inter (Oberfläche; wo vorhanden die Systemschrift), Carlito, Poppins und DejaVu Sans Mono (PDF) – SIL Open Font License bzw. freie Lizenz, Lizenztexte liegen bei.

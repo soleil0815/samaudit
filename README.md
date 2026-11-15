@@ -452,4 +452,4 @@ tools/clean-history.sh  rewrite the Git history without personal names/e-mail ad
 DATENSCHUTZ.md                    privacy documentation (German)
 ```
 
-Fonts: Inter and Poppins (web interface), Carlito, Poppins and DejaVu Sans Mono (PDF) – SIL Open Font License or other free licences; licence texts are included.
+Fonts: Inter (web interface; the system font is used where available), Carlito, Poppins and DejaVu Sans Mono (PDF) – SIL Open Font License or other free licences; licence texts are included.

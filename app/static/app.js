@@ -4,21 +4,28 @@
   "use strict";
   var root = document.documentElement;
 
-  // Theme: dark (default) or light – convenience only, may fail
-  function getTheme() { try { return localStorage.getItem("samaudit-theme") === "light" ? "light" : "dark"; } catch (e) { return "dark"; } }
-  function applyTheme(v) {
-    if (v === "light") root.setAttribute("data-theme", "light"); else root.removeAttribute("data-theme");
-    document.querySelectorAll("[data-theme-btn]").forEach(function (b) {
-      b.textContent = b.getAttribute("data-label-" + v) || v;
+  // Appearance: like the system (default), light or dark – a convenience of this browser, may fail
+  function getPref() {
+    try { var v = localStorage.getItem("samaudit-theme"); return v === "light" || v === "dark" ? v : "system"; }
+    catch (e) { return "system"; }
+  }
+  var media = window.matchMedia ? matchMedia("(prefers-color-scheme: dark)") : null;
+  function applyTheme(pref) {
+    var dark = pref === "dark" || (pref === "system" && media && media.matches);
+    root.setAttribute("data-theme", dark ? "dark" : "light");
+    document.querySelectorAll("[data-theme-set]").forEach(function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-theme-set") === pref ? "true" : "false");
     });
   }
-  applyTheme(getTheme());
+  document.addEventListener("DOMContentLoaded", function () { applyTheme(getPref()); });
+  applyTheme(getPref());
+  if (media && media.addEventListener) media.addEventListener("change", function () { applyTheme(getPref()); });
   document.addEventListener("click", function (ev) {
-    var b = ev.target.closest("[data-theme-btn]");
+    var b = ev.target.closest("[data-theme-set]");
     if (!b) return;
-    var next = getTheme() === "light" ? "dark" : "light";
-    try { localStorage.setItem("samaudit-theme", next); } catch (e) { /* ignore */ }
-    applyTheme(next);
+    var pref = b.getAttribute("data-theme-set");
+    try { localStorage.setItem("samaudit-theme", pref); } catch (e) { /* ignore */ }
+    applyTheme(pref);
   });
 
   // Copy code

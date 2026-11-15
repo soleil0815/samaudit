@@ -90,7 +90,7 @@ Links unten unter **Neuigkeiten** steht, was sich mit jeder Version geändert ha
 
 ### Sprache, Darstellung, Datenschutz
 
-Links unten: **DE / EN** wechselt die Sprache, **Dunkel / Hell** die Darstellung. **Datenschutz** zeigt, welche Daten SAMAUDIT verarbeitet, wie lange sie gespeichert werden und wer zuständig ist – diese Seite ist auch ohne Anmeldung erreichbar.
+Links unten: **DE / EN** wechselt die Sprache, **System / Hell / Dunkel** die Darstellung (Standard: wie das Betriebssystem eingestellt ist; die Wahl merkt sich der Browser). **Datenschutz** zeigt, welche Daten SAMAUDIT verarbeitet, wie lange sie gespeichert werden und wer zuständig ist – diese Seite ist auch ohne Anmeldung erreichbar.
 
 ### Meldungen bei der Anmeldung
 
