@@ -4,6 +4,14 @@
 
 Program versions. Monthly security updates on patch day, the second Tuesday (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.3.0 – new look
+
+- Interface restyled to match WhatsOnMyNet: calm Mac-like surfaces with hairlines and soft shadows, system font (Inter as fallback; the Poppins web font is gone), blue accent instead of violet, translucent sidebar, flat buttons, severities and news types as soft pills, key figures as one connected strip. The risk score stays a dark tile.
+- Appearance follows the operating system by default; **System / Light / Dark** as a segmented switch bottom left (remembered per browser). Earlier "light" choices are kept.
+- New logo: dark rounded tile with a blue shield (also favicon and PDF).
+- PDF report: neutral greys, blue accent, dark cover in the same style.
+- README screenshots updated.
+
 ## 2.2.0 – diagnostics package
 
 - **Activity log → Diagnostics package:** preview and download of an anonymous JSON file for troubleshooting: program and settings state (values only, no names), reachability of the DCs (LDAP, LDAPS, SMB), certificate state, the last five scans (per check: result, severity, points, count, note code), the latest warnings and errors (kept in memory only) and counts from the activity log. The download is recorded in the activity log.
