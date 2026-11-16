@@ -124,4 +124,8 @@ LEGACY_IDS = {
     "P-GMSAReaders": "PRV-40",
     "P-Certighost": "PRV-41",
     "A-GPOAnonymous": "ANM-45",
+    # since v2.4
+    "A-CredentialGuard": "ANM-46",
+    "A-SambaEOL": "ANM-47",
+    "A-DnsHostnameMismatch": "ANM-48",
 }
