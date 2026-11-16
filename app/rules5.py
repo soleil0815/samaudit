@@ -4,11 +4,12 @@
 life and computer accounts whose DNS host name does not match their logon name (Certifried leftovers)."""
 from __future__ import annotations
 
+import ipaddress
 import re
 from datetime import date
 
 from .analysis import Ctx
-from .rules import Hit, NotApplicable, rule
+from .rules import Hit, NotApplicable, need_sysvol, rule
 from .rules2 import as_num, gpo_values
 
 MS = "https://learn.microsoft.com"
@@ -19,8 +20,23 @@ MS = "https://learn.microsoft.com"
 # ===========================================================================
 
 CG_LSA_KEYS = (r"Microsoft\Windows\DeviceGuard\LsaCfgFlags",      # ADMX "Turn On Virtualization Based Security"
-               r"CurrentControlSet\Control\Lsa\LsaCfgFlags")       # set directly (GPP / security template)
+               r"CurrentControlSet\Control\Lsa\LsaCfgFlags")       # set directly (Registry.pol / security template;
+#                                                                       GPP Registry.xml is not evaluated)
 CG_VBS_KEY = r"Microsoft\Windows\DeviceGuard\EnableVirtualizationBasedSecurity"
+
+
+def _dc_only_gpos(ctx: Ctx) -> set[str]:
+    """GPOs linked exclusively to the Domain Controllers OU (Credential Guard is not meant for DCs)."""
+    links = ctx.m.get("gpo_links") or {}
+
+    def count(seq) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for lk in seq or []:
+            if lk.get("enabled") and lk.get("guid"):
+                out[lk["guid"].upper()] = out.get(lk["guid"].upper(), 0) + 1
+        return out
+    dc, every = count(links.get("dc_ou")), count(links.get("all"))
+    return {g for g, n in dc.items() if every.get(g, n) <= n}
 
 
 @rule(id="A-CredentialGuard", category="anomalies", severity="info", points=1,
@@ -60,8 +76,12 @@ CG_VBS_KEY = r"Microsoft\Windows\DeviceGuard\EnableVirtualizationBasedSecurity"
             ("Microsoft: Credential Guard considerations",
              f"{MS}/windows/security/identity-protection/credential-guard/considerations-known-issues")])
 def _credential_guard(ctx: Ctx):
+    need_sysvol(ctx)
     enabled, off, unreadable = False, [], None
+    dc_only = _dc_only_gpos(ctx)
     for g in ctx.gpo_guids("all"):
+        if g.upper() in dc_only:
+            continue
         try:
             lsa = [(k, v) for k in CG_LSA_KEYS for _, v in gpo_values(ctx, [g], k)]
             vbs = gpo_values(ctx, [g], CG_VBS_KEY)
@@ -106,6 +126,14 @@ def samba_version(text: str | None) -> tuple[int, str] | None:
     return int(m.group(1)), m.group(0) + (tail.group(0) if tail else "")
 
 
+def _is_ip(text: str) -> bool:
+    try:
+        ipaddress.ip_address(text.strip("[]"))
+        return True
+    except ValueError:
+        return False
+
+
 @rule(id="A-SambaEOL", category="anomalies", severity="info", points=0,
       title={"de": "Samba-Reihe der Domänencontroller vom Samba-Team nicht mehr gepflegt",
              "en": "Samba series of the domain controllers no longer maintained by the Samba team"},
@@ -113,12 +141,12 @@ def samba_version(text: str | None) -> tuple[int, str] | None:
                   "Sicherheitskorrekturen mehr. Viele Hersteller (z. B. Synology, Ubuntu, Red Hat, Debian) übernehmen "
                   "wichtige Korrekturen aber selbst in ihre ältere Reihe – entscheidend ist also, ob der Hersteller "
                   "Ihres Systems noch Updates liefert. Deshalb nur ein Hinweis ohne Punkte. Die Version stammt aus dem "
-                  "rootDSE (vendorVersion) bzw. dem Computerkonto des DCs.",
+                  "rootDSE (vendorVersion, aktuell) bzw. dem Computerkonto des DCs (kann nach Updates veraltet sein).",
             "en": "The Samba team only maintains the three most recent release series; older ones no longer receive "
                   "security fixes from upstream. Many vendors (e.g. Synology, Ubuntu, Red Hat, Debian) backport "
                   "important fixes into their older series, so what matters is whether your system's vendor still "
                   "ships updates – hence only a hint without points. The version comes from the rootDSE "
-                  "(vendorVersion) or the DC's computer account."},
+                  "(vendorVersion, live) or the DC's computer account (may be stale after upgrades)."},
       fix={"de": "Beim Hersteller prüfen, ob die eingesetzte Samba-Version noch Sicherheitsupdates bekommt, und alle "
                  "Updates einspielen. Mittelfristig auf eine aktuelle, vom Samba-Team gepflegte Reihe wechseln "
                  "(bei Appliances: Firmware-/Paketupdate des Herstellers).",
@@ -137,11 +165,26 @@ def _samba_eol(ctx: Ctx):
         v = samba_version(dc.get("os_version")) or samba_version(dc.get("os"))
         if v:
             found[(dc.get("sam") or "").rstrip("$") or dc.get("dns") or "?"] = v
+    # The rootDSE (vendorVersion) is live; operatingSystemVersion of the DC object may be stale after upgrades.
     meta = ctx.m.get("meta") or {}
     v = samba_version(meta.get("vendor"))
-    if v and not found:
-        host = (meta.get("dc_host") or "rootDSE").split(".", 1)[0]
-        found[host.upper() if host != "rootDSE" else host] = v
+    if v:
+        dh = (meta.get("dc_host") or "").strip().rstrip(".").lower()
+        host = None
+        for c in ctx.computers:
+            if dh and (c.get("is_dc") or c.get("is_rodc")) and dh in (
+                    (c.get("dns") or "").strip().rstrip(".").lower(), (c.get("sam") or "").rstrip("$").lower()):
+                host = (c.get("sam") or "").rstrip("$") or c.get("dns") or "?"
+                break
+        if host is None and not found:
+            if not dh:
+                host = "rootDSE"
+            elif _is_ip(dh):                                  # IP address – show as is
+                host = dh
+            else:
+                host = dh.split(".", 1)[0].upper()
+        if host is not None:
+            found[host] = v
     if not found:
         raise NotApplicable("na_samba_version")
     today = ctx.now.date()
@@ -180,11 +223,11 @@ def _samba_eol(ctx: Ctx):
       refs=[("Microsoft: CVE-2022-26923", "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2022-26923"),
             ("Oliver Lyak: Certifried", "https://research.ifcr.dk/certifried-active-directory-domain-privilege-escalation-cve-2022-26923-9e098fe298f4")])
 def _dns_mismatch(ctx: Ctx):
-    dc_dns = {(c.get("dns") or "").lower(): c for c in ctx.computers
+    dc_dns = {(c.get("dns") or "").strip().rstrip(".").lower(): c for c in ctx.computers
               if (c.get("is_dc") or c.get("is_rodc")) and c.get("dns")}
     items, critical = [], False
     for c in ctx.computers:
-        dns, sam = (c.get("dns") or "").strip().lower(), (c.get("sam") or "").lower()
+        dns, sam = (c.get("dns") or "").strip().rstrip(".").lower(), (c.get("sam") or "").lower()
         if not dns or not sam.endswith("$") or c.get("is_dc") or c.get("is_rodc"):
             continue
         name = sam[:-1]

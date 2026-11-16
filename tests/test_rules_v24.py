@@ -49,6 +49,11 @@ class Catalogue(unittest.TestCase):
             self.assertIn(rid, ids)
         self.assertEqual(len(RULES), 118)
 
+    def test_no_rule_crashes_on_demo(self):
+        from app.scanner import evaluate
+        results, _ = evaluate(copy.deepcopy(BASE))
+        self.assertEqual([r["rule_id"] for r in results if r["note"] == "na_error"], [])
+
     def test_platforms(self):
         self.assertEqual(rule("ANM-46").platforms, ("windows",))
         self.assertEqual(rule("ANM-47").platforms, ("samba",))
@@ -93,6 +98,21 @@ class CredentialGuard(unittest.TestCase):
         self.assertIsNotNone(run("ANM-46", m))
 
 
+    # --- findings of the independent review ---
+    def test_dc_only_gpo_disabling_cg_is_not_penalised(self):
+        m = regpol(copy.deepcopy(BASE), {CG + "lsacfgflags": 1})
+        ddcp = "{6AC1786C-016F-11D2-945F-00C04FB984F9}"     # Default Domain Controllers Policy, linked to the DC OU only
+        m = regpol(m, {CG + "lsacfgflags": 0}, guid=ddcp)
+        self.assertIsNone(run("ANM-46", m))
+
+    def test_sysvol_failure_without_links_is_not_checkable(self):
+        m = copy.deepcopy(BASE)
+        m["sysvol"]["status"] = "error"
+        m["gpo_links"] = {"domain": [], "dc_ou": [], "all": []}
+        with self.assertRaises(NotApplicable):
+            run("ANM-46", m)
+
+
 class SambaEOL(unittest.TestCase):
     def model(self, os_version: str | None = None, vendor: str = "") -> dict:
         m = copy.deepcopy(BASE)
@@ -131,6 +151,19 @@ class SambaEOL(unittest.TestCase):
         self.assertEqual(hit.items[0]["host"], "DC01")
         self.assertIn("2026-03-31", hit.items[0]["detail"])
 
+    def test_live_rootdse_beats_stale_computer_object(self):
+        m = self.model(vendor="Samba Team (https://www.samba.org) 4.23.2")
+        for c in m["computers"]:
+            if c.get("is_dc"):
+                c["os_version"] = "4.15.13-Ubuntu"
+        m["computers"] = [c for c in m["computers"] if not c.get("is_dc") or c["sam"] == "DC01$"]
+        self.assertIsNone(run("ANM-47", m))
+
+    def test_ip_as_dc_host(self):
+        m = self.model(vendor="Samba Team (https://www.samba.org) 4.21.4")
+        m["meta"]["dc_host"] = "10.0.10.5"
+        self.assertEqual(run("ANM-47", m).items[0]["host"], "10.0.10.5")
+
     def test_unknown_version_is_not_applicable(self):
         with self.assertRaises(NotApplicable):
             run("ANM-47", self.model(vendor="Samba Team (https://www.samba.org)"))
@@ -159,6 +192,11 @@ class DnsHostnameMismatch(unittest.TestCase):
         hit = run("ANM-48", m)
         self.assertEqual(hit.severity, "critical")
         self.assertIn({"account": "PC-0001$", "dns": "DC01.firma.local", "detail": "@v_dns_is_dc"}, hit.items)
+
+    def test_dc_name_with_trailing_dot_is_critical(self):
+        m = copy.deepcopy(BASE)
+        next(c for c in m["computers"] if c["sam"] == "PC-0001$")["dns"] = "dc01.firma.local."
+        self.assertEqual(run("ANM-48", m).severity, "critical")
 
     def test_netbios_truncation_and_empty(self):
         m = copy.deepcopy(BASE)
@@ -192,6 +230,14 @@ class ConstrainedDelegation(unittest.TestCase):
         self.assertEqual(hit.severity, "critical")
         hit = run("PRV-15", self.model(["cifs/FIRMA"]))
         self.assertEqual(hit.severity, "critical")
+
+    def test_trailing_dot_target(self):
+        self.assertEqual(run("PRV-15", self.model(["ldap/dc01.firma.local."])).severity, "critical")
+        self.assertEqual(run("PRV-15", self.model(["cifs/firma.local.:445"])).severity, "critical")
+
+    def test_krbtgt_and_dc_targets_both_listed(self):
+        hit = run("PRV-15", self.model(["krbtgt/FIRMA.LOCAL", "cifs/dc01.firma.local"]))
+        self.assertEqual(len(hit.items), 2)
 
     def test_member_server_without_protocol_transition(self):
         self.assertIsNone(run("PRV-15", self.model(["cifs/srv-file01.firma.local", "MSSQLSvc/srv-sql01.firma.local:1433"])))

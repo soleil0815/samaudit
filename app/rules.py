@@ -744,8 +744,8 @@ def _delegates_to_dc(ctx: Ctx, target: str) -> bool:
     parts = target.split("/")
     if len(parts) < 2:
         return False
-    host = parts[1].split(":", 1)[0].strip().lower()
-    dom = {(ctx.domain.get("fqdn") or "").lower(), (ctx.domain.get("netbios") or "").lower()} - {""}
+    host = parts[1].split(":", 1)[0].strip().rstrip(".").lower()
+    dom = {(ctx.domain.get("fqdn") or "").rstrip(".").lower(), (ctx.domain.get("netbios") or "").lower()} - {""}
     return host in ctx.dc_names or host in dom
 
 
@@ -770,17 +770,17 @@ def _constrained(ctx: Ctx):
             continue
         targets = a.get("delegate_to") or []
         # service/host[:port][/service name] – e.g. ldap/dc01.firma.local/firma.local
-        to_dc = [t for t in targets if _delegates_to_dc(ctx, t)]
-        pt = bool(a["uac"] & UAC_TRUSTED_TO_AUTH_FOR_DELEGATION)
         krbtgt = [t for t in targets if t.split("/", 1)[0].strip().lower() == "krbtgt"]
+        to_dc = [t for t in targets if t not in krbtgt and _delegates_to_dc(ctx, t)]
+        pt = bool(a["uac"] & UAC_TRUSTED_TO_AUTH_FOR_DELEGATION)
         if krbtgt:
             crit = True
             items.append({"account": a["sam"], "detail": "@v_deleg_krbtgt", "value": ", ".join(krbtgt)})
-        elif to_dc:
+        if to_dc:
             crit = True
             items.append({"account": a["sam"], "detail": "→ DC" + (" + Protocol Transition" if pt else ""),
                           "value": ", ".join(to_dc)})
-        elif pt and targets:
+        elif pt and targets and not krbtgt:
             items.append({"account": a["sam"], "detail": "Protocol Transition", "value": ", ".join(targets[:3])})
     if not items:
         return None
