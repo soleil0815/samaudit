@@ -325,3 +325,7 @@ def _gpo_anonymous(ctx: Ctx):
     except NotApplicable:
         pass
     return Hit(items, severity="high", points=15) if blank_on_dc else Hit(items)
+
+
+# Rule catalogue part 5 (since v2.4)
+from . import rules5  # noqa: E402,F401

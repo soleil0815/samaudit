@@ -39,7 +39,7 @@ class Catalogue(unittest.TestCase):
         ids = {canonical_id(r.id) for r in RULES}
         for rid in ("PRV-38", "PRV-39", "PRV-40", "PRV-41", "ANM-45"):
             self.assertIn(rid, ids)
-        self.assertEqual(len(RULES), 115)
+        self.assertGreaterEqual(len(RULES), 115)
 
 
 class ESC13(unittest.TestCase):

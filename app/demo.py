@@ -183,6 +183,7 @@ def build() -> dict:
         c["last_logon"] = ago(2)
     comp("PC-ALT01", "Windows XP Professional", last=1200, laps=False, uac=UAC_WORKSTATION_TRUST_ACCOUNT |
          UAC_PASSWD_NOTREQD)
+    comp("PC-0150", "Windows 11 Pro", dns=f"pc-0015-alt.{FQDN}")   # renamed by hand – DNS name no longer matches
 
     # --- groups -----------------------------------------------------------
     def gdn(name, ou="CN=Users"):

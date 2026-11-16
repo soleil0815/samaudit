@@ -739,13 +739,29 @@ def _unconstrained(ctx: Ctx):
     return Hit([{"account": a["sam"], "type": "@" + a["_kind"], "os": a.get("os", "")} for a in hits]) if hits else None
 
 
+def _delegates_to_dc(ctx: Ctx, target: str) -> bool:
+    """service/host[:port][/service name] – host is a DC or the domain name itself (resolves to all DCs)."""
+    parts = target.split("/")
+    if len(parts) < 2:
+        return False
+    host = parts[1].split(":", 1)[0].strip().lower()
+    dom = {(ctx.domain.get("fqdn") or "").lower(), (ctx.domain.get("netbios") or "").lower()} - {""}
+    return host in ctx.dc_names or host in dom
+
+
 @rule(id="P-ConstrainedDelegation", category="privileged", severity="high", points=15,
       title={"de": "Riskante eingeschränkte Delegierung", "en": "Risky constrained delegation"},
-      desc={"de": "Delegierung an Dienste auf Domänencontrollern (z. B. cifs/ldap) oder mit Protokollübergang erlaubt "
-                  "es, sich gegenüber diesen Diensten als beliebiger Benutzer – auch als Admin – auszugeben.",
-            "en": "Delegation to DC services or with protocol transition allows impersonating any user, including admins."},
-      fix={"de": "Delegierungsziele auf Domänencontrollern entfernen. Protokollübergang nur, wo zwingend nötig.",
-           "en": "Remove delegation targets on DCs; use protocol transition only where required."},
+      desc={"de": "Delegierung an Dienste auf Domänencontrollern (z. B. cifs/ldap, auch über den Domänennamen) oder mit "
+                  "Protokollübergang erlaubt es, sich gegenüber diesen Diensten als beliebiger Benutzer – auch als "
+                  "Admin – auszugeben. Delegierung an krbtgt ist eine bekannte Hintertür: Das Konto kann sich damit "
+                  "Tickets für beliebige Benutzer und Dienste beschaffen.",
+            "en": "Delegation to DC services (e.g. cifs/ldap, also via the domain name) or with protocol transition "
+                  "allows impersonating any user, including admins. Delegation to krbtgt is a known backdoor: the "
+                  "account can obtain tickets for any user and service."},
+      fix={"de": "Delegierungsziele auf Domänencontrollern und krbtgt entfernen (krbtgt: als Sicherheitsvorfall "
+                 "behandeln). Protokollübergang nur, wo zwingend nötig.",
+           "en": "Remove delegation targets on DCs and krbtgt (krbtgt: treat as a security incident); use protocol "
+                 "transition only where required."},
       columns=["account", "detail", "value"])
 def _constrained(ctx: Ctx):
     items, crit = [], False
@@ -754,9 +770,13 @@ def _constrained(ctx: Ctx):
             continue
         targets = a.get("delegate_to") or []
         # service/host[:port][/service name] – e.g. ldap/dc01.firma.local/firma.local
-        to_dc = [t for t in targets if len(t.split("/")) > 1 and t.split("/")[1].split(":", 1)[0].lower() in ctx.dc_names]
+        to_dc = [t for t in targets if _delegates_to_dc(ctx, t)]
         pt = bool(a["uac"] & UAC_TRUSTED_TO_AUTH_FOR_DELEGATION)
-        if to_dc:
+        krbtgt = [t for t in targets if t.split("/", 1)[0].strip().lower() == "krbtgt"]
+        if krbtgt:
+            crit = True
+            items.append({"account": a["sam"], "detail": "@v_deleg_krbtgt", "value": ", ".join(krbtgt)})
+        elif to_dc:
             crit = True
             items.append({"account": a["sam"], "detail": "→ DC" + (" + Protocol Transition" if pt else ""),
                           "value": ", ".join(to_dc)})

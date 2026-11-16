@@ -1,5 +1,21 @@
 [
   {
+    "version": "2.4.0",
+    "date": "2026-11-16",
+    "items": [
+      {
+        "type": "security",
+        "de": "Drei neue Prüfungen (jetzt 118): Credential Guard per Gruppenrichtlinie (ANM-46, nur Hinweis), vom Samba-Team nicht mehr gepflegte Samba-Versionsreihen der Domänencontroller (ANM-47, Hinweis ohne Punkte) und Computerkonten, deren DNS-Name nicht zum Kontonamen passt – Spur des Angriffs „Certifried“ (ANM-48). Die Prüfung der eingeschränkten Delegierung erkennt jetzt auch Delegierung an krbtgt und an Dienste über den Domänennamen.",
+        "en": "Three new checks (now 118): Credential Guard via Group Policy (ANM-46, hint only), Samba release series of the domain controllers no longer maintained by the Samba team (ANM-47, hint without points) and computer accounts whose DNS name does not match the account name – a trace of the 'Certifried' attack (ANM-48). The constrained delegation check now also detects delegation to krbtgt and to services via the domain name."
+      },
+      {
+        "type": "notice",
+        "de": "November 2026: Microsoft hat kritische Lücken unter anderem in LDAP und Kerberos geschlossen; eine ausgenutzte Outlook-Lücke verrät NTLM-Hashes. Alle Domänencontroller zeitnah patchen – den Patchstand kann SAMAUDIT nicht prüfen. Außerdem beginnt mit KB5135557 die Umstellung auf NTLM-Signierung: ab Mai 2027 verlangen Server sie standardmäßig. Jetzt die Überwachungsereignisse auswerten, um Geräte ohne Signierung zu finden.",
+        "en": "November 2026: Microsoft fixed critical flaws in LDAP and Kerberos, among others; an exploited Outlook flaw leaks NTLM hashes. Patch all domain controllers promptly – SAMAUDIT cannot check patch levels. KB5135557 also starts the move to NTLM signing: from May 2027 servers require it by default. Review the audit events now to find devices without signing."
+      }
+    ]
+  },
+  {
     "version": "2.3.1",
     "date": "2026-11-15",
     "items": [

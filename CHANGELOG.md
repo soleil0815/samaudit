@@ -4,6 +4,13 @@
 
 Program versions. Monthly security updates on patch day, the second Tuesday (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.4.0 – three new checks (now 118)
+
+- **ANM-46 Credential Guard (A-CredentialGuard):** hint when no linked GPO enables Credential Guard (LsaCfgFlags), weighted higher when a GPO explicitly disables it or virtualization-based security. Only a hint, because Credential Guard is on by default on Windows 11 22H2+/Server 2025 and may be set via Intune. Windows domains only.
+- **ANM-47 Samba series past end of life (A-SambaEOL):** hint without points when the Samba release series of the DCs (rootDSE vendorVersion or DC computer account) is no longer maintained by the Samba team. Vendors such as Synology or Ubuntu often backport fixes – check with the vendor. Samba domains only.
+- **ANM-48 DNS host name does not match the computer account (A-DnsHostnameMismatch):** traces of "Certifried" (CVE-2022-26923); critical when a normal computer carries a domain controller's DNS name.
+- **PRV constrained delegation (P-ConstrainedDelegation):** now also detects delegation to krbtgt (backdoor) and to services addressed via the domain name (e.g. `ldap/firma.local`), both critical.
+
 ## 2.3.1 – tables
 
 - Long values without spaces (user input in the activity log, DNs) wrap instead of widening the table; time and rule ID stay on one line; column headers may wrap (hyphenated); report-list actions wrap when space is short.
