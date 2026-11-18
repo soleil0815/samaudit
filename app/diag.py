@@ -129,6 +129,8 @@ RESERVED = {
     "low", "medium", "high", "critical", "info", "true", "false", "none", "null", "inbound", "outbound",
     "bidirectional", "trust", "trusts", "domain", "forest", "external", "policies", "sysvol", "netlogon",
     "configuration", "schema", "localhost", "example", "admin", "test", "user",
+    # the program's own name (host names like samaudit.firma.local would otherwise mask it)
+    "samaudit",
     # words of operating system names (shown as they are)
     "server", "standard", "datacenter", "enterprise", "professional", "pro", "home", "education", "workstation",
     "edition", "essentials", "foundation", "storage", "embedded", "ltsc", "iot",
