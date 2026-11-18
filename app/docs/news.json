@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.4.1",
+    "date": "2026-11-18",
+    "items": [
+      {
+        "type": "fix",
+        "de": "Diagnosepaket: Heißt der Server selbst „samaudit…“ (PUBLIC_HOSTNAME), stand als Programmname ein Platzhalter statt „SAMAUDIT“. Der Programmname bleibt jetzt erhalten; der Servername wird weiterhin ersetzt.",
+        "en": "Diagnostics package: if the server itself is called “samaudit…” (PUBLIC_HOSTNAME), the program name showed a placeholder instead of “SAMAUDIT”. The program name is now kept; the server name is still replaced."
+      }
+    ]
+  },
+  {
     "version": "2.4.0",
     "date": "2026-11-16",
     "items": [

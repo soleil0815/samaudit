@@ -131,6 +131,11 @@ class Pseudonyms(unittest.TestCase):
         self.assertIn("sid-1-512", t)
         self.assertIn("127.0.0.1", t)
 
+    def test_program_name_survives_host_named_after_it(self):
+        p = diag.Pseudo()
+        p.add("samaudit.firma.local", "host")
+        self.assertEqual(p.text("SAMAUDIT 2.4.1 on samaudit.firma.local"), "SAMAUDIT 2.4.1 on host-1")
+
     def test_well_known_names_stay(self):
         p = diag.Pseudo()
         self.assertEqual(p.add("Domain Admins", "group"), "Domain Admins")
@@ -198,7 +203,7 @@ class Package(_Configured):
     def test_cli(self):
         from app.config import settings
         env = dict(os.environ, DATA_DIR=settings.data_dir, DOMAIN_FQDN="firma.local", DOMAIN_NETBIOS="FIRMA", DC_HOSTS="dc1.firma.local",
-                   DEMO_MODE="false", TLS_KEY_PASSWORD="Geheim-Kennwort-123", PUBLIC_HOSTNAME="audit.firma.local")
+                   DEMO_MODE="false", TLS_KEY_PASSWORD="Geheim-Kennwort-123", PUBLIC_HOSTNAME="samaudit.firma.local")
         r = subprocess.run([sys.executable, "-m", "app.diag", "--no-probe", "--log", "-"], cwd=ROOT, env=env,
                            input="INFO samaudit: start for firma.local\nWARNING Section x failed on dc7 (10.0.10.10)\n",
                            capture_output=True, text=True, timeout=120)
@@ -207,7 +212,8 @@ class Package(_Configured):
         self.assertEqual(pkg["source"], "cli")
         self.assertEqual(len(pkg["server_log"]), 2)
         self.assertNotIn("Geheim-Kennwort-123", r.stdout)
-        self.assertNotIn("audit.firma", r.stdout)
+        self.assertNotIn("samaudit.firma", r.stdout.lower())
+        self.assertEqual(pkg["program"]["name"], "SAMAUDIT")
         self.assertNotIn("TLS_KEY_PASSWORD", r.stdout)
         for real in REAL:
             self.assertNotIn(real.lower(), r.stdout.lower())

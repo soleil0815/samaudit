@@ -4,6 +4,10 @@
 
 Program versions. Monthly security updates on patch day, the second Tuesday (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.4.1 – diagnostics package
+
+- The program name “SAMAUDIT” is no longer replaced by a placeholder when the server host name starts with “samaudit” (PUBLIC_HOSTNAME); the host name itself is still pseudonymised.
+
 ## 2.4.0 – three new checks (now 118)
 
 - **ANM-46 Credential Guard (A-CredentialGuard):** hint when no linked GPO enables Credential Guard (LsaCfgFlags), weighted higher when a GPO explicitly disables it or virtualization-based security. Only a hint, because Credential Guard is on by default on Windows 11 22H2+/Server 2025 and may be set via Intune. Windows domains only.
