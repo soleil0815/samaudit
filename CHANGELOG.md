@@ -4,6 +4,12 @@
 
 Program versions. Monthly security updates on patch day, the second Tuesday (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.5.0 – update hint
+
+- **Is there a newer version?** For installations that do not update automatically: if the running version is older than 60 days (`UPDATE_HINT_DAYS`, `0` = off), the overview shows "Check for updates" with a link to the releases. No internet needed – the release date ships with the program.
+- **Optional online check** (`UPDATE_CHECK=true`, default off): once a day the server asks the GitHub API for the latest version number (security updates `-s<n>` included) and shows "Version x.y.z available". Only the request itself is sent; the egress guard then additionally allows exactly `api.github.com` on port 443. Failures stay silent. SAMAUDIT never updates itself.
+- Both hints can be dismissed (age hint for 30 days, new-version hint until the next version). The privacy page mentions the check when it is on; the diagnostics package has a new section `update`.
+
 ## 2.4.1 – diagnostics package
 
 - The program name “SAMAUDIT” is no longer replaced by a placeholder when the server host name starts with “samaudit” (PUBLIC_HOSTNAME); the host name itself is still pseudonymised.

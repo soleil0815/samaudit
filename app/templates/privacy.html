@@ -30,6 +30,7 @@
   </ul>
   <h3>Empfänger und Übermittlung</h3>
   <p>Keine. Alle Daten bleiben auf diesem Server. SAMAUDIT lädt keine Inhalte aus dem Internet nach, nutzt keine Analyse- oder Tracking-Dienste und darf ausgehend nur die eigenen Domänencontroller erreichen. Keine Übermittlung in Drittländer.</p>
+  {% if settings.update_check %}<p>Ausnahme Update-Prüfung (vom Betreiber eingeschaltet): Einmal am Tag fragt der Server bei GitHub (USA) nach der neuesten Versionsnummer von SAMAUDIT. Dabei wird nichts außer der Anfrage selbst übertragen; GitHub sieht die IP-Adresse des Servers bzw. seines Internetanschlusses, aber keine Daten aus dem Active Directory oder über Personen.</p>{% endif %}
   <h3>Cookies und Browser-Speicher</h3>
   <p>Nur technisch notwendige Cookies: Sitzung, Schutz vor Formular-Missbrauch (CSRF), gewählte Sprache und die zuletzt gesehene Version der Neuigkeiten (nur die Versionsnummer). Die gewählte Darstellung (hell/dunkel) wird nur im eigenen Browser gespeichert. Es gibt keine Werbe- oder Statistik-Cookies, daher ist kein Einwilligungsbanner nötig.</p>
   <h3>Zugriff</h3>
@@ -55,6 +56,7 @@
   </ul>
   <h3>Recipients and transfers</h3>
   <p>None. All data stays on this server. SAMAUDIT loads nothing from the internet, uses no analytics or tracking and may only connect to the domain controllers. No transfers to third countries.</p>
+  {% if settings.update_check %}<p>Exception update check (switched on by the operator): once a day the server asks GitHub (USA) for the latest SAMAUDIT version number. Nothing is transferred apart from the request itself; GitHub sees the IP address of the server or its internet connection, but no data from Active Directory or about people.</p>{% endif %}
   <h3>Cookies and browser storage</h3>
   <p>Only technically necessary cookies: session, CSRF protection, language and the last version of “What’s new” you saw (version number only). The chosen theme is stored in your browser only. No advertising or statistics cookies, so no consent banner is required.</p>
   <h3>Access</h3>

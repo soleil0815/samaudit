@@ -8,12 +8,13 @@
 |---|---|
 | **Keine Datenübermittlung nach außen** | Keine externen Schriften, Skripte, CDNs, Analyse- oder Tracking-Dienste; Content-Security-Policy erlaubt nur eigene Inhalte. |
 | **Ausgehende Verbindungen** | Programminterner Wächter (`EGRESS_GUARD`): SAMAUDIT verbindet sich nur zu den DCs, jede andere ausgehende Verbindung wird abgewiesen und protokolliert. Optional zusätzlich eigene Firewall-Regeln für das Docker-Netz `samaudit-net`. |
+| **Update-Hinweis** | Standardmäßig ohne Internet: Ist die laufende Version älter als `UPDATE_HINT_DAYS` (Standard 60 Tage), zeigt die Übersicht einen Hinweis; das Erscheinungsdatum kommt mit dem Programm. Die **Online-Prüfung** (`UPDATE_CHECK=true`) ist **aus**. Schaltet der Betreiber sie ein, fragt der Server einmal am Tag `api.github.com` (GitHub, USA) nach der neuesten Versionsnummer; übertragen wird nur die Anfrage selbst, GitHub sieht die IP-Adresse des Anschlusses. Der Wächter lässt dann genau dieses Ziel auf Port 443 zu. Die Seite `/privacy` weist dann darauf hin. |
 | **Datenminimierung** | Es werden nur sicherheitsrelevante Attribute gelesen. **Keine** Passwörter, Passwort-Hashes, LAPS-Passwörter, E-Mail-Inhalte oder Telefonnummern. Gespeichert werden in Befunden nur Kontonamen, Zeitpunkte und technische Merkmale. |
 | **Speicherbegrenzung** | Automatische Löschung: Berichte nach `REPORT_RETENTION_DAYS` (Standard 365 Tage), Protokoll nach `AUDIT_RETENTION_DAYS` (Standard 90 Tage). Gelöschte Daten werden auch physisch aus der Datenbankdatei entfernt (VACUUM). Container-Logs sind auf 3 × 5 MB begrenzt. |
 | **Zugriffskontrolle** | Nur Mitglieder der Prüfer-Gruppe; Admin-Konten werden abgewiesen. Sperre nach Fehlversuchen, Sitzungs-Timeout, CSRF-Schutz. |
 | **Vertraulichkeit** | HTTPS; Passwort der Prüfer nur verschlüsselt im Arbeitsspeicher; Datenordner nur für den Programmbenutzer lesbar (`chmod 700`); Container ohne Root-Rechte, schreibgeschützt. |
 | **Nachvollziehbarkeit** | Protokoll aller Anmeldungen (auch abgewiesener), Scans, Exporte, Löschungen und blockierten Verbindungen. |
-| **Cookies** | Nur technisch notwendige (Sitzung, CSRF, Sprache, zuletzt gesehene Version der Neuigkeiten) – kein Einwilligungsbanner erforderlich (§ 25 Abs. 2 TDDDG). |
+| **Cookies** | Nur technisch notwendige (Sitzung, CSRF, Sprache, zuletzt gesehene Version der Neuigkeiten, ausgeblendeter Update-Hinweis) – kein Einwilligungsbanner erforderlich (§ 25 Abs. 2 TDDDG). |
 | **Transparenz** | Öffentliche Seite `/privacy` („Datenschutz“) mit Zweck, Datenarten, Speicherdauer und Rechten; Kontakt über `PRIVACY_CONTACT`. |
 | **Diagnosepaket** | Nur auf Knopfdruck eines Prüfers (Protokoll) oder per Befehl auf dem Server; wird nirgends hin gesendet. Namen, Adressen und Kennungen sind durch Platzhalter ersetzt, Inhalte von Befunden, Kennwörter und Zertifikate nie enthalten; eine Schlussprüfung verhindert das Paket, wenn ein bekannter echter Name stehen bliebe. Warnungen dafür liegen nur im Arbeitsspeicher. |
 | **Löschung auf Anforderung** | Einzelne Berichte unter „Berichte“ löschbar; vollständige Löschung durch Entfernen des Ordners `data`. |
@@ -31,7 +32,7 @@
 | Datenkategorien | Kontoname, Anzeigename (nur bei Prüfern), Gruppenmitgliedschaften, Zeitpunkt letzte Anmeldung/Passwortänderung, Konto-Einstellungen, Computername/Betriebssystem; bei Prüfern zusätzlich IP-Adresse und Zeitpunkt der Nutzung |
 | Besondere Kategorien (Art. 9) | keine |
 | Empfänger | nur Mitglieder der Prüfer-Gruppe; keine externen Empfänger |
-| Drittlandübermittlung | keine |
+| Drittlandübermittlung | keine (bei eingeschalteter Update-Prüfung `UPDATE_CHECK`: nur die IP-Adresse des Servers an GitHub, USA, ohne personenbezogene Daten aus dem AD) |
 | Löschfristen | Berichte *365* Tage, Protokoll *90* Tage, Sitzungen max. 12 Stunden |
 | Technische und organisatorische Maßnahmen | siehe Abschnitt 1 und 4 |
 

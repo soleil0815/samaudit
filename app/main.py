@@ -42,7 +42,8 @@ templates = Jinja2Templates(directory=os.path.join(BASE, "templates"))
 templates.env.globals.update(t=t, tv=tv, settings=settings, CATEGORIES=CATEGORIES, SEVERITIES=SEVERITIES,
                              level_class=level_class, level_key=level_key, seal=seal,
                              login_dial=login_dial, APP_NAME=APP_NAME, VERSION=VERSION,
-                             IMAGE_VERSION=IMAGE_VERSION, SOURCE_URL=SOURCE_URL, DONATE_URL=DONATE_URL)
+                             IMAGE_VERSION=IMAGE_VERSION, SOURCE_URL=SOURCE_URL, DONATE_URL=DONATE_URL,
+                             UPDATE_RELEASES_URL=f"{SOURCE_URL}/releases")
 
 
 def effective_domain_type() -> str | None:
@@ -61,7 +62,12 @@ def fmt_dt(v: str | None, lang: str = "de") -> str:
     return d.strftime("%d.%m.%Y %H:%M") if lang == "de" else d.strftime("%Y-%m-%d %H:%M")
 
 
+def fmt_date(v, lang: str = "de") -> str:
+    return v.strftime("%d.%m.%Y") if lang == "de" else v.isoformat()
+
+
 templates.env.filters["dt"] = fmt_dt
+templates.env.filters["d_only"] = fmt_date
 templates.env.globals["domain_type"] = effective_domain_type
 
 
@@ -116,10 +122,11 @@ async def form_of(request: Request) -> dict[str, str]:
 
 def render(request: Request, name: str, ctx: dict, status: int = 200) -> Response:
     lang = lang_of(request)
-    from . import news
+    from . import news, updatecheck
     base = {"request": request, "lang": lang, "sess": session_of(request), "path": request.url.path,
             "news_unseen": news.unseen(request.cookies.get(news.COOKIE)), "news_headline": news.headline,
-            "news_text": news.text, "compose_msg": datastate.compose_message(lang)}
+            "news_text": news.text, "compose_msg": datastate.compose_message(lang),
+            "update_notice": updatecheck.notice(request.cookies.get(updatecheck.COOKIE)) if request.url.path == "/" else None}
     base.update(ctx)
     return templates.TemplateResponse(request, name, base, status_code=status)
 
@@ -490,6 +497,19 @@ def _mark_news_seen(resp: Response) -> Response:
     return resp
 
 
+async def update_seen(request: Request):
+    """Dismiss the update hint (cookie with the hint's key; comes back for the next newer version)."""
+    from . import updatecheck
+    if not session_of(request):
+        return to_login(request)
+    resp = RedirectResponse(safe_next(request.query_params.get("next", "/")), status_code=303)
+    hint = updatecheck.notice(None)
+    if hint:
+        resp.set_cookie(updatecheck.COOKIE, hint["key"], max_age=(365 if hint["kind"] == "new" else 30) * 86400,
+                        samesite="lax", secure=settings.cookie_secure, httponly=True)
+    return resp
+
+
 async def news_page(request: Request):
     from . import news
     resp = render(request, "news.html", {"entries": news.ENTRIES, "news_text": news.text,
@@ -597,9 +617,12 @@ def _purge():
 
 
 async def _janitor():
+    from . import updatecheck
     last_purge = 0.0
     while True:
         auth.cleanup()
+        if updatecheck.due():
+            await run_in_threadpool(updatecheck.check_now)
         if time.time() - last_purge > 6 * 3600:
             last_purge = time.time()
             try:
@@ -645,6 +668,7 @@ routes = [
     Route("/help", help_page),
     Route("/news", news_page),
     Route("/news/seen", news_seen),
+    Route("/update/seen", update_seen),
     Route("/connection/reset", pin_reset, methods=["POST"]),
     Route("/connection/cert", cert_upload, methods=["POST"]),
     Route("/connection/cert/remove", cert_remove, methods=["POST"]),

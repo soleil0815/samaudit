@@ -88,6 +88,8 @@ Alle Anmeldungen (auch abgewiesene), Scans, PDF-Exporte, Löschungen, Zertifikat
 
 Links unten unter **Neuigkeiten** steht, was sich mit jeder Version geändert hat: neue **Funktionen**, **Sicherheit**sverbesserungen, **Fehlerbehebungen** und **Hinweise** auf neue Risiken im Active Directory (z. B. Abschaltungen durch Microsoft). Gibt es Neues, das Sie noch nicht gesehen haben, zeigt ein kleiner Punkt daneben das an (orange bei Sicherheitsthemen), und auf der Übersicht erscheint einmalig eine schmale Zeile. Mit **×** oder einem Besuch der Seite verschwindet beides. Die Neuigkeiten kommen mit dem Update mit – SAMAUDIT lädt dafür nichts aus dem Internet. Gemerkt wird nur in einem Cookie Ihres Browsers, welche Version Sie zuletzt gesehen haben.
 
+**Neuere Version?** Ist die laufende Version älter als 60 Tage, steht auf der Übersicht „Update prüfen“ mit einem Link zu den Versionen auf GitHub. Hat Ihr Betreiber die Online-Prüfung eingeschaltet, steht dort stattdessen „Version x.y.z verfügbar“, sobald es eine neuere gibt. Mit **×** blenden Sie den Hinweis aus (den Altershinweis für 30 Tage, den Hinweis auf eine neue Version bis zur nächsten). Aktualisieren muss der Betreiber – SAMAUDIT aktualisiert sich nie selbst.
+
 ### Sprache, Darstellung, Datenschutz
 
 Links unten: **DE / EN** wechselt die Sprache, **System / Hell / Dunkel** die Darstellung (Standard: wie das Betriebssystem eingestellt ist; die Wahl merkt sich der Browser). **Datenschutz** zeigt, welche Daten SAMAUDIT verarbeitet, wie lange sie gespeichert werden und wer zuständig ist – diese Seite ist auch ohne Anmeldung erreichbar.
@@ -161,11 +163,15 @@ Alle Einstellungen stehen in der Datei `.env` (Vorlage mit Erklärungen: `.env.e
 | `REPORT_RETENTION_DAYS` | `365` | Berichte automatisch löschen nach … Tagen (0 = nie) |
 | `AUDIT_RETENTION_DAYS` | `90` | Protokoll automatisch löschen nach … Tagen (0 = nie) |
 | `PRIVACY_CONTACT` | – | Ansprechpartner auf der Datenschutzseite |
+| `UPDATE_HINT_DAYS` | `60` | Hinweis „Update prüfen“, wenn die Version älter ist (ohne Internet; 0 = aus) |
+| `UPDATE_CHECK` | `false` | einmal täglich bei GitHub nach einer neueren Version fragen |
 | `DEFAULT_LANG` | `de` | Standardsprache |
 
 Die vollständige Liste steht in der README.
 
 ### Update
+
+**Woher weiß ich, dass es ein Update gibt?** Ohne Container-Verwaltung zeigt die Übersicht nach 60 Tagen „Update prüfen“ (`UPDATE_HINT_DAYS`). Mit `UPDATE_CHECK=true` in der `.env` fragt SAMAUDIT einmal am Tag bei GitHub nach der neuesten Versionsnummer und meldet „Version x.y.z verfügbar“ – auch für Sicherheitsupdates (`-s<n>`). Dafür braucht der Server Internetzugang auf Port 443 zu `api.github.com`; mehr unter *Ausgehende Verbindungen*.
 
 **Mit einer Container-Verwaltung (empfohlen):** Dockhand, Watchtower, Tugtainer o. Ä. halten den Container `samaudit` aktuell. Empfehlung: die Update-Zeit **nachts** legen – ein Neustart bricht einen gerade laufenden Scan ab.
 
@@ -222,6 +228,8 @@ Zusätzlich wird das veröffentlichte Image täglich gescannt, und jede Woche wi
 
 SAMAUDIT selbst verbindet sich nur zu den Domänencontrollern (LDAP, LDAPS, Global Catalog, SMB). Jeder andere Verbindungsversuch wird abgewiesen und im **Protokoll** vermerkt (`EGRESS_GUARD`, Standard an). Eine zusätzliche Abschottung auf Netzwerkebene regeln Sie bei Bedarf mit Ihrer eigenen Firewall (Docker-Netz `samaudit-net`, Bridge `br-samaudit`).
 
+Einzige Ausnahme, und nur wenn Sie sie einschalten: die Update-Prüfung (`UPDATE_CHECK=true`). Dann lässt der Wächter zusätzlich genau `api.github.com` auf Port 443 zu. Übertragen wird nur die Anfrage nach der neuesten Version – keine Domäne, keine Namen; GitHub sieht die IP-Adresse Ihres Anschlusses. Proxys aus der Umgebung werden nicht verwendet. Scheitert die Prüfung, bleibt das ohne Meldung in der Oberfläche; Zeitpunkt und Ergebnis der letzten Prüfung stehen im Diagnosepaket (Abschnitt `update`).
+
 ### Daten, Sicherung und Wiederherstellung
 
 Alles, was SAMAUDIT speichert, liegt im Ordner `data/`: die Datenbank `samaudit.db` (Berichte, Protokoll, gemerkte DC-Zertifikate), unter `backups/` die automatischen Sicherungen vor jedem Versionswechsel und unter `tls/` die Zertifikate der Weboberfläche.
@@ -238,7 +246,7 @@ Die Datenbank vor dem Zurückspielen bleibt als `samaudit-ersetzt-<Zeit>.db` erh
 
 ### Datenschutz
 
-SAMAUDIT überträgt keine Daten an Dritte, lädt nichts aus dem Internet und löscht Berichte und Protokoll automatisch. Für Ihre Dokumentation (Verzeichnis von Verarbeitungstätigkeiten, Abstimmung mit Datenschutzbeauftragten und Betriebsrat) siehe `DATENSCHUTZ.md`.
+SAMAUDIT überträgt keine Daten an Dritte, lädt nichts aus dem Internet (die einschaltbare Update-Prüfung fragt nur eine Versionsnummer ab) und löscht Berichte und Protokoll automatisch. Für Ihre Dokumentation (Verzeichnis von Verarbeitungstätigkeiten, Abstimmung mit Datenschutzbeauftragten und Betriebsrat) siehe `DATENSCHUTZ.md`.
 
 ### Fehlersuche
 

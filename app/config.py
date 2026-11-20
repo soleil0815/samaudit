@@ -113,6 +113,11 @@ class Settings:
         self.egress_guard = _bool("EGRESS_GUARD", True)
         # additional targets (IP, network or name), e.g. further DCs at other sites
         self.egress_allow = _list("EGRESS_ALLOW", "")
+        # Online update check: once a day ask GitHub for the latest version number (default off –
+        # then SAMAUDIT only talks to the DCs). The guard then also allows api.github.com:443.
+        self.update_check = _bool("UPDATE_CHECK", False)
+        # Hint on the overview when this version is older than x days (no network; 0 = off)
+        self.update_hint_days = max(0, _int("UPDATE_HINT_DAYS", 60))
         # Retention periods (days, 0 = never delete automatically)
         self.report_retention_days = _int("REPORT_RETENTION_DAYS", 365)
         self.audit_retention_days = _int("AUDIT_RETENTION_DAYS", 90)

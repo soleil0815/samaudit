@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.5.0",
+    "date": "2026-11-20",
+    "items": [
+      {
+        "type": "feature",
+        "de": "Update-Hinweis: Ist diese Version älter als 60 Tage, schlägt die Übersicht vor, nach einer neueren zu sehen – ohne Internet. Wer möchte, schaltet mit UPDATE_CHECK=true eine tägliche Prüfung bei GitHub ein; dann steht dort „Version x.y.z verfügbar“. Standardmäßig bleibt SAMAUDIT bei den Domänencontrollern.",
+        "en": "Update hint: if this version is older than 60 days, the overview suggests checking for a newer one – without internet. If you like, switch on a daily check with GitHub using UPDATE_CHECK=true; it then shows “Version x.y.z available”. By default SAMAUDIT still only talks to the domain controllers."
+      }
+    ]
+  },
+  {
     "version": "2.4.1",
     "date": "2026-11-18",
     "items": [

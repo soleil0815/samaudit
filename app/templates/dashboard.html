@@ -23,6 +23,14 @@
   <span class="news-strip-text">{{ compose_msg }}</span>
 </div>
 {% endif %}
+{% if update_notice %}{% set un = update_notice %}
+<div class="news-strip upd" role="note">
+  <span class="news-strip-tag">{{ t('upd_tag_new', lang, v=un.version) if un.kind == 'new' else t('upd_tag_age', lang) }}</span>
+  <span class="news-strip-text">{% if un.kind == 'new' %}{{ t('upd_new', lang, v=un.version, cur=IMAGE_VERSION) }}{% else %}{{ t('upd_age', lang, v=un.version, d=un.date|d_only(lang), n=un.days) }}{% endif %}</span>
+  <a href="{{ UPDATE_RELEASES_URL }}" target="_blank" rel="noopener noreferrer">{{ t('upd_more', lang) }}</a>
+  <a class="news-strip-x" href="/update/seen?next=/" title="{{ t('news_dismiss', lang) }}" aria-label="{{ t('news_dismiss', lang) }}">×</a>
+</div>
+{% endif %}
 {% set nh = news_headline(news_unseen) %}{% if nh %}
 <div class="news-strip{{ ' sec' if nh.security }}" role="note">
   <span class="news-strip-tag">{{ t('news_new_in', lang, v=nh.version) }}</span>

@@ -35,7 +35,7 @@ import traceback
 from datetime import datetime, timezone
 from typing import Any
 
-DIAG_FORMAT = 1          # increase when the structure of the package changes
+DIAG_FORMAT = 2          # increase when the structure of the package changes
 MAX_SCANS = 5
 MAX_EVENTS = 200
 MAX_LOG_LINES = 300
@@ -55,7 +55,7 @@ SETTINGS_POLICY: dict[str, str] = {
     "data_dir": "omit", "db_path": "omit",
     "inactive_days": "value", "admin_inactive_days": "value", "krbtgt_max_days": "value",
     "smb_checks": "value", "smb_timeout": "value",
-    "egress_guard": "value", "egress_allow": "count",
+    "egress_guard": "value", "egress_allow": "count", "update_check": "value", "update_hint_days": "value",
     "report_retention_days": "value", "audit_retention_days": "value", "privacy_contact": "bool",
     "default_lang": "value", "org_name": "bool", "tz": "value",
     "demo_mode": "value",
@@ -497,6 +497,11 @@ def _runtime_part(settings) -> dict:
     return out
 
 
+def _update_part() -> dict:
+    from . import updatecheck
+    return updatecheck.diag_part()
+
+
 def _activity_part(p: Pseudo) -> dict:
     from . import db
     with db.conn() as c:
@@ -614,6 +619,7 @@ def build(source: str = "web", probe: bool = True, log_lines: list[str] | None =
         "settings": _settings_part(settings),
         "environment": _env_part(p),
         "runtime": _runtime_part(settings),
+        "update": _update_part(),
         "web_certificate": _web_cert_part(),
         "connection": _connection_part(p, settings, probe),
         "domain": {"detected_type": kv.get("domain_type"), "vendor": kv.get("domain_vendor"),
