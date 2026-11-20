@@ -150,11 +150,21 @@ SAMAUDIT prüft vor dem Übernehmen, ob Zertifikat und Schlüssel zusammenpassen
 
 ## Ausgehende Verbindungen
 
-SAMAUDIT verbindet sich nur zu den Domänencontrollern. Die programminterne Sperre (`EGRESS_GUARD=true`, Standard) lässt nur Verbindungen zu den DC-Adressen auf den LDAP-/SMB-Ports zu; jeder andere Versuch wird abgewiesen und im Protokoll als „Ausgehende Verbindung blockiert“ vermerkt. Weitere Ziele bei Bedarf mit `EGRESS_ALLOW` (IP, Netz oder Name, durch `;` getrennt). Wer den Container zusätzlich auf Netzwerkebene abschotten möchte, regelt das mit der eigenen Firewall (Docker-Netz `samaudit-net`, Bridge `br-samaudit`).
+SAMAUDIT verbindet sich nur zu den Domänencontrollern. Die programminterne Sperre (`EGRESS_GUARD=true`, Standard) lässt nur Verbindungen zu den DC-Adressen auf den LDAP-/SMB-Ports zu; jeder andere Versuch wird abgewiesen und im Protokoll als „Ausgehende Verbindung blockiert“ vermerkt. Weitere Ziele bei Bedarf mit `EGRESS_ALLOW` (IP, Netz oder Name, durch `;` getrennt). Wer den Container zusätzlich auf Netzwerkebene abschotten möchte, regelt das mit der eigenen Firewall (Docker-Netz `samaudit-net`, Bridge `br-samaudit`). Einzige Ausnahme ist die Update-Prüfung, die Sie selbst einschalten müssen (nächster Abschnitt).
+
+## Gibt es eine neuere Version?
+
+Für Installationen ohne automatische Updates (Dockhand, Watchtower): Ist die laufende Version älter als 60 Tage (`UPDATE_HINT_DAYS`, `0` = aus), zeigt die Übersicht eine schmale Zeile mit Link zu den Versionen auf GitHub. Das funktioniert ohne Internet – das Erscheinungsdatum kommt mit dem Programm.
+
+Wer SAMAUDIT wirklich nachsehen lassen möchte, setzt `UPDATE_CHECK=true` (Standard `false`). Dann fragt der Server einmal am Tag bei der GitHub-API nach der Nummer der neuesten Version und zeigt auf der Übersicht „Version x.y.z verfügbar“.
+
+![Übersicht mit dem Hinweis „Version 2.6.0 verfügbar“ und Link zu den Versionen auf GitHub](docs/images/de-update.webp)
+
+Übertragen wird nur die Anfrage selbst – keine Domäne, keine Namen, keine Statistik; GitHub sieht die IP-Adresse des Servers. Der Wächter lässt dafür zusätzlich genau `api.github.com` auf Port 443 zu; Proxys aus der Umgebung werden nicht verwendet. Schlägt die Prüfung fehl (kein Internet), bleibt sie still; wann sie zuletzt lief, steht im Diagnosepaket. SAMAUDIT aktualisiert sich nie selbst – das bleibt Sache von Dockhand, Watchtower oder `update.sh`.
 
 ## Datenschutz (DSGVO)
 
-SAMAUDIT überträgt keine Daten an Dritte, lädt nichts aus dem Internet, setzt nur technisch notwendige Cookies und löscht Berichte und Protokoll automatisch (`REPORT_RETENTION_DAYS`, `AUDIT_RETENTION_DAYS`). Die Seite **„Datenschutz“** (`/privacy`, auch ohne Anmeldung erreichbar) informiert Prüfer und Beschäftigte; die zuständige Stelle tragen Sie in `PRIVACY_CONTACT` ein.
+SAMAUDIT überträgt keine Daten an Dritte, lädt nichts aus dem Internet (die optionale Update-Prüfung fragt nur eine Versionsnummer ab), setzt nur technisch notwendige Cookies und löscht Berichte und Protokoll automatisch (`REPORT_RETENTION_DAYS`, `AUDIT_RETENTION_DAYS`). Die Seite **„Datenschutz“** (`/privacy`, auch ohne Anmeldung erreichbar) informiert Prüfer und Beschäftigte; die zuständige Stelle tragen Sie in `PRIVACY_CONTACT` ein.
 
 Die Verantwortung für den datenschutzkonformen Einsatz bleibt beim Betreiber. [`DATENSCHUTZ.md`](DATENSCHUTZ.md) enthält eine Vorlage für das Verzeichnis von Verarbeitungstätigkeiten, die technischen und organisatorischen Maßnahmen sowie eine Checkliste (Datenschutzbeauftragte/r, Betriebsrat, Löschfristen).
 
@@ -338,6 +348,8 @@ Alle Werte werden in der `.env` gesetzt (Schreibweise `NAME=wert`, Vorlage mit E
 | `DEMO_MODE` | `false` | Beispieldaten, Anmeldung demo/demo |
 | `EGRESS_GUARD` | `true` | programminterne Sperre ausgehender Verbindungen (nur DCs) |
 | `EGRESS_ALLOW` | – | weitere erlaubte Ziele (IP, Netz, Name; `;`-getrennt) |
+| `UPDATE_HINT_DAYS` | `60` | Hinweis auf der Übersicht, wenn die Version älter ist (Tage, ohne Internet; `0` = aus) |
+| `UPDATE_CHECK` | `false` | tägliche Online-Prüfung auf eine neuere Version (GitHub-API, Port 443) |
 | `REPORT_RETENTION_DAYS` | `365` | Berichte nach x Tagen löschen (`0` = nie) |
 | `AUDIT_RETENTION_DAYS` | `90` | Protokoll nach x Tagen löschen (`0` = nie) |
 | `PRIVACY_CONTACT` | – | Ansprechpartner auf der Datenschutzseite |
@@ -427,6 +439,7 @@ app/
   mdhelp.py      Handbuch als Hilfe-Seite
   docs/          Handbuch (handbuch.de.md, manual.en.md)
   egress.py      Ausgangssperre (nur Verbindungen zu den DCs)
+  updatecheck.py Update-Hinweis (Alter ohne Netz, optional tägliche Prüfung bei GitHub)
   sysvol.py      SYSVOL/NETLOGON über SMB (GPP, GptTmpl.inf, Registry.pol, audit.csv, Skripte)
   analysis.py    Gruppenauflösung, privilegierte Konten, GPO-Zuordnung
   rules.py       Prüfregeln Teil 1, rules2.py Teil 2 (Texte DE/EN)

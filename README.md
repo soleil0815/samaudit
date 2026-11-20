@@ -153,11 +153,21 @@ Before installing, SAMAUDIT checks that certificate and key match, that the cert
 
 ## Outbound connections
 
-SAMAUDIT only connects to the domain controllers. The in-app guard (`EGRESS_GUARD=true`, default) only allows connections to the DC addresses on the LDAP/SMB ports; any other attempt is rejected and recorded in the activity log as "Outbound connection blocked". Allow further targets with `EGRESS_ALLOW` if needed (IP, network or name, separated by `;`). If you want to isolate the container at network level as well, use your own firewall (Docker network `samaudit-net`, bridge `br-samaudit`).
+SAMAUDIT only connects to the domain controllers. The in-app guard (`EGRESS_GUARD=true`, default) only allows connections to the DC addresses on the LDAP/SMB ports; any other attempt is rejected and recorded in the activity log as "Outbound connection blocked". Allow further targets with `EGRESS_ALLOW` if needed (IP, network or name, separated by `;`). If you want to isolate the container at network level as well, use your own firewall (Docker network `samaudit-net`, bridge `br-samaudit`). The only exception is the update check, which you have to switch on yourself (next section).
+
+## Newer version available?
+
+For installations without automatic updates (Dockhand, Watchtower): if the running version is older than 60 days (`UPDATE_HINT_DAYS`, `0` = off), the overview shows a slim hint with a link to the releases on GitHub. This works without internet – the release date ships with the program.
+
+If you want SAMAUDIT to really check, set `UPDATE_CHECK=true` (default `false`). Once a day the server then asks the GitHub API for the number of the latest version and shows "Version x.y.z available" on the overview.
+
+![Overview with the hint "Version 2.6.0 available" and a link to the releases on GitHub](docs/images/en-update.webp)
+
+Only the request itself is sent – no domain, no names, no statistics; GitHub sees the server's IP address. The egress guard then additionally allows exactly `api.github.com` on port 443; proxies from the environment are not used. If the check fails (no internet), it stays silent; the diagnostics package shows when it last ran. SAMAUDIT never updates itself – that remains the job of Dockhand, Watchtower or `update.sh`.
 
 ## Privacy (GDPR)
 
-SAMAUDIT sends no data to third parties, loads nothing from the internet, sets only strictly necessary cookies and deletes reports and audit log entries automatically (`REPORT_RETENTION_DAYS`, `AUDIT_RETENTION_DAYS`). The **Privacy** page (`/privacy`, reachable without sign-in) informs auditors and employees; set the responsible contact in `PRIVACY_CONTACT`.
+SAMAUDIT sends no data to third parties, loads nothing from the internet (the optional update check only asks for a version number), sets only strictly necessary cookies and deletes reports and audit log entries automatically (`REPORT_RETENTION_DAYS`, `AUDIT_RETENTION_DAYS`). The **Privacy** page (`/privacy`, reachable without sign-in) informs auditors and employees; set the responsible contact in `PRIVACY_CONTACT`.
 
 Responsibility for GDPR-compliant use remains with the operator. [`DATENSCHUTZ.md`](DATENSCHUTZ.md) (German) contains a template for the record of processing activities, the technical and organisational measures and a checklist (data protection officer, works council, retention).
 
@@ -344,6 +354,8 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 | `DEMO_MODE` | `false` | sample data, sign-in demo/demo |
 | `EGRESS_GUARD` | `true` | in-app outbound lock (DCs only) |
 | `EGRESS_ALLOW` | – | additional allowed targets (IP, network, name; `;`-separated) |
+| `UPDATE_HINT_DAYS` | `60` | hint on the overview when this version is older (days, no internet; `0` = off) |
+| `UPDATE_CHECK` | `false` | daily online check for a newer version (GitHub API, port 443) |
 | `REPORT_RETENTION_DAYS` | `365` | delete reports after x days (`0` = never) |
 | `AUDIT_RETENTION_DAYS` | `90` | delete audit log after x days (`0` = never) |
 | `PRIVACY_CONTACT` | – | contact shown on the privacy page |
@@ -433,6 +445,7 @@ app/
   mdhelp.py      manual as help page
   docs/          manual (handbuch.de.md, manual.en.md)
   egress.py      outbound lock (connections to DCs only)
+  updatecheck.py update hint (age without network, optional daily check with GitHub)
   sysvol.py      SYSVOL/NETLOGON via SMB (GPP, GptTmpl.inf, Registry.pol, audit.csv, scripts)
   analysis.py    group resolution, privileged accounts, GPO mapping
   rules.py       check rules part 1, rules2.py part 2 (texts DE/EN)

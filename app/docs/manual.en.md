@@ -88,6 +88,8 @@ All sign-ins (including rejected ones), scans, PDF exports, deletions, certifica
 
 Bottom left, **What's new** lists what changed with each version: new **features**, **security** improvements, **fixes** and **notices** about new Active Directory risks (e.g. deprecations by Microsoft). If there is something you have not seen yet, a small dot appears next to it (orange for security topics) and the overview shows a slim line once. **×** or visiting the page clears both. The news ships with the update – SAMAUDIT loads nothing from the internet for it. Only a cookie in your browser remembers which version you last saw.
 
+**Newer version?** If the running version is older than 60 days, the overview shows "Check for updates" with a link to the releases on GitHub. If your operator has switched on the online check, it shows "Version x.y.z available" instead as soon as there is a newer one. **×** dismisses the hint (the age hint for 30 days, the new-version hint until the next one). Updating is up to the operator – SAMAUDIT never updates itself.
+
 ### Language, appearance, privacy
 
 Bottom left: **DE / EN** switches the language, **System / Light / Dark** the appearance (default: as the operating system is set; the browser remembers the choice). **Privacy** shows which data SAMAUDIT processes, how long it is kept and who is responsible – this page is available without signing in.
@@ -161,11 +163,15 @@ All settings live in the `.env` file (annotated template: `.env.example`). After
 | `REPORT_RETENTION_DAYS` | `365` | delete reports automatically after … days (0 = never) |
 | `AUDIT_RETENTION_DAYS` | `90` | delete the activity log automatically after … days (0 = never) |
 | `PRIVACY_CONTACT` | – | contact shown on the privacy page |
+| `UPDATE_HINT_DAYS` | `60` | "Check for updates" hint when this version is older (no internet; 0 = off) |
+| `UPDATE_CHECK` | `false` | ask GitHub once a day for a newer version |
 | `DEFAULT_LANG` | `de` | default language |
 
 The complete list is in the README.
 
 ### Update
+
+**How do I know there is an update?** Without a container manager the overview shows "Check for updates" after 60 days (`UPDATE_HINT_DAYS`). With `UPDATE_CHECK=true` in `.env`, SAMAUDIT asks GitHub once a day for the latest version number and reports "Version x.y.z available" – security updates (`-s<n>`) included. The server needs internet access on port 443 to `api.github.com` for this; see *Outbound connections*.
 
 **With a container manager (recommended):** Dockhand, Watchtower, Tugtainer or similar keep the container `samaudit` up to date. Recommendation: schedule updates **at night** – a restart aborts a scan that is running.
 
@@ -222,6 +228,8 @@ In addition, the published image is scanned daily, and every week it is checked 
 
 SAMAUDIT itself only connects to the domain controllers (LDAP, LDAPS, Global Catalog, SMB). Any other connection attempt is rejected and recorded in the **activity log** (`EGRESS_GUARD`, on by default). If you also want to isolate the container at network level, use your own firewall (Docker network `samaudit-net`, bridge `br-samaudit`).
 
+The only exception, and only if you switch it on: the update check (`UPDATE_CHECK=true`). The guard then additionally allows exactly `api.github.com` on port 443. Only the request for the latest version is sent – no domain, no names; GitHub sees the IP address of your connection. Proxies from the environment are not used. If the check fails, the interface stays silent; time and result of the last check are in the diagnostics package (section `update`).
+
 ### Data, backup and restore
 
 Everything SAMAUDIT stores is in the `data/` folder: the database `samaudit.db` (reports, activity log, remembered DC certificates), under `backups/` the automatic backups before every version change and under `tls/` the web UI certificates.
@@ -238,7 +246,7 @@ The database from before the restore is kept as `samaudit-ersetzt-<time>.db`. **
 
 ### Privacy
 
-SAMAUDIT sends no data to third parties, loads nothing from the internet and deletes reports and the activity log automatically. For your documentation (record of processing activities, coordination with the data protection officer and works council) see `DATENSCHUTZ.md` (German).
+SAMAUDIT sends no data to third parties, loads nothing from the internet (the optional update check only asks for a version number) and deletes reports and the activity log automatically. For your documentation (record of processing activities, coordination with the data protection officer and works council) see `DATENSCHUTZ.md` (German).
 
 ### Troubleshooting
 

@@ -4,7 +4,8 @@
 
 Every outbound connection attempt of the program is
 checked: only the IP addresses of the DCs (DC_HOSTS or DOMAIN_FQDN) on the
-LDAP/SMB ports are allowed, plus connections inside the container (localhost).
+LDAP/SMB ports are allowed, plus connections inside the container (localhost) and – only with
+UPDATE_CHECK=true – the GitHub API on port 443 for the version check (app/updatecheck.py).
 Everything else is rejected and logged."""
 from __future__ import annotations
 
@@ -64,6 +65,9 @@ def is_allowed(host: str, port: int) -> bool:
             return False
         return bool(addrs) and all(is_allowed(a, port) for a in addrs)
     if ip.is_loopback:
+        return True
+    from . import updatecheck
+    if updatecheck.allows(str(ip), port):     # UPDATE_CHECK=true: api.github.com on 443 only
         return True
     if port not in ALLOWED_PORTS | {settings.ldap_port}:
         return False
@@ -130,6 +134,7 @@ def install() -> None:
     socket.socket.connect = _connect  # type: ignore[method-assign]
     socket.socket.connect_ex = _connect_ex  # type: ignore[method-assign]
     _installed = True
-    log.info("Egress guard active: connections only to %s (ports %s)",
+    log.info("Egress guard active: connections only to %s (ports %s)%s",
              ", ".join(sorted(set(settings.dc_hosts) | set(settings.egress_allow))) or "–",
-             ", ".join(str(p) for p in sorted(ALLOWED_PORTS)))
+             ", ".join(str(p) for p in sorted(ALLOWED_PORTS)),
+             " and api.github.com:443 for the update check" if settings.update_check else "")

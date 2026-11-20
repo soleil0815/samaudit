@@ -4,6 +4,12 @@
 
 Programmversionen. Die monatlichen Sicherheitsupdates am Patchday, dem zweiten Dienstag (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.5.0 – Update-Hinweis
+
+- **Gibt es eine neuere Version?** Für Installationen ohne automatische Updates: Ist die laufende Version älter als 60 Tage (`UPDATE_HINT_DAYS`, `0` = aus), zeigt die Übersicht „Update prüfen“ mit Link zu den Versionen. Ohne Internet – das Erscheinungsdatum kommt mit dem Programm.
+- **Online-Prüfung zum Einschalten** (`UPDATE_CHECK=true`, Standard aus): Einmal am Tag fragt der Server bei der GitHub-API nach der neuesten Versionsnummer (auch Sicherheitsupdates `-s<n>`) und zeigt „Version x.y.z verfügbar“. Übertragen wird nur die Anfrage selbst; der Wächter lässt dann zusätzlich genau `api.github.com` auf Port 443 zu. Fehler bleiben still. SAMAUDIT aktualisiert sich nie selbst.
+- Beide Hinweise lassen sich ausblenden (Altershinweis für 30 Tage, Hinweis auf neue Version bis zur nächsten). Die Datenschutzseite nennt die Prüfung, wenn sie an ist; das Diagnosepaket hat den neuen Abschnitt `update`.
+
 ## 2.4.1 – Diagnosepaket
 
 - Der Programmname „SAMAUDIT“ wird nicht mehr durch einen Platzhalter ersetzt, wenn der Servername mit „samaudit“ beginnt (PUBLIC_HOSTNAME); der Servername selbst wird weiterhin ersetzt.
