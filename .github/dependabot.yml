@@ -7,3 +7,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # cooldown: only suggest action releases that are at least a week old (a hijacked release is usually
+    # withdrawn within days – see tj-actions/changed-files 2025)
+    cooldown:
+      default-days: 7

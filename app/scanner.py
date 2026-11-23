@@ -129,6 +129,7 @@ def build_overview(model: dict) -> dict:
     return {
         "fqdn": d.get("fqdn"), "netbios": d.get("netbios"), "sid": d.get("sid"), "dn": d.get("dn"),
         "domain_type": ctx.domain_type, "dc_host": model.get("meta", {}).get("dc_host"),
+        "ldap_mode": model.get("meta", {}).get("ldap_mode") or "",
         "domain_level": LEVEL_NAMES.get(d.get("domain_level"), d.get("domain_level")),
         "forest_level": LEVEL_NAMES.get(d.get("forest_level"), d.get("forest_level")),
         "created": fmt_date(d.get("created")), "is_root": d.get("is_root"),
@@ -148,7 +149,7 @@ def build_overview(model: dict) -> dict:
         "policy": d.get("policy", {}), "maq": d.get("maq"),
         "priv_groups": priv,
         "sysvol": {"status": sv.get("status", "disabled"), "error": sv.get("error"),
-                   "files": sv.get("files_scanned", 0)},
+                   "files": sv.get("files_scanned", 0), "auth": sv.get("auth")},
         "pki_cas": [c.get("name") for c in (model.get("pki") or {}).get("cas", [])],
         "warnings": model.get("meta", {}).get("warnings", []),
         "last_backup": (lambda lb: fmt_date(lb) if hasattr(lb, "year") else lb)((model.get("config") or {}).get("last_backup")),
@@ -189,7 +190,9 @@ def _run(scan_id: int, bind_name: str, password: str) -> None:
                 except Exception:  # noqa: BLE001
                     pass
             progress(88, "phase_sysvol")
-            model["sysvol"] = sysvol.scan(model["meta"]["dc_host"], model["domain"]["fqdn"], bind_name, password,
+            # SMB to the address whose certificate LDAPS has just checked (not a new DNS lookup)
+            smb_target = model["meta"].get("dc_addr") or model["meta"]["dc_host"]
+            model["sysvol"] = sysvol.scan(smb_target, model["domain"]["fqdn"], bind_name, password,
                                           model.get("gpos", []), model.get("gpo_links", {}))
         password = ""  # noqa: F841 – drop the reference as early as possible
         progress(94, "phase_rules")

@@ -190,9 +190,15 @@ def scan(server: str, fqdn: str, username: str, password: str, gpos: list[dict],
         result.update(status="error", error=f"@err_smb_missing|{e}")   # translated with tv() in the report
         return result
 
+    # Kerberos needs gssapi/krb5, which are not part of the image (no Linux wheels) – then NTLM.
+    # The server is the address LDAPS has just verified, so NTLM goes to the checked DC, not to a new DNS answer.
+    import importlib.util
+    kerberos = importlib.util.find_spec("gssapi") is not None or importlib.util.find_spec("krb5") is not None
+    result["auth"] = "negotiate" if kerberos else "ntlm"
     try:
         smbclient.register_session(server, username=username, password=password,
-                                   connection_timeout=settings.smb_timeout, require_signing=True)
+                                   connection_timeout=settings.smb_timeout, require_signing=True,
+                                   auth_protocol="negotiate" if kerberos else "ntlm")
     except Exception as e:  # noqa: BLE001
         result.update(status="error", error=str(e)[:300])
         return result

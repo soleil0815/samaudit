@@ -63,12 +63,37 @@ def _tls():
     return ldap3.Tls(**kwargs)
 
 
-def _server(host: str):
+def _server(host: str, mode: str = ""):
+    """mode: "" = as configured, "starttls" = StartTLS on 389 (fallback), "ntlm" = port 389 without TLS."""
     ldap3 = _ldap3()
+    if mode == "ntlm":
+        return ldap3.Server(host, port=389, use_ssl=False, tls=None, get_info=ldap3.NONE,
+                            connect_timeout=settings.ldap_timeout)
+    if mode == "starttls":
+        return ldap3.Server(host, port=389, use_ssl=False, tls=_tls(), get_info=ldap3.NONE,
+                            connect_timeout=settings.ldap_timeout)
     use_tls = settings.ldap_ssl or settings.ldap_starttls
     return ldap3.Server(host, port=settings.ldap_port, use_ssl=settings.ldap_ssl,
                         tls=_tls() if use_tls else None, get_info=ldap3.NONE,
                         connect_timeout=settings.ldap_timeout)
+
+
+def _modes() -> list[str]:
+    """Connection methods in order: as configured (LDAPS/StartTLS), then StartTLS on 389 if LDAPS is not
+    available (Windows DC without certificate), then NTLM on 389 only if LDAP_NTLM is switched on."""
+    out = [""] if (settings.ldap_ssl or settings.ldap_starttls or settings.ldap_allow_plain) else []
+    if settings.ldap_ssl and settings.ldap_port == 636:
+        out.append("starttls")
+    if settings.ldap_ntlm:
+        out.append("ntlm")
+    return out
+
+
+def nt_hash_password(password: str) -> str:
+    """ldap3 computes the NT hash with hashlib's MD4, which OpenSSL 3 no longer offers. ldap3 also accepts
+    "LM:NT" hex hashes – the NT hash is computed with the pure-Python MD4 of pyspnego (in memory only)."""
+    from spnego._ntlm_raw.md4 import md4
+    return "0" * 32 + ":" + md4(password.encode("utf-16-le")).hex()
 
 
 def _targets() -> list[tuple[str, str, str]]:
@@ -94,9 +119,10 @@ def _targets() -> list[tuple[str, str, str]]:
     return out
 
 
-def _check_pin(host: str, conn) -> None:
+def _check_pin(host: str, conn, mode: str = "") -> None:
     """LDAPS auto-trust: remember the certificate chain on first contact, compare it afterwards."""
-    if settings.ldap_cert_mode != "auto" or not (settings.ldap_ssl or settings.ldap_starttls):
+    if mode == "ntlm" or settings.ldap_cert_mode != "auto" or \
+            not (settings.ldap_ssl or settings.ldap_starttls or mode == "starttls"):
         return
     from . import pins
     sock = getattr(conn, "socket", None)
@@ -104,12 +130,57 @@ def _check_pin(host: str, conn) -> None:
         raise AuthError("tls_failed", "no TLS connection")
     try:
         pins.check(host, pins.peer_chain(sock))
+    except pins.PinPending as e:
+        try:
+            conn.unbind()
+        except Exception:  # noqa: BLE001
+            pass
+        raise AuthError("dc_pending", e.host) from e
     except pins.PinMismatch as e:
         try:
             conn.unbind()
         except Exception:  # noqa: BLE001
             pass
         raise AuthError("cert_changed", str(e)) from e
+
+
+def _connect(bind_name: str, password: str, addr: str, pin_key: str, mode: str):
+    """One connection attempt with one method; raises AuthError or ldap3 exceptions."""
+    ldap3 = _ldap3()
+    if mode == "ntlm":
+        domain = settings.netbios or settings.domain_fqdn
+        sam = bind_name.split("@")[0]
+        conn = ldap3.Connection(
+            _server(addr, "ntlm"), user=f"{domain}\\{sam}", password=nt_hash_password(password),
+            authentication=ldap3.NTLM, auto_bind=ldap3.AUTO_BIND_NONE, read_only=True, raise_exceptions=False,
+            auto_range=False, auto_referrals=False, receive_timeout=max(settings.ldap_timeout, 30))
+        conn.open()
+        if not conn.bind():
+            _bind_error(conn)
+        return conn
+    conn = ldap3.Connection(
+        _server(addr, mode), user=bind_name, password=password,
+        authentication=ldap3.SIMPLE, auto_bind=ldap3.AUTO_BIND_NONE,
+        read_only=True, raise_exceptions=False, auto_range=False,
+        auto_referrals=False,          # never follow a referral (would send the password again)
+        receive_timeout=max(settings.ldap_timeout, 30),
+    )
+    conn.open()
+    if mode == "starttls" or (settings.ldap_starttls and not settings.ldap_ssl):
+        if not conn.start_tls():
+            raise AuthError("tls_failed", str(conn.result))
+    _check_pin(pin_key, conn, mode)  # before sending the password
+    if not conn.bind():
+        _bind_error(conn)
+    return conn
+
+
+def _remember_mode(mode: str) -> None:
+    try:
+        from . import db
+        db.set_kv("ldap_mode", mode)
+    except Exception as e:  # noqa: BLE001
+        log.debug("kv: %s", e)
 
 
 def _remember_type(dtype: str, vendor: str | None) -> None:
@@ -138,47 +209,54 @@ def normalize_username(username: str) -> tuple[str, str]:
 
 def open_connection(bind_name: str, password: str):
     """Bind against the first reachable DC. Returns a bound connection."""
-    ldap3 = _ldap3()
+    _ldap3()
     from ldap3.core import exceptions as lexc
 
     if not password:
         raise AuthError("bad_credentials")
-    if not (settings.ldap_ssl or settings.ldap_starttls) and not settings.ldap_allow_plain:
+    if not _modes():
         raise AuthError("insecure_config")
 
     last_err: AuthError | None = None
     for host, addr, pin_key in _targets():
-        try:
-            conn = ldap3.Connection(
-                _server(addr), user=bind_name, password=password,
-                authentication=ldap3.SIMPLE, auto_bind=ldap3.AUTO_BIND_NONE,
-                read_only=True, raise_exceptions=False, auto_range=False,
-                auto_referrals=False,          # never follow a referral (would send the password again)
-                receive_timeout=max(settings.ldap_timeout, 30),
-            )
-            conn.open()
-            if settings.ldap_starttls and not settings.ldap_ssl:
-                if not conn.start_tls():
-                    raise AuthError("tls_failed", str(conn.result))
-            _check_pin(pin_key, conn)  # before sending the password
-            if not conn.bind():
-                _bind_error(conn)
-            conn._samaudit_host = host
-            return conn
-        except AuthError as e:
-            if e.code in ("bad_credentials", "account_locked", "account_unusable", "cert_changed"):
-                raise
-            last_err = e
-        except lexc.LDAPSocketOpenError as e:
-            text = str(e)
-            if "certificate" in text.lower() or "ssl" in text.lower():
-                last_err = AuthError("tls_cert", text)
-            else:
-                last_err = AuthError("dc_unreachable", f"{pin_key}: {text}")
-        except lexc.LDAPException as e:
-            last_err = AuthError("bind_failed", f"{pin_key}: {e}")
-        except OSError as e:
-            last_err = AuthError("dc_unreachable", f"{pin_key}: {e}")
+        cert_failed = False
+        for mode in _modes():
+            if mode == "ntlm":
+                from . import db
+                if db.get_pin(pin_key) is not None or cert_failed:
+                    # this DC had a certificate, or its certificate failed validation: never fall back to NTLM
+                    # (an attacker could block or break TLS on purpose)
+                    continue
+            try:
+                conn = _connect(bind_name, password, addr, pin_key, mode)
+                conn._samaudit_host = host
+                conn._samaudit_mode = mode or ("ldaps" if settings.ldap_ssl else "starttls" if settings.ldap_starttls
+                                               else "plain")
+                try:
+                    conn._samaudit_addr = conn.socket.getpeername()[0]   # the address that was actually checked
+                except Exception:  # noqa: BLE001
+                    conn._samaudit_addr = addr
+                _remember_mode(conn._samaudit_mode)
+                return conn
+            except AuthError as e:
+                if e.code in ("bad_credentials", "account_locked", "account_unusable", "cert_changed"):
+                    raise
+                last_err = e
+                if e.code == "dc_pending":
+                    break                      # this DC waits for approval – next DC, not a weaker method
+            except lexc.LDAPSocketOpenError as e:
+                text = str(e)
+                if "certificate" in text.lower():
+                    last_err = AuthError("tls_cert", text)
+                    cert_failed = True
+                elif "ssl" in text.lower():
+                    last_err = AuthError("tls_failed", text)        # no TLS on this port (DC without certificate)
+                else:
+                    last_err = AuthError("dc_unreachable", f"{pin_key}: {text}")
+            except lexc.LDAPException as e:
+                last_err = AuthError("bind_failed", f"{pin_key}: {e}")
+            except OSError as e:
+                last_err = AuthError("dc_unreachable", f"{pin_key}: {e}")
     raise last_err or AuthError("dc_unreachable", "no DC configured")
 
 
@@ -823,7 +901,8 @@ def collect(conn, progress) -> dict:
 
     return {
         "meta": {"domain_type": dtype, "vendor": dse.get("vendor") or "", "unprivileged": True,
-                 "dc_host": getattr(conn, "_samaudit_host", ""), "warnings": warnings, "demo": False,
+                 "dc_host": getattr(conn, "_samaudit_host", ""), "dc_addr": getattr(conn, "_samaudit_addr", ""),
+                 "ldap_mode": getattr(conn, "_samaudit_mode", ""), "warnings": warnings, "demo": False,
                  "failed_sections": sorted(failed)},
         "rootdse": dse, "domain": domain, "users": users, "computers": computers, "groups": groups,
         "trusts": trusts, "acl": acl, "config": config, "psos": psos, "pki": {"cas": cas, "templates": templates, "objects": pki_objects, "oids": oids},

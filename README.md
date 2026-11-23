@@ -113,7 +113,10 @@ The default is `LDAP_CERT_MODE=auto` – **no CA certificate needs to be importe
 
 The first contact should happen in your normal network, because at that moment the certificate is necessarily trusted without verification.
 
-If a name points to several DCs (e.g. the domain name without `DC_HOSTS`), each DC is trusted individually; entries are then called "firma.local [10.0.0.10]". A newly added DC is pinned on first contact and recorded in the activity log. If you do not want that, list the DCs in `DC_HOSTS` or use `LDAP_CERT_MODE=verify`.
+If a name points to several DCs (e.g. the domain name without `DC_HOSTS`), each DC is trusted individually; entries are then called "firma.local [10.0.0.10]".
+
+- **With an enterprise CA (Windows):** a further DC is adopted when its certificate comes from the same CA and names a known DC – and it is recorded in the activity log.
+- **With self-signed certificates (Samba):** anyone can put any name into such a certificate, so a further DC waits for **approval**: it appears under **Connection → Waiting for approval** with its fingerprint (compare it with the certificate on the DC first) or via `docker exec samaudit python -m app.pins approve "<entry>"`. Until then SAMAUDIT signs in through the DCs it already knows. For the old behaviour (trust on first contact) set `PIN_NEW_DC=auto`. If you list your DCs individually in `DC_HOSTS`, no approval is needed – each DC is pinned on first contact.
 
 The pinned certificates are listed under **Connection**. After an intentional CA change, reset them there or via the command line:
 
@@ -124,6 +127,21 @@ docker exec samaudit python -m app.pins reset dc01.firma.local # one DC
 ```
 
 Other modes: `trust` (always trust, no check – test labs only) and `verify` (classic validation against `LDAP_CA_FILE`, e.g. `ca.pem` in the `certs` folder). Unencrypted LDAP binds are blocked.
+
+### DC without a certificate (Windows without an enterprise CA)
+
+A Windows DC only offers LDAPS once it has a certificate – with an enterprise CA it gets one automatically, without a CA it does not. SAMAUDIT tries **LDAPS (636)**, **StartTLS (389)** and – only with `LDAP_NTLM=true` – **NTLM on 389**, in that order. The method used is shown under **Connection** and in the report.
+
+- **NTLM** does not send the password over the network, but the directory data travels **unencrypted** and the DC is not authenticated (someone in between could capture the sign-in and try to crack it offline). SAMAUDIT never falls back to NTLM for a DC that already had a certificate, or after a certificate error. If the DC requires LDAP signing (default from Windows Server 2025), NTLM does not work anyway.
+- **Better:** give the DC a certificate – even without a CA. On the DC in an admin PowerShell:
+  ```powershell
+  New-SelfSignedCertificate -DnsName "dc1.firma.local","firma.local" -CertStoreLocation Cert:\LocalMachine\My `
+    -KeyAlgorithm RSA -KeyLength 2048 -NotAfter (Get-Date).AddYears(5) `
+    -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1")
+  ```
+  After a restart (or a few minutes) the DC serves LDAPS with this certificate; SAMAUDIT pins it on first contact.
+
+**SYSVOL (SMB)** is read via the address whose certificate LDAPS has just checked – not via a new DNS lookup. The sign-in there uses NTLM with SMB signing (Kerberos is not part of the image); the report says so.
 
 ## Your own HTTPS certificate
 
@@ -334,6 +352,8 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 | `LDAP_CERT_MODE` | `auto` | `auto` (trust automatically and pin), `trust`, `verify` |
 | `LDAP_ALLOW_PLAIN` | `false` | allow unencrypted LDAP sign-in – tests only, the password then crosses the network in clear text |
 | `PIN_RESET_WEB` | `false` | allow resetting remembered DC certificates in the web interface (otherwise only `docker exec samaudit python -m app.pins reset`) |
+| `PIN_NEW_DC` | `approve` | further DC with a self-signed certificate: `approve` = only after approval, `auto` = trust on first contact |
+| `LDAP_NTLM` | `false` | without LDAPS/StartTLS, sign in with NTLM on port 389 (password not on the network, data unencrypted) |
 | `LDAP_CA_FILE` | – | CA certificate (PEM) in the `certs` folder, only for `verify` |
 | `LDAP_TIMEOUT` | `10` | seconds |
 | `ALLOWED_GROUPS` | `SAMAUDIT-Users` | auditor group(s): name, DN, SID or `RID:x`. Without the setting, the former name `SAMAUDIT-Benutzer` is accepted as well. |

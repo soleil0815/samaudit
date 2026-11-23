@@ -64,6 +64,14 @@ class Settings:
         # Allow resetting pinned DC certificates in the web interface? Default: no – otherwise any auditor could
         # trigger a new "first trust". Reset instead with: docker exec samaudit python -m app.pins reset
         self.pin_reset_web = _bool("PIN_RESET_WEB", False)
+        # Another DC behind an already pinned name with a self-signed certificate (Samba): "approve" = only after
+        # approval (connection page or docker exec samaudit python -m app.pins approve), "auto" = trust on first contact
+        nd = os.environ.get("PIN_NEW_DC", "").strip().lower()
+        self.pin_new_dc = nd if nd in ("approve", "auto") else "approve"
+        # Windows DCs without a certificate: sign in with NTLM on port 389 when neither LDAPS nor StartTLS works.
+        # The password never crosses the network, but the directory data is not encrypted and the DC is not
+        # authenticated – therefore only when switched on, and never for a DC that already had a pinned certificate.
+        self.ldap_ntlm = _bool("LDAP_NTLM", False)
         self.ldap_timeout = _int("LDAP_TIMEOUT", 10)
         # A plain-text bind without TLS is deliberately possible only when explicitly allowed
         self.ldap_allow_plain = _bool("LDAP_ALLOW_PLAIN", False)

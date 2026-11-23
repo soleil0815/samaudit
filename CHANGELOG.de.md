@@ -4,6 +4,13 @@
 
 Programmversionen. Die monatlichen Sicherheitsupdates am Patchday, dem zweiten Dienstag (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.6.0 – neue DCs freigeben, DCs ohne Zertifikat, Wartefrist für Pakete
+
+- **Neue DCs nur nach Freigabe (Samba):** Meldet sich hinter einem bereits gemerkten Namen ein weiterer DC mit selbst ausgestelltem Zertifikat, wird er nicht mehr automatisch vertraut – den Namen darin kann jeder eintragen. Er wartet unter **Verbindung** mit Fingerabdruck auf Freigabe (oder `python -m app.pins approve`); bis dahin geht die Anmeldung über die bekannten DCs. `PIN_NEW_DC=auto` behält das alte Verhalten.
+- **Windows-DC ohne Zertifikat:** SAMAUDIT versucht nacheinander LDAPS, StartTLS und – nur mit `LDAP_NTLM=true` – NTLM auf Port 389. Das Passwort geht nie übers Netz; nach einem Zertifikatsfehler oder bei einem DC, der schon ein Zertifikat hatte, wird nie auf NTLM ausgewichen. Verbindungsseite und Bericht zeigen den benutzten Weg; die README erklärt, wie ein DC auch ohne CA ein Zertifikat bekommt.
+- **SYSVOL nur zum geprüften DC:** Die SMB-Verbindung geht an genau die Adresse, deren Zertifikat LDAPS eben geprüft hat (keine neue DNS-Abfrage), mit NTLM und SMB-Signierung; der Bericht nennt das Verfahren. Kerberos ist nicht möglich, weil es die nötigen Bibliotheken für Linux nur als Quellcode gibt.
+- **Wartefrist für neue Pakete:** Das monatliche Sicherheitsupdate nimmt nur Python-Pakete und einen Debian-Stand, die mindestens 7 Tage alt sind – eine gekaperte Version ist bis dahin meist wieder zurückgezogen. Meldet Trivy behebbare Lücken, wird sofort mit den neuesten Versionen gebaut. Von Hand lässt sich die Frist beim Start setzen (`cooldown_days`). Dependabot schlägt Actions-Versionen ebenfalls erst nach 7 Tagen vor.
+
 ## 2.5.1 – Code-Audit
 
 Vollständiges Code-Audit (Anmeldung, Weboberfläche, LDAP/SMB und Prüfregeln, Daten und Datenschutz, Update-Weg, Lieferkette, Doku) mit unabhängigen Prüfern; jeder behobene Fund hat einen Test, der am alten Stand scheitert.

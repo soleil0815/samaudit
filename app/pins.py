@@ -31,6 +31,67 @@ class PinMismatch(Exception):
         self.host, self.expected, self.got = host, expected, got
 
 
+class PinPending(PinMismatch):
+    """Another DC with a self-signed certificate: waits for approval (PIN_NEW_DC=approve)."""
+
+    def __init__(self, host: str, got: str):
+        super().__init__(host, "approval", got)
+
+
+def pending() -> dict[str, dict]:
+    """DCs waiting for approval: host → {fingerprint, subject, not_after, names, der (hex), seen}."""
+    import json
+    try:
+        data = json.loads(db.get_kv("pins_pending") or "{}")
+        return data if isinstance(data, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
+def _set_pending(data: dict) -> None:
+    import json
+    db.set_kv("pins_pending", json.dumps(data, sort_keys=True))
+
+
+def _remember_pending(host: str, anchor, fp: str, names: set[str]) -> None:
+    import datetime as _dt
+
+    from cryptography.hazmat.primitives.serialization import Encoding
+    subject, not_after, _is_ca = _describe(anchor)
+    data = pending()
+    new = host not in data or data[host].get("fingerprint") != fp
+    data[host] = {"fingerprint": fp, "subject": subject, "not_after": not_after, "names": sorted(names),
+                  "der": anchor.public_bytes(Encoding.DER).hex(),
+                  "seen": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")}
+    if len(data) > 20:                          # never grows without limit (crafted answers)
+        for k in sorted(data, key=lambda k: data[k]["seen"])[:len(data) - 20]:
+            data.pop(k, None)
+    _set_pending(data)
+    if new:
+        db.audit("act_cert_pending", detail=f"{host}: {subject} SHA256 {fp[:23]}…")
+        log.warning("LDAPS: new DC %s waits for approval (%s, SHA256 %s)", host, subject, fp)
+
+
+def approve(host: str, user: str = "", fingerprint: str = "") -> bool:
+    """Approve a waiting DC: its certificate is pinned. With `fingerprint`, only exactly that certificate."""
+    data = pending()
+    p = data.get(host)
+    if not p or (fingerprint and p["fingerprint"] != fingerprint):
+        return False
+    db.save_pin(host, p["fingerprint"], p["subject"], p["not_after"], False, bytes.fromhex(p["der"]),
+                ",".join(p.get("names") or []))
+    data.pop(host, None)
+    _set_pending(data)
+    db.audit("act_cert_approved", user or None, detail=f"{host}: {p['subject']} SHA256 {p['fingerprint'][:23]}…")
+    return True
+
+
+def discard(host: str) -> None:
+    data = pending()
+    if data.pop(host, None) is not None:
+        _set_pending(data)
+
+
 def peer_chain(sock) -> list[bytes]:
     """DER certificates as sent by the server (leaf first)."""
     chain: list[bytes] = []
@@ -211,9 +272,16 @@ def check(host: str, chain: list[bytes]) -> dict:
                 db.audit("act_cert_pinned", detail=f"{host}: weitere Adresse, {', '.join(sorted(names))[:120]}")
                 log.warning("LDAPS: further address %s adopted for %s", host, ", ".join(sorted(names)))
                 return {"first_use": False, "fingerprint": p["fingerprint"]}
-        if not any(p["is_ca"] for p in family) and plausible_dc():
-            # self-signed DC certificates (e.g. Samba): every DC has its own – first contact as before
-            return _first_use(host, anchor, fp, names, note="weiterer DC")
+        if not any(p["is_ca"] for p in family):
+            # self-signed DC certificates (e.g. Samba): every DC has its own. The names inside prove nothing
+            # (anyone can issue a self-signed certificate for any name) – so a further DC needs approval.
+            from .config import settings
+            if settings.pin_new_dc != "auto":
+                _remember_pending(host, anchor, fp, names)
+                raise PinPending(host, fp)
+            b = base.lower()
+            if (dcs and (names & dcs)) or any(n == b or n.endswith("." + b) for n in names):
+                return _first_use(host, anchor, fp, names, note="weiterer DC")
         db.audit("act_cert_mismatch", detail=f"{host}: neue Adresse mit unbekanntem Zertifikat "
                                              f"({', '.join(sorted(names))[:120]}, SHA256 {fp[:23]}…)")
         raise PinMismatch(host, family[0]["fingerprint"], fp)
@@ -240,14 +308,25 @@ def _first_use(host: str, anchor, fp: str, names: set[str], note: str = "") -> d
 
 def _cli(argv: list[str]) -> int:
     db.init()
-    if len(argv) < 1 or argv[0] not in ("list", "reset"):
-        print("Usage: python -m app.pins list | reset [host]")
+    if len(argv) < 1 or argv[0] not in ("list", "reset", "approve"):
+        print("Usage: python -m app.pins list | reset [host] | approve <host>")
         return 2
     if argv[0] == "list":
         for p in db.list_pins():
             print(f"{p['host']:35} {'CA ' if p['is_ca'] else 'DC '} {p['subject']}\n{'':35} SHA256 {p['fingerprint']}  "
                   f"valid until {p['not_after']}  pinned {p['first_seen']}")
+        for host, p in pending().items():
+            print(f"{host:35} WAITING FOR APPROVAL {p['subject']}\n{'':35} SHA256 {p['fingerprint']}  seen {p['seen']}")
         return 0
+    if argv[0] == "approve":
+        if len(argv) < 2:
+            print("Usage: python -m app.pins approve <host>   (see: python -m app.pins list)")
+            return 2
+        if approve(argv[1], "cli"):
+            print(f"{argv[1]}: certificate approved and pinned.")
+            return 0
+        print(f"{argv[1]}: nothing waits for approval.")
+        return 1
     n = db.delete_pins(argv[1] if len(argv) > 1 else None)
     print(f"{n} pinned certificate(s) removed. They will be trusted again at the next sign-in.")
     return 0

@@ -65,8 +65,34 @@
   </div>
 </section>
 
-<section class="section">
+<section class="section" id="pins">
   <h2>{{ t('pins_title', lang) }}</h2>
+  {% if ldap_mode %}<p class="{{ 'warn-text' if ldap_mode in ('ntlm', 'plain') else 'muted' }}">{{ t('ldap_mode_title', lang) }}: {{ t('ldap_mode_' ~ ldap_mode, lang) }}</p>{% endif %}
+  {% if pending %}
+  <div class="panel u-m-10-0-4"><div class="panel-body table-wrap u-pad-10-20">
+    <h3>{{ t('pins_pending_title', lang) }}</h3>
+    <p class="muted small">{{ t('pins_pending_intro', lang) }}</p>
+    <table>
+      <thead><tr><th>{{ t('dc', lang) }}</th><th>{{ t('subject', lang) }}</th><th>{{ t('fingerprint', lang) }}</th><th></th></tr></thead>
+      <tbody>{% for host, p in pending.items() %}
+        <tr>
+          <td>{{ host }}</td>
+          <td>{{ p.subject }}<br><span class="muted small">{{ p.names|join(', ') }}</span></td>
+          <td class="mono">{{ p.fingerprint[:32] }}<br>{{ p.fingerprint[32:] }}</td>
+          <td class="row-actions">
+            <form method="post" action="/connection/approve" data-confirm="{{ t('pin_approve_confirm', lang) }}">
+              <input type="hidden" name="csrf" value="{{ sess.csrf }}"><input type="hidden" name="host" value="{{ host }}">
+              <input type="hidden" name="fingerprint" value="{{ p.fingerprint }}">
+              <button class="btn btn-primary" type="submit">{{ t('pin_approve', lang) }}</button></form>
+            <form method="post" action="/connection/approve">
+              <input type="hidden" name="csrf" value="{{ sess.csrf }}"><input type="hidden" name="host" value="{{ host }}">
+              <input type="hidden" name="action" value="discard">
+              <button class="btn" type="submit">{{ t('pin_discard', lang) }}</button></form>
+          </td>
+        </tr>{% endfor %}</tbody>
+    </table>
+  </div></div>
+  {% endif %}
   <div class="panel"><div class="panel-body table-wrap u-pad-10-20">
   {% if pins %}
   <table>

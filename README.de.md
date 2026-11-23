@@ -110,7 +110,10 @@ Standard ist `LDAP_CERT_MODE=auto` – es muss **kein CA-Zertifikat importiert**
 2. Bei jeder weiteren Verbindung muss die Kette wieder zu diesem gemerkten Zertifikat führen – **bevor** das Passwort gesendet wird.
 3. Erneuert die CA das DC-Zertifikat, bleibt das Vertrauen bestehen. Präsentiert jemand ein Zertifikat einer fremden CA (Man-in-the-Middle), wird die Anmeldung abgebrochen und im Protokoll vermerkt.
 
-Zeigt ein Name auf mehrere DCs (z. B. der Domänenname ohne `DC_HOSTS`), wird jedem DC einzeln vertraut; die Einträge heißen dann „firma.local [10.0.0.10]“. Ein neu hinzugekommener DC wird beim ersten Kontakt gemerkt und im Protokoll vermerkt. Wer das nicht möchte, trägt die DCs fest in `DC_HOSTS` ein oder nutzt `LDAP_CERT_MODE=verify`.
+Zeigt ein Name auf mehrere DCs (z. B. der Domänenname ohne `DC_HOSTS`), wird jedem DC einzeln vertraut; die Einträge heißen dann „firma.local [10.0.0.10]“.
+
+- **Mit Unternehmens-CA (Windows):** Ein weiterer DC wird übernommen, wenn sein Zertifikat von derselben CA stammt und auf einen bekannten DC lautet – und im Protokoll vermerkt.
+- **Mit selbst ausgestellten Zertifikaten (Samba):** Den Namen in einem solchen Zertifikat kann jeder eintragen. Ein weiterer DC wartet deshalb auf **Freigabe**: Er erscheint unter **Verbindung → Wartet auf Freigabe** mit Fingerabdruck (vorher mit dem Zertifikat auf dem DC vergleichen) oder per `docker exec samaudit python -m app.pins approve "<Eintrag>"`. Bis dahin meldet sich SAMAUDIT über die bereits bekannten DCs an. Wer das alte Verhalten möchte (beim ersten Kontakt vertrauen), setzt `PIN_NEW_DC=auto`. Wer seine DCs einzeln in `DC_HOSTS` einträgt, braucht keine Freigabe – jeder DC wird dann beim ersten Kontakt gemerkt.
 
 Die gemerkten Zertifikate stehen unter **Verbindung**. Nach einem gewollten CA-Wechsel dort zurücksetzen oder per Kommandozeile:
 
@@ -121,6 +124,21 @@ docker exec samaudit python -m app.pins reset dc01.firma.local # einzelner DC
 ```
 
 Weitere Modi: `trust` (immer vertrauen, keine Prüfung – nur Testlabor) und `verify` (klassische Prüfung gegen `LDAP_CA_FILE`, z. B. `ca.pem` im Ordner `certs`). Unverschlüsselte LDAP-Binds sind gesperrt.
+
+### DC ohne Zertifikat (Windows ohne Unternehmens-CA)
+
+Ein Windows-DC bietet LDAPS erst an, wenn er ein Zertifikat hat – mit einer Unternehmens-CA bekommt er es automatisch, ohne CA nicht. SAMAUDIT versucht nacheinander **LDAPS (636)**, **StartTLS (389)** und – nur mit `LDAP_NTLM=true` – **NTLM auf 389**. Welcher Weg benutzt wurde, steht unter **Verbindung** und im Bericht.
+
+- **NTLM** schickt das Passwort nicht übers Netz, aber die Verzeichnisdaten gehen **unverschlüsselt** über die Leitung, und der DC wird nicht geprüft (wer im Netz dazwischen sitzt, könnte die Anmeldung abfangen und offline zu knacken versuchen). Für einen DC, der schon einmal ein Zertifikat hatte, oder nach einem Zertifikatsfehler wird nie auf NTLM ausgewichen. Verlangt der DC LDAP-Signierung (Standard ab Windows Server 2025), klappt NTLM ohnehin nicht.
+- **Besser:** dem DC ein Zertifikat geben – auch ohne CA. Auf dem DC in einer Admin-PowerShell:
+  ```powershell
+  New-SelfSignedCertificate -DnsName "dc1.firma.local","firma.local" -CertStoreLocation Cert:\LocalMachine\My `
+    -KeyAlgorithm RSA -KeyLength 2048 -NotAfter (Get-Date).AddYears(5) `
+    -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.1")
+  ```
+  Nach einem Neustart (oder wenigen Minuten) liefert der DC LDAPS mit diesem Zertifikat; SAMAUDIT merkt es sich beim ersten Kontakt.
+
+**SYSVOL (SMB)** liest SAMAUDIT über die Adresse, deren Zertifikat LDAPS gerade geprüft hat – nicht über eine neue DNS-Abfrage. Die Anmeldung dort läuft per NTLM mit SMB-Signierung (Kerberos ist im Image nicht enthalten); der Bericht nennt das.
 
 ## Eigenes HTTPS-Zertifikat
 
@@ -328,6 +346,8 @@ Alle Werte werden in der `.env` gesetzt (Schreibweise `NAME=wert`, Vorlage mit E
 | `LDAP_CERT_MODE` | `auto` | `auto` (automatisch vertrauen und merken), `trust`, `verify` |
 | `LDAP_ALLOW_PLAIN` | `false` | unverschlüsselte LDAP-Anmeldung erlauben – nur für Tests, das Passwort geht dann im Klartext übers Netz |
 | `PIN_RESET_WEB` | `false` | gemerkte DC-Zertifikate in der Weboberfläche zurücksetzen erlauben (sonst nur `docker exec samaudit python -m app.pins reset`) |
+| `PIN_NEW_DC` | `approve` | weiterer DC mit selbst ausgestelltem Zertifikat: `approve` = erst nach Freigabe, `auto` = beim ersten Kontakt vertrauen |
+| `LDAP_NTLM` | `false` | ohne LDAPS/StartTLS per NTLM auf Port 389 anmelden (Passwort nicht im Netz, Daten unverschlüsselt) |
 | `LDAP_CA_FILE` | – | CA-Zertifikat (PEM) im Ordner `certs`, nur für `verify` |
 | `LDAP_TIMEOUT` | `10` | Sekunden |
 | `ALLOWED_GROUPS` | `SAMAUDIT-Users` und `SAMAUDIT-Benutzer` | Prüfer-Gruppe(n): Name, DN, SID oder `RID:x`. Ohne Einstellung gelten beide Namen; mit Einstellung genau die angegebenen Gruppen. |

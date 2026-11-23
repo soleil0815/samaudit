@@ -617,3 +617,6 @@ td.nowrap { white-space: nowrap; }
 .w-98.w-98 { width: 98%; }
 .w-99.w-99 { width: 99%; }
 .w-100.w-100 { width: 100%; }
+
+/* connection page: weaker LDAP method (NTLM / unencrypted) */
+.warn-text { color: var(--warn); font-weight: 500; }
