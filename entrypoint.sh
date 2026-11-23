@@ -23,7 +23,7 @@ if [ "$(id -u)" = "0" ]; then
   # This way the files on the host do not need to be readable by UID 10001.
   if [ -d "$CERTS_SRC" ]; then
     rm -rf "$CERTS_RUN"; mkdir -p "$CERTS_RUN"
-    find "$CERTS_SRC" -maxdepth 1 -type f ! -name 'README*' -exec cp {} "$CERTS_RUN"/ \;
+    find -L "$CERTS_SRC" -maxdepth 1 -type f ! -name 'README*' -exec cp -L {} "$CERTS_RUN"/ \;   # links too, like the program
     chown -R "$APP_UID:$APP_GID" "$CERTS_RUN"
     chmod 700 "$CERTS_RUN"; find "$CERTS_RUN" -type f -exec chmod 600 {} \;
     export CERTS_DIR="$CERTS_RUN"

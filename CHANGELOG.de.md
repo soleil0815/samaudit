@@ -4,6 +4,35 @@
 
 Programmversionen. Die monatlichen Sicherheitsupdates am Patchday, dem zweiten Dienstag (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.5.1 – Code-Audit
+
+Vollständiges Code-Audit (Anmeldung, Weboberfläche, LDAP/SMB und Prüfregeln, Daten und Datenschutz, Update-Weg, Lieferkette, Doku) mit unabhängigen Prüfern; jeder behobene Fund hat einen Test, der am alten Stand scheitert.
+
+**Sicherheit**
+- `update.sh` übernimmt eine neuere `docker-compose.yml` aus dem Image nur noch nach ausdrücklichem „j“ im Terminal (nie mit `-y`) – sie bestimmt die Rechte des Containers auf dem Host. Fällt ein Update zurück, kommt auch die alte Compose-Datei zurück.
+- Das monatliche Sicherheitsupdate veröffentlicht nur noch das zuletzt veröffentlichte Programm – zusammengeführter, aber noch nicht veröffentlichter Code geht nie über den Patchday hinaus.
+- Zurücksetzen der DC-Zertifikate prüft vorher wie Löschen und Zertifikatswechsel erneut gegen das AD. Ein im AD gesperrtes Konto beendet die Sitzung bei solchen Aktionen sofort.
+- Vor dem ersten Scan wird für eine weitere DC-Adresse nur ein Zertifikat für den Domänennamen oder einen Eintrag aus `DC_HOSTS` übernommen (nicht mehr jedes Serverzertifikat der Unternehmens-CA); jede Übernahme steht im Protokoll.
+- Anmeldeseite: Benutzernamen mit Sonderzeichen zählen als Fehlversuch, eine gesperrte IP erzeugt nur noch einen Protokolleintrag – das Aktivitätsprotokoll lässt sich nicht mehr ohne Anmeldung fluten.
+- Diagnosepaket: Fehlermeldungen zum Web-Zertifikat, Namen mit é/Apostroph/„!“, `DOMÄNE\benutzer`, DNs wie „Mustermann\, Lieselotte“ und IP-Adressen am Satzende werden zuverlässig ersetzt. `diag --log` liest die Datei mit den Rechten des Programmbenutzers.
+- `userPassword`/`unixUserPassword` werden nur noch auf Vorhandensein geprüft, ihr Inhalt wird nicht mehr gelesen.
+- Trivy wird im CI immer frisch geladen und gegen die Prüfsumme geprüft.
+
+**Richtige Ergebnisse**
+- Gruppenrichtlinien: erzwungene Verknüpfungen haben Vorrang, GPOs mit deaktivierten Computereinstellungen zählen nicht mehr.
+- Lesefehler in SYSVOL (z. B. Zugriff verweigert) gelten nicht mehr als „nicht konfiguriert“; A-GPPPassword und A-ScriptPasswords melden „nicht prüfbar“ statt „bestanden“, wenn SYSVOL nicht vollständig lesbar war.
+- Fehler beim Lesen einzelner Verzeichnisobjekte (AdminSDHolder, dsHeuristics, DC-OU, PKI, Schema) machen die betroffenen Prüfungen „nicht prüfbar“ statt „bestanden“. In untergeordneten Domänen gilt die Domäne nicht mehr als Stammdomäne; Schema-/Organisations-Admins sind dort „nicht prüfbar“.
+- Gesperrte, deaktivierte oder abgelaufene AD-Konten werden bei der Anmeldung richtig erkannt (nicht mehr „falsches Passwort“).
+- Zwei SYSVOL-/gPLink-Suchmuster arbeiten linear – eine präparierte Datei kann einen Scan nicht mehr minutenlang blockieren.
+
+**Betrieb**
+- Sicherungen in `data/backups` werden spätestens nach der kürzeren der beiden Löschfristen gelöscht.
+- Ungewöhnliche Zertifikatsdateien ergeben eine verständliche Meldung statt Fehler 500; eine kaputte Datei in `./certs` verhindert den Start nicht mehr (selbstsigniertes Zertifikat).
+- `--cleanup` lässt alte Versionsordner mit Schlüsseln, eigenen Einstellungen oder Sicherungen stehen.
+- Gesundheitscheck liest `TLS_ENABLED` wie das Programm (leer = an); `LOG_LEVEL` leer oder klein geschrieben verhindert den Start nicht mehr; Zertifikate als Verknüpfung in `./certs` werden übernommen.
+- CSRF-Werte mit Umlauten, zu große Scan-Nummern und technische Fehler bei der erneuten AD-Prüfung führen nicht mehr zu Fehler 500; erneutes Anmelden beendet die alte Sitzung des Browsers.
+- Doku: Prüfer-Gruppe `SAMAUDIT-Users`, Sperre 5 pro Benutzer/15 pro IP, Cookies, `LDAP_ALLOW_PLAIN`, `EGRESS_ALLOW` nur LDAP-/SMB-Ports, Sicherungen, Datenschutzseite.
+
 ## 2.5.0 – Update-Hinweis
 
 - **Gibt es eine neuere Version?** Für Installationen ohne automatische Updates: Ist die laufende Version älter als 60 Tage (`UPDATE_HINT_DAYS`, `0` = aus), zeigt die Übersicht „Update prüfen“ mit Link zu den Versionen. Ohne Internet – das Erscheinungsdatum kommt mit dem Programm.

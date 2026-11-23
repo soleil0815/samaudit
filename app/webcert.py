@@ -215,6 +215,16 @@ def analyze(files: list[tuple[str, bytes]], password: str | None, ca_only_ok: bo
 
     Returns (certificate, key, all certificates, source) or None if there is nothing usable
     at all. Raises CertError with an understandable message on problems."""
+    try:
+        return _analyze(files, password, ca_only_ok)
+    except CertError:
+        raise
+    except Exception as e:  # noqa: BLE001 – unusual files (duplicate extension, unsupported curve …): a message, not a 500
+        names = ", ".join(n for n, _ in files)[:200] or "?"
+        raise CertError("certerr_format", name=names) from e
+
+
+def _analyze(files: list[tuple[str, bytes]], password: str | None, ca_only_ok: bool):
     certs: list[tuple[x509.Certificate, str]] = []
     keys: list[tuple[object, str]] = []
     for name, data in files:
@@ -368,7 +378,8 @@ def prepare() -> tuple[str, str]:
             leaf, key, pool, src, meta = up
             own = (leaf, key, pool, src)
             info.update(source="upload", uploaded_by=meta.get("user"), uploaded_at=meta.get("at"))
-    except CertError as e:
+    except Exception as e:  # noqa: BLE001 – never stop the start because of an own certificate
+        e = e if isinstance(e, CertError) else CertError("certerr_format", name="data/tls/custom")
         log.error("Uploaded certificate not readable: %s", e)
         info["error"] = e                 # CertError: the template shows e.text(lang)
     if own is None:
@@ -376,7 +387,8 @@ def prepare() -> tuple[str, str]:
             own = _from_certs_folder()
             if own:
                 info["source"] = "folder"
-        except CertError as e:
+        except Exception as e:  # noqa: BLE001 – a broken file in ./certs falls back to the self-signed one
+            e = e if isinstance(e, CertError) else CertError("certerr_format", folder=True, name="certs")
             log.error("Own certificate not usable: %s – using the self-signed one.", e)
             info["error"] = e
 

@@ -11,7 +11,8 @@ import uvicorn
 
 from app.config import settings
 
-logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"),
+_lvl = (os.environ.get("LOG_LEVEL") or "INFO").strip().upper()
+logging.basicConfig(level=_lvl if _lvl in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL") else "INFO",
                     format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
 log = logging.getLogger("samaudit")
 

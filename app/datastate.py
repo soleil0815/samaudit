@@ -145,6 +145,24 @@ def _prune() -> None:
             log.warning("Old backup could not be removed: %s (%s)", f, e)
 
 
+def prune_by_age(days: int) -> int:
+    """Retention also for the backups: every backup older than `days` is deleted (also "ersetzt-" and old
+    ".vor-*.bak" files). 0 = keep. Returns the number of deleted files."""
+    if not days or days <= 0:
+        return 0
+    cutoff = time.time() - days * 86400
+    n = 0
+    for f in list_backups():
+        try:
+            if os.path.getmtime(f) < cutoff:
+                os.remove(f)
+                n += 1
+                log.info("Backup older than %s days removed (retention): %s", days, os.path.basename(f))
+        except OSError as e:
+            log.warning("Backup could not be removed: %s (%s)", f, e)
+    return n
+
+
 def _db_mtime() -> float:
     return max(os.path.getmtime(p) for p in (settings.db_path, settings.db_path + "-wal") if os.path.exists(p))
 

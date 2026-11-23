@@ -146,16 +146,22 @@ _lock_logged: dict[str, float] = {}
 
 
 def should_log_locked(username: str, ip: str) -> bool:
-    """Log locked-out retries only once per lockout window (no flooding of the log)."""
+    """Log locked-out retries only once per lockout window (no flooding of the log).
+    Once the IP itself is locked, one entry per IP – changing the user name must not write a new row each time."""
     now = time.time()
-    key = "|".join(_keys(username, ip))
+    window = settings.lockout_min * 60
     with _lock:
-        if now - _lock_logged.get(key, 0) < settings.lockout_min * 60:
+        ip_key = f"ip:{ip}"
+        ip_locked = len([t for t in _failures.get(ip_key, []) if now - t < window]) >= settings.max_login_attempts * 3
+        key = ip_key if ip_locked else "|".join(_keys(username, ip))
+        if now - _lock_logged.get(key, 0) < window:
             return False
-        _lock_logged[key] = now
-        if len(_lock_logged) > 10_000:
-            for k in [k for k, t in _lock_logged.items() if now - t > settings.lockout_min * 60]:
+        if len(_lock_logged) >= 10_000:
+            for k in [k for k, t in _lock_logged.items() if now - t > window]:
                 _lock_logged.pop(k, None)
+            if len(_lock_logged) >= 10_000:      # still full within the window: stop logging, never grow without limit
+                return False
+        _lock_logged[key] = now
     return True
 
 
@@ -171,4 +177,5 @@ def new_login_token() -> str:
 
 
 def check_token(expected: str | None, given: str | None) -> bool:
-    return bool(expected and given and hmac.compare_digest(expected, given))
+    # compare bytes: compare_digest raises TypeError for non-ASCII str (500 instead of a plain "no")
+    return bool(expected and given and hmac.compare_digest(expected.encode(), given.encode()))

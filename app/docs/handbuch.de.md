@@ -12,7 +12,7 @@ Das Handbuch hat zwei Teile: **Teil A** für Prüferinnen und Prüfer, die SAMAU
 2. Im Anmeldefeld steht, an welcher **Domäne** Sie sich anmelden.
 3. Mit Ihrem **normalen** Domänenkonto anmelden – als `benutzer`, `DOMÄNE\benutzer` oder `benutzer@domäne`.
 
-Anmelden darf nur, wer Mitglied der Prüfer-Gruppe ist (Standard `SAMAUDIT-Benutzer` oder `SAMAUDIT-Users`).
+Anmelden darf nur, wer Mitglied der Prüfer-Gruppe ist (Standard `SAMAUDIT-Users`; der frühere Name `SAMAUDIT-Benutzer` gilt weiter, solange `ALLOWED_GROUPS` nicht gesetzt ist).
 
 > **Admin-Konten werden immer abgewiesen** – auch wenn sie in der Prüfer-Gruppe sind. Das ist Absicht: So wird nie ein Passwort eines hochprivilegierten Kontos in eine Weboberfläche eingegeben. Verwenden Sie Ihr normales Arbeitskonto.
 
@@ -76,7 +76,7 @@ Alle 118 Prüfungen mit Kennung, Bereich, Schweregrad und Beschreibung. Die Kenn
 - **HTTPS-Zertifikat der Weboberfläche:** zeigt das aktive Zertifikat (Quelle, Aussteller, Ablaufdatum, Fingerabdruck) und Warnungen (abgelaufen, läuft bald ab, Servername fehlt im Zertifikat).
   - **Eigenes Zertifikat hochladen:** PFX-Datei (z. B. Export aus der Windows-Zertifizierungsstelle) mit Passwort **oder** Zertifikat + privaten Schlüssel auswählen → **Hochladen und aktivieren**. Es wird sofort aktiv, ohne Neustart; danach die Seite neu laden. Vorher wird geprüft, ob Zertifikat und Schlüssel zusammenpassen, ob es gültig ist und ob der Schlüssel stark genug ist (RSA mindestens 2048 Bit).
   - **Hochgeladenes Zertifikat entfernen** stellt das vorherige wieder her.
-- **Vertrauenswürdige DC-Zertifikate:** SAMAUDIT merkt sich beim ersten Kontakt das Zertifikat jedes DCs samt seinem DNS-Namen und lehnt später ein fremdes Zertifikat ab (Schutz vor Man-in-the-Middle) – auch eines, das dieselbe Unternehmens-CA für einen anderen Rechner oder Benutzer ausgestellt hat. Normale Erneuerungen bleiben gültig. Nach einem **gewollten** Zertifikats- oder CA-Wechsel (oder einem neuen DC) zurücksetzen – aus Sicherheitsgründen auf dem Server: `docker exec samaudit python -m app.pins reset <DC>`. Mit `PIN_RESET_WEB=true` in der `.env` geht das auch hier über **Zurücksetzen**.
+- **Vertrauenswürdige DC-Zertifikate:** SAMAUDIT merkt sich beim ersten Kontakt das Zertifikat jedes DCs samt seinem DNS-Namen und lehnt später ein fremdes Zertifikat ab (Schutz vor Man-in-the-Middle) – auch eines, das dieselbe Unternehmens-CA für einen anderen Rechner oder Benutzer ausgestellt hat. Eine weitere Adresse desselben Namens (zweiter DC) wird nur mit einem Zertifikat dieser CA für einen bekannten DC übernommen (bekannt aus dem letzten Scan, aus `DC_HOSTS` oder dem Domänennamen selbst) und im Protokoll vermerkt. Bei selbstsignierten DC-Zertifikaten (Samba) wird ein weiterer DC beim ersten Kontakt gemerkt – wer das nicht möchte, trägt die DCs in `DC_HOSTS` ein. Normale Erneuerungen bleiben gültig. Nach einem **gewollten** Zertifikats- oder CA-Wechsel (oder einem neuen DC) zurücksetzen – aus Sicherheitsgründen auf dem Server: `docker exec samaudit python -m app.pins reset <DC>`. Mit `PIN_RESET_WEB=true` in der `.env` geht das auch hier über **Zurücksetzen**.
 
 ### Protokoll
 
@@ -99,7 +99,7 @@ Links unten: **DE / EN** wechselt die Sprache, **System / Hell / Dunkel** die Da
 | Meldung | Bedeutung / Abhilfe |
 |---|---|
 | Benutzername oder Passwort ist falsch | Eingabe prüfen. Nach mehreren Fehlversuchen wird kurz gesperrt (Standard 5 Versuche / 15 Minuten). |
-| Zugriff verweigert: nicht Mitglied der Prüfer-Gruppe | Konto in die Gruppe `SAMAUDIT-Benutzer` aufnehmen lassen, danach neu anmelden. |
+| Zugriff verweigert: nicht Mitglied der Prüfer-Gruppe | Konto in die Gruppe `SAMAUDIT-Users` aufnehmen lassen, danach neu anmelden. |
 | Admin-Konten dürfen sich nicht anmelden | Normales Konto verwenden (siehe oben). |
 | Die Prüfer-Gruppe existiert nicht | Gruppe in der Domäne anlegen (Betrieb, Teil B). |
 | Das Konto ist in der Domäne gesperrt / deaktiviert / Passwort muss geändert werden | In der Domäne klären (z. B. Passwort am PC ändern). |
@@ -113,9 +113,9 @@ Links unten: **DE / EN** wechselt die Sprache, **System / Hell / Dunkel** die Da
 
 - Server oder NAS mit Docker und Docker Compose (oder einer Container-Verwaltung wie Dockhand oder Portainer).
 - Vom Server zu den DCs: TCP 636 (LDAPS), TCP 445 (SMB/SYSVOL), DNS.
-- In der Domäne eine Gruppe **`SAMAUDIT-Benutzer`** mit den normalen Konten der Prüfer:
-  - Windows: `New-ADGroup SAMAUDIT-Benutzer -GroupScope Global` und `Add-ADGroupMember SAMAUDIT-Benutzer -Members max.muster`
-  - Samba: `samba-tool group add SAMAUDIT-Benutzer` und `samba-tool group addmembers SAMAUDIT-Benutzer max.muster`
+- In der Domäne eine Gruppe **`SAMAUDIT-Users`** mit den normalen Konten der Prüfer:
+  - Windows: `New-ADGroup SAMAUDIT-Users -GroupScope Global` und `Add-ADGroupMember SAMAUDIT-Users -Members max.muster`
+  - Samba: `samba-tool group add SAMAUDIT-Users` und `samba-tool group addmembers SAMAUDIT-Users max.muster`
 
 ### Installation
 
@@ -181,7 +181,7 @@ Die vollständige Liste steht in der README.
 docker compose pull && docker compose up -d
 ```
 
-oder `sh update.sh`: merkt sich die laufende Version, prüft die neue und startet bei Problemen wieder die vorige; bringt bei Bedarf eine neuere `docker-compose.yml` mit (die bisherige bleibt als `docker-compose.yml.alt`). Läuft auch auf einem NAS. Ist das Repository privat, auf dem Server einmalig `docker login ghcr.io` (Passwort: GitHub-Token mit `read:packages`).
+oder `sh update.sh`: merkt sich die laufende Version, prüft die neue und startet bei Problemen wieder die vorige; bringt bei Bedarf eine neuere `docker-compose.yml` mit – als `docker-compose.yml.neu`, übernommen nur nach ausdrücklichem „j“ im Terminal (nie mit `-y`), weil sie die Rechte des Containers auf dem Host bestimmt (die bisherige bleibt als `docker-compose.yml.alt` und kommt bei einem Rückfall zurück). Läuft auch auf einem NAS. Ist das Repository privat, auf dem Server einmalig `docker login ghcr.io` (Passwort: GitHub-Token mit `read:packages`).
 
 **Bei jedem Versionswechsel** sichert SAMAUDIT beim ersten Start selbst die Datenbank nach `data/backups/samaudit-vor-<Version>-<Zeit>.db` (die letzten 5 bleiben) – egal, wie das Update kam.
 
@@ -228,7 +228,7 @@ Zusätzlich wird das veröffentlichte Image täglich gescannt, und jede Woche wi
 
 SAMAUDIT selbst verbindet sich nur zu den Domänencontrollern (LDAP, LDAPS, Global Catalog, SMB). Jeder andere Verbindungsversuch wird abgewiesen und im **Protokoll** vermerkt (`EGRESS_GUARD`, Standard an). Eine zusätzliche Abschottung auf Netzwerkebene regeln Sie bei Bedarf mit Ihrer eigenen Firewall (Docker-Netz `samaudit-net`, Bridge `br-samaudit`).
 
-Einzige Ausnahme, und nur wenn Sie sie einschalten: die Update-Prüfung (`UPDATE_CHECK=true`). Dann lässt der Wächter zusätzlich genau `api.github.com` auf Port 443 zu. Übertragen wird nur die Anfrage nach der neuesten Version – keine Domäne, keine Namen; GitHub sieht die IP-Adresse Ihres Anschlusses. Proxys aus der Umgebung werden nicht verwendet. Scheitert die Prüfung, bleibt das ohne Meldung in der Oberfläche; Zeitpunkt und Ergebnis der letzten Prüfung stehen im Diagnosepaket (Abschnitt `update`).
+Einzige Ausnahme, und nur wenn Sie sie einschalten: die Update-Prüfung (`UPDATE_CHECK=true`). Dann lässt der Wächter zusätzlich genau `api.github.com` auf Port 443 zu. Übertragen wird nur die Anfrage nach der neuesten Version – keine Domäne, keine Namen; GitHub sieht die IP-Adresse Ihres Anschlusses. Proxys aus der Umgebung werden nicht verwendet. Scheitert die Prüfung, bleibt das ohne Meldung in der Oberfläche; Zeitpunkt und Ergebnis der letzten Prüfung stehen im Diagnosepaket aus der Oberfläche (Abschnitt `update`; per Befehl erstellt ist er leer, weil der Stand nur im laufenden Programm liegt).
 
 ### Daten, Sicherung und Wiederherstellung
 

@@ -21,13 +21,14 @@ TRIVY_SHA256=c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f   
 TRIVY_SHA256_ARM64=a1ee9f6ffb7d112b64ff726a2a0717c21175c1114361391f4a132956751a13b3   # trivy_0.75.0_Linux-ARM64.tar.gz
 
 image="${1:?usage: trivy.sh IMAGE}"
-bin="${RUNNER_TEMP:-/tmp}/trivy-$TRIVY_VERSION"
 out="${RUNNER_TEMP:-/tmp}/trivy-report"
-mkdir -p "$bin" "$out"
+mkdir -p "$out"
 
 if [ -n "${TRIVY_BIN:-}" ]; then
   trivy="$TRIVY_BIN"                      # self-tests: a stand-in for trivy
-elif [ ! -x "$bin/trivy" ]; then
+else
+  # always a fresh folder: a trivy binary that is already lying around is never run without the checksum
+  bin="$(mktemp -d "${RUNNER_TEMP:-/tmp}/trivy-$TRIVY_VERSION.XXXXXX")"
   # the release for this runner: the release jobs scan each platform on its own hardware
   case "$(uname -m)" in
     x86_64) asset=Linux-64bit; sum="$TRIVY_SHA256" ;;

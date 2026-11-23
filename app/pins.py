@@ -193,8 +193,12 @@ def check(host: str, chain: list[bytes]) -> dict:
         def plausible_dc() -> bool:
             if dcs:
                 return bool(names & dcs) or _host_matches(base, names)
-            b = base.lower()
-            return any(n == b or n.endswith("." + b) for n in names)
+            # no scan yet, so no known DC names: only the configured name itself (or a configured DC host).
+            # "any *.domain" would let every server certificate of the enterprise CA (e.g. from the default
+            # "Computer" template) pose as a DC.
+            from .config import settings
+            allowed = {base.lower()} | {h.lower().rstrip(".") for h in settings.dc_hosts}
+            return bool(names & allowed)
 
         for p in family:
             if not _anchor_matches(p, fp, path, anchor):
@@ -203,6 +207,9 @@ def check(host: str, chain: list[bytes]) -> dict:
                 db.save_pin(host, p["fingerprint"], p["subject"], p["not_after"], bool(p["is_ca"]), p["der"],
                             ",".join(sorted(names)))
                 db.touch_pin(host)
+                # documented: a new DC address is noted in the activity log (also when the anchor is known)
+                db.audit("act_cert_pinned", detail=f"{host}: weitere Adresse, {', '.join(sorted(names))[:120]}")
+                log.warning("LDAPS: further address %s adopted for %s", host, ", ".join(sorted(names)))
                 return {"first_use": False, "fingerprint": p["fingerprint"]}
         if not any(p["is_ca"] for p in family) and plausible_dc():
             # self-signed DC certificates (e.g. Samba): every DC has its own – first contact as before

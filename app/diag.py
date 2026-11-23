@@ -137,9 +137,11 @@ RESERVED = {
 }
 _PLACEHOLDER = re.compile(r"^(?:domain|netbios|dc|host|user|group|name|ca|trust|gpo|ip|mail|dn|sid|net)-\d+$")
 _WORD = re.compile(r"[A-Za-z0-9ÄÖÜäöüß_$][A-Za-z0-9ÄÖÜäöüß_$.-]*")
-_IPV4 = re.compile(r"(?<![\d.])(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?![\d.])")
+_IPV4 = re.compile(r"(?<![\d.])(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?!\d|\.\d)")
 _MAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
-_DN = re.compile(r"(?i)\b(?:CN|OU|DC)=[^,;:\"'\n=()\[\]]{1,64}(?:\s*,\s*(?:CN|OU|DC|O|L|ST|C)=[^,;:\"'\n=()\[\]]{1,64})*")
+# values may contain escaped characters ("CN=Mustermann\\, Lieselotte" – usual in German directories)
+_DNV = r"(?:\\.|[^,;:\"'\n=()\[\]\\]){1,64}"
+_DN = re.compile(r"(?i)\b(?:CN|OU|DC)=" + _DNV + r"(?:\s*,\s*(?:CN|OU|DC|O|L|ST|C)=" + _DNV + r")*")
 _SID = re.compile(r"S-1-5-21-\d+-\d+-\d+")
 _IPV6 = re.compile(r"(?<![\w:])[0-9A-Fa-f:]*:[0-9A-Fa-f:]*:[0-9A-Fa-f:]*(?![\w:])")
 _KEEP_IP = {"0.0.0.0", "127.0.0.1"}  # noqa: S104 – literal addresses that identify nothing
@@ -189,9 +191,14 @@ class Pseudo:
         if not self._usable(v):
             return v
         key = v.lower()
-        tbl = self.multi if " " in v else self.map
+        # names the word pattern cannot match as one token (spaces, é, apostrophes, "!") are matched literally
+        tbl = self.map if _WORD.fullmatch(v) and not v.endswith(("-", ".")) else self.multi
         if key not in tbl:
             tbl[key] = self._new(kind)
+            if kind == "user" and ("\\" in v or "@" in v):        # FIRMA\hmeier, hmeier@x: the bare name as well
+                bare = v.split("\\")[-1].split("@")[0]
+                if bare and bare.lower() != key and self._usable(bare):
+                    (self.map if _WORD.fullmatch(bare) else self.multi).setdefault(bare.lower(), tbl[key])
             self._multi_re = None
             if kind in ("dc", "host") and "." in v:                 # dc1.firma.local → also "dc1"
                 short = v.split(".")[0]
@@ -207,7 +214,10 @@ class Pseudo:
         """The object's own name (first CN) is a name; whole DNs are replaced by pattern anyway."""
         k, _, v = re.split(r"(?<!\\),", dn or "")[0].partition("=")
         if v and k.strip().upper() == "CN":
-            self.add(v.strip(), "name")
+            v = re.sub(r"\\(.)", r"\1", v.strip())          # "Mustermann\, Lieselotte" → "Mustermann, Lieselotte"
+            self.add(v, "name")
+            for part in re.split(r",\s*", v) if "," in v else []:   # both halves on their own as well
+                self.add(part, "name")
 
     def tokens(self) -> list[str]:
         return list(self.map) + list(self.multi)
@@ -476,7 +486,10 @@ def _web_cert_part() -> dict:
         info = webcert.INFO or {}
     except Exception:  # noqa: BLE001
         info = {}
-    return {k: info.get(k) for k in ("source", "chain", "not_after", "warnings", "error") if k in info}
+    out = {k: info.get(k) for k in ("source", "chain", "not_after", "warnings") if k in info}
+    if info.get("error") is not None:                  # the code only – the text may contain file and host names
+        out["error"] = getattr(info["error"], "key", "error")
+    return out
 
 
 def _runtime_part(settings) -> dict:
@@ -553,7 +566,9 @@ def _walk(o: Any, fn) -> Any:
         return {str(k): _walk(v, fn) for k, v in o.items()}   # keys are field names, rule ids, action codes
     if isinstance(o, list):
         return [_walk(v, fn) for v in o]
-    return fn(o) if isinstance(o, str) else o
+    if o is None or isinstance(o, (bool, int, float)):
+        return o
+    return fn(o if isinstance(o, str) else str(o))   # objects (e.g. exceptions) are text too – never pass them by
 
 
 def _strings(o: Any):
@@ -565,6 +580,8 @@ def _strings(o: Any):
             yield from _strings(v)
     elif isinstance(o, str):
         yield o
+    elif o is not None and not isinstance(o, (bool, int, float)):
+        yield str(o)
 
 
 def check_leaks(pkg: dict, p: Pseudo) -> None:
@@ -669,11 +686,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-o", "--output", help="write to this file instead of stdout")
     a = ap.parse_args(argv)
     lines = None
+    _drop_root()                         # before reading --log: the file is read with the program user's rights
     if a.log:
         src = sys.stdin if a.log == "-" else open(a.log, encoding="utf-8", errors="replace")  # noqa: SIM115
         with src:
             lines = collections.deque(src, maxlen=MAX_LOG_LINES)
-    _drop_root()
+    from .config import settings
+    if not os.path.exists(settings.db_path):
+        print("SAMAUDIT has not been started yet (no database) – start it once, then create the package.",
+              file=sys.stderr)
+        return 2
     try:
         pkg = build("cli", probe=not a.no_probe, log_lines=list(lines) if lines is not None else None)
     except LeakError as e:

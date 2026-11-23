@@ -12,7 +12,7 @@ FROM ${PYTHON_IMAGE}
 
 ARG DEBIAN_SNAPSHOT=20261109T000000Z
 ARG DEBIAN_CODENAME=trixie
-ARG APP_VERSION=2.5.0
+ARG APP_VERSION=2.5.1
 # version of this image: program version, or "<program version>-s<n>" for a security update
 ARG IMAGE_VERSION=
 LABEL org.opencontainers.image.title="SAMAUDIT" \
@@ -85,7 +85,7 @@ RUN groupadd --system --gid 10001 samaudit \
 
 EXPOSE 9400
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --start-interval=3s \
-  CMD python -c "import os,ssl,urllib.request as u; s=os.environ.get('TLS_ENABLED','true').lower() in ('1','true','yes','ja','on'); p=os.environ.get('PORT','9400'); u.urlopen(('https' if s else 'http')+'://127.0.0.1:'+p+'/healthz', context=ssl._create_unverified_context() if s else None, timeout=4)" || exit 1
+  CMD python -c "import os,ssl,urllib.request as u; v=os.environ.get('TLS_ENABLED','').strip().lower(); s=(v or 'true') in ('1','true','yes','ja','on'); p=os.environ.get('PORT','9400'); u.urlopen(('https' if s else 'http')+'://127.0.0.1:'+p+'/healthz', context=ssl._create_unverified_context() if s else None, timeout=4)" || exit 1
 
 ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["python", "run.py"]

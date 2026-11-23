@@ -992,6 +992,8 @@ def _ppl(ctx: Ctx):
 def _scripts(ctx: Ctx):
     sv = need_sysvol(ctx)
     hits = sv.get("script_secrets") or []
+    if not hits and (sv.get("unreadable_gpos") or sv.get("limits")):
+        raise NotApplicable("na_sysvol_partial")     # nothing found, but not everything could be read
     return Hit([{"file": h["file"], "line": str(h["line"]), "kind": h["kind"]} for h in hits]) if hits else None
 
 

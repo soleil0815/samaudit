@@ -82,6 +82,31 @@ class Env:
         self.out = r.stdout + r.stderr
         return r
 
+    def run_tty(self, *args: str, answers: str = "") -> int:
+        """Run with a pseudo terminal on stdin, so ask_strict() really asks; answers are typed in."""
+        import pty
+        import select
+        env = {"PATH": f"{self.extra_path}{FAKE}:{os.environ['PATH']}", "FAKE_STATE": str(self.state_file),
+               "SAMAUDIT_TEST_ROOT": str(self.rootfs), "SAMAUDIT_HEALTH_TIMEOUT": "6", "HOME": str(self.tmp),
+               "LANG": "C.UTF-8", **self.extra_env}
+        master, slave = pty.openpty()
+        p = subprocess.Popen([SH, str(self.dir / "update.sh"), *args], cwd=self.dir, env=env, stdin=slave,
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        os.close(slave)
+        os.write(master, answers.encode())
+        try:
+            out, _ = p.communicate(timeout=120)
+        finally:
+            while select.select([master], [], [], 0)[0]:
+                try:
+                    os.read(master, 4096)
+                except OSError:
+                    break
+            os.close(master)
+        self.load()
+        self.out = out
+        return p.returncode
+
     def calls(self, *prefix: str) -> list[dict]:
         return [c for c in self.state["calls"] if c["argv"][:len(prefix)] == list(prefix)]
 
@@ -201,16 +226,53 @@ class UpdateFlow(unittest.TestCase):
         r = e.run("-y", "--version=../../etc")
         self.assertNotEqual(r.returncode, 0)
 
-    def test_newer_compose_file_replaces_old_and_keeps_alt(self):
+    def test_newer_compose_file_is_only_saved_without_a_terminal(self):
+        # code audit 11/2026: the compose file decides the container's host rights – -y must not install it
+        e = Env(self)
+        e.image("img1", "2.0.0", tags=("old",), local=True)
+        e.image("img2", "2.1.0", compose_version=2)
+        own = compose_text(1) + "# own line\n"
+        (e.dir / "docker-compose.yml").write_text(own, encoding="utf-8")
+        e.running("img1")
+        r = e.run("-y")
+        self.assertEqual(r.returncode, 0, e.out)
+        self.assertEqual((e.dir / "docker-compose.yml").read_text(), own)
+        self.assertIn('SAMAUDIT_COMPOSE: "2"', (e.dir / "docker-compose.yml.neu").read_text())
+        self.assertFalse((e.dir / "docker-compose.yml.alt").exists())
+        self.assertEqual(e.state["containers"]["samaudit"]["image"], "img2")   # the update itself still runs
+
+    def test_image_cannot_grant_itself_host_rights_via_compose(self):
+        e = Env(self)
+        e.image("img1", "2.0.0", tags=("old",), local=True)
+        e.image("img2", "2.1.0", compose_version=999)
+        evil = compose_text(999).replace("    read_only: true\n", "    read_only: true\n    privileged: true\n    pid: host\n")
+        (e.dists / "img2" / "docker-compose.yml").write_text(evil, encoding="utf-8")
+        (e.dir / "docker-compose.yml").write_text(compose_text(1), encoding="utf-8")
+        e.running("img1")
+        for args in (("-y",), ()):
+            e.run(*args)
+            self.assertNotIn("privileged", (e.dir / "docker-compose.yml").read_text(), e.out)
+
+    def test_newer_compose_file_replaces_old_after_explicit_yes(self):
         e = Env(self)
         e.image("img1", "2.0.0", tags=("old",), local=True)
         e.image("img2", "2.1.0", compose_version=2)
         (e.dir / "docker-compose.yml").write_text(compose_text(1) + "# own line\n", encoding="utf-8")
         e.running("img1")
-        r = e.run("-y")
-        self.assertEqual(r.returncode, 0, e.out)
+        rc = e.run_tty("-y", answers="y\n")
+        self.assertEqual(rc, 0, e.out)
         self.assertIn('SAMAUDIT_COMPOSE: "2"', (e.dir / "docker-compose.yml").read_text())
         self.assertIn("# own line", (e.dir / "docker-compose.yml.alt").read_text())
+
+    def test_rollback_restores_the_previous_compose_file(self):
+        e = Env(self)
+        e.image("img1", "2.0.0", tags=("old",), local=True)
+        e.image("img2", "2.1.0", compose_version=2, health="unhealthy")
+        (e.dir / "docker-compose.yml").write_text(compose_text(1) + "# own line\n", encoding="utf-8")
+        e.running("img1")
+        e.run_tty("-y", answers="y\n")
+        self.assertIn("# own line", (e.dir / "docker-compose.yml").read_text(), e.out)
+        self.assertIn('SAMAUDIT_COMPOSE: "1"', (e.dir / "docker-compose.yml").read_text())
 
     def test_same_compose_version_is_left_alone(self):
         e = Env(self)
@@ -442,6 +504,23 @@ class Cleanup(unittest.TestCase):
         for keep in (".env", "docker-compose.yml", "docker-compose.override.yml", "update.sh", "certs"):
             self.assertTrue((d / keep).exists(), keep)
         self.assertFalse(unit.exists())
+
+    def test_old_version_folder_with_keys_or_settings_is_kept(self):
+        # code audit 11/2026: an old unpacked version with its own certificate or override must not be deleted
+        e = self.make()
+        d = e.dir
+        for name, rel in (("samaudit-v1.9.5", "certs/server.pfx"), ("samaudit-v1.9.4", "docker-compose.override.yml"),
+                          ("samaudit-v1.9.3", ".env.bak")):
+            (d / name / "app").mkdir(parents=True)
+            (d / name / "app" / "version.py").write_text('APP_NAME = "SAMAUDIT"\n', encoding="utf-8")
+            (d / name / rel).parent.mkdir(parents=True, exist_ok=True)
+            (d / name / rel).write_text("SECRET", encoding="utf-8")
+        r = e.run("--cleanup", "-y")
+        self.assertEqual(r.returncode, 0, e.out)
+        self.assertEqual((d / "samaudit-v1.9.5" / "certs" / "server.pfx").read_text(), "SECRET")
+        self.assertTrue((d / "samaudit-v1.9.4" / "docker-compose.override.yml").exists())
+        self.assertTrue((d / "samaudit-v1.9.3" / ".env.bak").exists())
+        self.assertFalse((d / "samaudit-v1.9.6").exists())        # without such files it is still cleaned up
 
     def test_links_never_lead_into_data(self):
         e = self.make()

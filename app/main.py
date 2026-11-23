@@ -138,7 +138,8 @@ def to_login(request: Request, reason: str | None = None) -> Response:
     return RedirectResponse(url, status_code=303)
 
 
-ACCOUNT_GONE = ("bad_credentials", "not_allowed", "privileged_denied", "user_not_found", "account_unusable")
+ACCOUNT_GONE = ("bad_credentials", "not_allowed", "privileged_denied", "user_not_found", "account_unusable",
+                "account_locked")
 
 
 async def recheck(request: Request) -> Response | None:
@@ -156,6 +157,8 @@ async def recheck(request: Request) -> Response | None:
             db.audit("act_session_revoked", s.user, client_ip(request), e.code)
             auth.destroy(s.sid)
             return to_login(request, e.code)
+    except Exception as e:  # noqa: BLE001 – technical error (DC, network): as documented, not blocking
+        log.warning("Re-check against AD not possible (%s) – action allowed", e.__class__.__name__)
     return None
 
 
@@ -202,6 +205,12 @@ async def multipart_of(request: Request, limit: int = 1_000_000) -> tuple[dict[s
         else:
             fields[name] = payload.decode("utf-8", "replace")
     return fields, files
+
+
+def _scan_id(request: Request) -> int:
+    """Scan id from the path; values beyond SQLite's INTEGER become 0 (= not found) instead of an error."""
+    v = int(request.path_params["id"])
+    return v if 0 < v < 2**63 else 0
 
 
 async def check_csrf(request: Request, form: dict) -> bool:
@@ -254,7 +263,8 @@ async def login_submit(request: Request):
         try:
             res = await run_in_threadpool(authenticate, username, password)
         except AuthError as e:
-            if e.code not in ("bad_credentials", "not_allowed", "privileged_denied", "user_not_found", "account_unusable"):
+            # invalid_user is chosen by the client – it counts, otherwise every request writes an audit row for free
+            if e.code not in ACCOUNT_GONE + ("invalid_user",):
                 auth.release_attempt(username, ip, mark)   # technical error, not a failed attempt
             log.warning("Login failed for %r from %s: %s %s", username[:80], ip, e.code, e.detail)
             db.audit("act_login_failed", username[:80], ip, e.code)
@@ -268,6 +278,8 @@ async def login_submit(request: Request):
         auth.release_attempt(username, ip, mark)
         auth.clear_failures(username, ip)
         sess = auth.create(res.sam, res.display_name, res.upn, res.bind_name, res.matched_groups, password, ip)
+    if (old := request.cookies.get(SID_COOKIE)) and old != sess.sid:
+        auth.destroy(old)                       # signing in again ends the previous session of this browser
     db.audit("act_login", sess.user, ip, ", ".join(sess.groups))
     resp = RedirectResponse("/", status_code=303)
     resp.set_cookie(SID_COOKIE, sess.sid, httponly=True, secure=settings.cookie_secure, samesite="strict",
@@ -338,7 +350,7 @@ async def scan_start(request: Request):
 
 @require
 async def scan_view(request: Request):
-    scan = db.get_scan(int(request.path_params["id"]))
+    scan = db.get_scan(_scan_id(request))
     if not scan:
         return render(request, "error.html", {"msg": "not_found"}, 404)
     if scan["status"] == "done":
@@ -348,7 +360,7 @@ async def scan_view(request: Request):
 
 @require
 async def scan_status(request: Request):
-    scan = db.get_scan(int(request.path_params["id"]))
+    scan = db.get_scan(_scan_id(request))
     if not scan:
         return JSONResponse({"error": "not_found"}, status_code=404)
     lang = lang_of(request)
@@ -370,7 +382,7 @@ async def scan_delete(request: Request):
     if await check_csrf(request, form):
         if (deny := await recheck(request)) is not None:
             return deny
-        sid = int(request.path_params["id"])
+        sid = _scan_id(request)
         if await run_in_threadpool(db.delete_scan, sid):
             db.audit("act_delete", request.state.sess.user, client_ip(request), f"#{sid}")
             await run_in_threadpool(db.compact)
@@ -415,7 +427,7 @@ def report_data(scan_id: int) -> dict | None:
 
 @require
 async def report_page(request: Request):
-    data = report_data(int(request.path_params["id"]))
+    data = report_data(_scan_id(request))
     if not data:
         return render(request, "error.html", {"msg": "not_found"}, 404)
     lang = lang_of(request)
@@ -427,7 +439,7 @@ async def report_page(request: Request):
 
 @require
 async def report_pdf(request: Request):
-    data = report_data(int(request.path_params["id"]))
+    data = report_data(_scan_id(request))
     if not data:
         return render(request, "error.html", {"msg": "not_found"}, 404)
     from .pdfreport import build_pdf
@@ -580,6 +592,8 @@ async def pin_reset(request: Request):
     if not settings.pin_reset_web:
         return RedirectResponse("/connection", status_code=303)
     if await check_csrf(request, form):
+        if (deny := await recheck(request)) is not None:   # a revoked auditor must not reset DC trust
+            return deny
         host = (form.get("host") or "").strip()
         if host:
             db.delete_pins(host)
@@ -610,7 +624,12 @@ class SecurityHeaders(BaseHTTPMiddleware):
 
 
 def _purge():
+    from . import datastate
     res = db.purge_expired(settings.report_retention_days, settings.audit_retention_days)
+    # backups hold reports and the activity log too: they go after the shorter of the two periods
+    days = min([d for d in (settings.report_retention_days, settings.audit_retention_days) if d and d > 0] or [0])
+    if (gone := datastate.prune_by_age(days)):
+        db.audit("act_purge", detail=f"{gone} Sicherungen älter als {days} Tage")
     if res["scans"] or res["audit"]:
         log.info("Retention: deleted %s reports and %s activity log entries", res["scans"], res["audit"])
         db.audit("act_purge", detail=f"{res['scans']} Berichte, {res['audit']} Protokolleinträge")

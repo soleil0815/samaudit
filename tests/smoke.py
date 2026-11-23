@@ -194,6 +194,16 @@ def rejected(host, chain) -> bool:
 
 check(rejected("firma.local [10.0.0.1]", [leaf("eve.firma.local", SA), ca_der]), "pin: foreign name from the same CA rejected")
 check(rejected("firma.local [10.0.0.1]", [leaf("dc01.firma.local", CA_), ca_der]), "pin: client certificate rejected")
+# before the first scan (no DC names known): another server certificate of the same CA must not pose as a DC
+db.set_kv("dc_names", "")
+check(rejected("firma.local [10.0.0.8]", [leaf("pc0815.firma.local", SA), ca_der]),
+      "pin: before the first scan a workstation certificate of the CA is rejected for a new address")
+check(not pins.check("firma.local [10.0.0.7]", [leaf("firma.local", SA), ca_der])["first_use"],
+      "pin: before the first scan a certificate for the domain name itself is adopted")
+with db.conn() as _c:
+    _logged = _c.execute("SELECT COUNT(*) FROM audit_log WHERE action='act_cert_pinned' AND detail LIKE ?",
+                         ("firma.local [10.0.0.7]%",)).fetchone()[0]
+check(_logged == 1, "pin: adopting a further address is noted in the activity log")
 db.set_kv("dc_names", "dc01.firma.local,dc02.firma.local")     # known from the last scan
 check(rejected("firma.local [10.0.0.9]", [leaf("eve.firma.local", SA), ca_der]), "pin: new address, not a DC → rejected")
 check(not pins.check("firma.local [10.0.0.2]", [leaf("dc02.firma.local", SA), ca_der])["first_use"],

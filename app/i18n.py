@@ -211,6 +211,8 @@ T: dict[str, dict[str, str]] = {
     "na_unknown": {"de": "Information nicht verfügbar.", "en": "Information not available."},
     "na_platform": {"de": "Nicht relevant für diesen Domänentyp.", "en": "Not relevant for this domain type."},
     "na_error": {"de": "Fehler bei der Auswertung.", "en": "Evaluation error."},
+    "na_child_domain": {"de": "Untergeordnete Domäne: Diese Gruppen liegen in der Stammdomäne der Gesamtstruktur – dort prüfen.", "en": "Child domain: these groups live in the forest root domain – check there."},
+    "na_sysvol_partial": {"de": "Nichts gefunden, aber SYSVOL war nicht vollständig lesbar (unlesbare Gruppenrichtlinien oder Dateigrenze erreicht).", "en": "Nothing found, but SYSVOL could not be read completely (unreadable group policies or file limit reached)."},
     "na_gpo_unreadable": {"de": "Mindestens eine wirksame Gruppenrichtlinie ist für das Prüferkonto nicht lesbar (Sicherheitsfilterung).", "en": "At least one applied group policy is not readable by the auditor account (security filtering)."},
     "na_esc8_certsrv": {"de": "Die Web-Registrierung (/certsrv) ist im AD nicht hinterlegt – bitte auf dem CA-Server prüfen, ob sie per HTTP mit NTLM erreichbar ist.", "en": "Web enrollment (/certsrv) is not recorded in AD – check on the CA server whether it is reachable over HTTP with NTLM."},
     "na_section": {"de": "Die nötigen Daten konnten beim Scan nicht vollständig gelesen werden.", "en": "The required data could not be read completely during the scan."},
