@@ -94,8 +94,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+      - id: published
+        name: Only the published program (never merged but unpublished code)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # a security update ships the program of the last release with new packages – nothing else.
+          # Merged code is published only by the owner ("veröffentlichen"), never through the patchday.
+          app="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' app/version.py)"
+          base="$(git tag -l "v$app" "v$app-s*" | sort -V | tail -n 1)"
+          if [ -z "$base" ]; then
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Security update skipped::Version $app is merged but not published yet – publish it first, the security update follows on the next patchday."
+            exit 0
+          fi
+          if ! git diff --quiet "$base" HEAD -- app run.py entrypoint.sh ':!app/docs'; then   # docs ship as they are
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Security update skipped::main contains program changes since $base that are not published – publish them first."
+            exit 0
+          fi
+          echo "ok=true" >> "$GITHUB_OUTPUT"
       - id: locks
         name: Update locks within the base (build without cache)
+        if: steps.published.outputs.ok == 'true'
         shell: bash
         run: |
           set -euo pipefail

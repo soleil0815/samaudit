@@ -9,7 +9,7 @@ import os
 import re
 
 APP_NAME = "SAMAUDIT"
-VERSION = "2.5.0"
+VERSION = "2.5.1"
 SOURCE_URL = "https://github.com/soleil0815/samaudit"   # source code (AGPL §13)
 DONATE_URL = "https://buymeacoffee.com/soleil0815"   # voluntary support (card at the bottom of the pages)
 

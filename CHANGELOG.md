@@ -4,6 +4,35 @@
 
 Program versions. Monthly security updates on patch day, the second Tuesday (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.5.1 – code audit
+
+Full code audit (sign-in, web interface, LDAP/SMB and rules, data and privacy, update path, supply chain, docs) with independent reviewers; every fixed finding has a test that fails on the previous version.
+
+**Security**
+- `update.sh` installs a newer `docker-compose.yml` from the image only after an explicit "y" at a terminal (never with `-y`) – it decides the container's rights on the host. If an update is rolled back, the old compose file comes back too.
+- The monthly security update only publishes the last published program – merged but unpublished code never goes out through the patchday.
+- Resetting DC certificates re-checks against AD first, like deleting and certificate changes. An account locked in AD ends the session for such actions immediately.
+- Before the first scan, a further DC address is only adopted with a certificate for the domain name or a `DC_HOSTS` entry (no longer any server certificate of the enterprise CA); every adoption is logged.
+- Sign-in page: user names with special characters count as failed attempts, a locked IP writes only one log entry – the activity log can no longer be flooded without signing in.
+- Diagnostics package: web certificate errors, names with é/apostrophes/"!", `DOMAIN\user`, DNs like "Mustermann\, Lieselotte" and IP addresses at the end of a sentence are replaced reliably. `diag --log` reads the file with the program user's rights.
+- `userPassword`/`unixUserPassword` are only checked for presence; their content is no longer read.
+- CI always downloads Trivy fresh and verifies its checksum.
+
+**Correct results**
+- Group policies: enforced links take precedence, GPOs with disabled computer settings no longer count.
+- SYSVOL read errors (e.g. access denied) no longer count as "not configured"; A-GPPPassword and A-ScriptPasswords report "not checkable" instead of "passed" when SYSVOL could not be read completely.
+- Errors reading single directory objects (AdminSDHolder, dsHeuristics, DC OU, PKI, schema) make the affected checks "not checkable" instead of "passed". Child domains are no longer taken for the root domain; Schema/Enterprise Admins are "not checkable" there.
+- Locked, disabled or expired AD accounts are recognised correctly at sign-in (no longer "wrong password").
+- Two SYSVOL/gPLink patterns work in linear time – a crafted file can no longer block a scan for minutes.
+
+**Operation**
+- Backups in `data/backups` are deleted after the shorter of the two retention periods at the latest.
+- Unusual certificate files give an understandable message instead of error 500; a broken file in `./certs` no longer stops the start (self-signed certificate).
+- `--cleanup` keeps old version folders containing keys, own settings or backups.
+- The health check reads `TLS_ENABLED` like the program (blank = on); a blank or lower-case `LOG_LEVEL` no longer stops the start; certificates given as links in `./certs` are taken over.
+- CSRF values with umlauts, oversized scan numbers and technical errors during the AD re-check no longer cause error 500; signing in again ends the browser's old session.
+- Docs: auditor group `SAMAUDIT-Users`, lockout 5 per user/15 per IP, cookies, `LDAP_ALLOW_PLAIN`, `EGRESS_ALLOW` LDAP/SMB ports only, backups, privacy page.
+
 ## 2.5.0 – update hint
 
 - **Is there a newer version?** For installations that do not update automatically: if the running version is older than 60 days (`UPDATE_HINT_DAYS`, `0` = off), the overview shows "Check for updates" with a link to the releases. No internet needed – the release date ships with the program.

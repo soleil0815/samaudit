@@ -111,11 +111,8 @@ def effective_dc_registry(ctx: Ctx, key_suffix: str) -> str | None:
     check_gpos_readable(ctx, ctx.gpo_guids("dc"))   # raises "not checkable" for unreadable links/GPOs
     secedit = sv.get("secedit", {})
     value = None
-    links = (ctx.m.get("gpo_links") or {})
-    for link in list(links.get("domain", [])) + list(links.get("dc_ou", [])):
-        if not link.get("enabled"):
-            continue
-        data = secedit.get(link["guid"].upper()) or {}
+    for guid in ctx.gpo_guids("dc"):          # order of application incl. enforced links and disabled GPOs
+        data = secedit.get(guid) or {}
         for k, v in (data.get("Registry Values") or {}).items():
             if k.lower().endswith(key_suffix.lower()):
                 value = v.split(",", 1)[1].strip().strip('"') if "," in v else v
@@ -496,6 +493,8 @@ def _admin_count(ctx: Ctx):
       code="Get-ADGroupMember 'Schema Admins' | ForEach-Object { Remove-ADGroupMember 'Schema Admins' $_ -WhatIf }",
       columns=["account", "group", "last_logon"])
 def _schema_ea(ctx: Ctx):
+    if ctx.domain.get("is_root") is False:
+        raise NotApplicable("na_child_domain")   # both groups live in the forest root domain, not readable here
     items = []
     for rid in (518, 519):
         g = ctx.group(rid)
@@ -1285,6 +1284,8 @@ def _dc_ou(ctx: Ctx):
 def _gpp(ctx: Ctx):
     sv = need_sysvol(ctx)
     hits = sv.get("gpp_passwords") or []
+    if not hits and (sv.get("unreadable_gpos") or sv.get("limits")):
+        raise NotApplicable("na_sysvol_partial")     # nothing found, but not everything could be read
     return Hit([{"gpo": h["gpo"], "file": h["file"], "account": h.get("accounts", "")} for h in hits]) if hits else None
 
 

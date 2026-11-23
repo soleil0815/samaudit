@@ -76,7 +76,7 @@ All 118 checks with ID, area, severity and description. IDs start with `STL-` (s
 - **HTTPS certificate of the web interface:** shows the active certificate (source, issuer, expiry date, fingerprint) and warnings (expired, expiring soon, server name missing from the certificate).
   - **Upload your own certificate:** select a PFX file (e.g. exported from a Windows CA) with its password **or** certificate + private key → **Upload and activate**. It becomes active immediately, without a restart; reload the page afterwards. Before installing, SAMAUDIT checks that certificate and key match, that it is valid and that the key is strong enough (RSA at least 2048 bits).
   - **Remove uploaded certificate** restores the previous one.
-- **Trusted DC certificates:** SAMAUDIT remembers each DC's certificate and DNS name on first contact and later rejects a foreign certificate (protection against man-in-the-middle) – including one the same enterprise CA issued for another computer or user. Normal renewals stay valid. After an **intended** certificate or CA change (or a new DC), reset it – for security reasons on the server: `docker exec samaudit python -m app.pins reset <DC>`. With `PIN_RESET_WEB=true` in `.env` the **Reset** button here works as well.
+- **Trusted DC certificates:** SAMAUDIT remembers each DC's certificate and DNS name on first contact and later rejects a foreign certificate (protection against man-in-the-middle) – including one the same enterprise CA issued for another computer or user. A further address of the same name (second DC) is only adopted with a certificate of that CA for a known DC (known from the last scan, from `DC_HOSTS` or the domain name itself) and is noted in the activity log. With self-signed DC certificates (Samba) a further DC is pinned on first contact – if you do not want that, list the DCs in `DC_HOSTS`. Normal renewals stay valid. After an **intended** certificate or CA change (or a new DC), reset it – for security reasons on the server: `docker exec samaudit python -m app.pins reset <DC>`. With `PIN_RESET_WEB=true` in `.env` the **Reset** button here works as well.
 
 ### Activity log
 
@@ -181,7 +181,7 @@ The complete list is in the README.
 docker compose pull && docker compose up -d
 ```
 
-or `sh update.sh`: remembers the running version, checks the new one and starts the previous one again on problems; brings a newer `docker-compose.yml` along if needed (the previous one is kept as `docker-compose.yml.alt`). Also runs on a NAS. If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
+or `sh update.sh`: remembers the running version, checks the new one and starts the previous one again on problems; brings a newer `docker-compose.yml` along if needed – as `docker-compose.yml.neu`, installed only after an explicit "y" at a terminal (never with `-y`), because it decides the container's rights on the host (the previous one is kept as `docker-compose.yml.alt` and comes back on a rollback). Also runs on a NAS. If the repository is private, run `docker login ghcr.io` once on the server (password: a GitHub token with `read:packages`).
 
 **On every version change** SAMAUDIT itself backs up the database on first start to `data/backups/samaudit-vor-<version>-<time>.db` (the last 5 are kept) – however the update arrived.
 
@@ -228,7 +228,7 @@ In addition, the published image is scanned daily, and every week it is checked 
 
 SAMAUDIT itself only connects to the domain controllers (LDAP, LDAPS, Global Catalog, SMB). Any other connection attempt is rejected and recorded in the **activity log** (`EGRESS_GUARD`, on by default). If you also want to isolate the container at network level, use your own firewall (Docker network `samaudit-net`, bridge `br-samaudit`).
 
-The only exception, and only if you switch it on: the update check (`UPDATE_CHECK=true`). The guard then additionally allows exactly `api.github.com` on port 443. Only the request for the latest version is sent – no domain, no names; GitHub sees the IP address of your connection. Proxies from the environment are not used. If the check fails, the interface stays silent; time and result of the last check are in the diagnostics package (section `update`).
+The only exception, and only if you switch it on: the update check (`UPDATE_CHECK=true`). The guard then additionally allows exactly `api.github.com` on port 443. Only the request for the latest version is sent – no domain, no names; GitHub sees the IP address of your connection. Proxies from the environment are not used. If the check fails, the interface stays silent; time and result of the last check are in the diagnostics package from the interface (section `update`; created by command it is empty, because the state only lives in the running program).
 
 ### Data, backup and restore
 

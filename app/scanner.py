@@ -43,6 +43,7 @@ SECTION_RULES = {
     "adminsdholder": ("P-AdminSDHolder",),
     "dsheuristics": ("A-AnonymousAccess", "A-DSHeuristicsSDProp", "A-UPNSPNUniqueness", "A-Tombstone"),
     "recyclebin": ("A-RecycleBin",),
+    "userpassword": ("S-UserPassword",),
     "laps_schema": ("S-LAPS",),
     "root_groups": ("P-SchemaEnterpriseAdmins",),
 }

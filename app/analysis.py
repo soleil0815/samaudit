@@ -220,13 +220,22 @@ class Ctx:
             raise NotApplicable("na_section")
         links = self.m.get("gpo_links") or {}
         if scope == "dc":
-            seq = list(links.get("domain", [])) + list(links.get("dc_ou", []))
+            dom, ou = list(links.get("domain", [])), list(links.get("dc_ou", []))
+            # order of application: normal links domain → DC OU, then enforced links, where the higher
+            # container wins (enforced domain GPO overrides everything) – later entries override earlier ones
+            seq = ([lk for lk in dom if not lk.get("enforced")] + [lk for lk in ou if not lk.get("enforced")]
+                   + [lk for lk in ou if lk.get("enforced")] + [lk for lk in dom if lk.get("enforced")])
         else:
-            seq = list(links.get("all", [])) or list(links.get("domain", [])) + list(links.get("dc_ou", []))
-        out = []
+            base = list(links.get("all", [])) or list(links.get("domain", [])) + list(links.get("dc_ou", []))
+            seq = [lk for lk in base if not lk.get("enforced")] + [lk for lk in base if lk.get("enforced")]
+        # GPOs whose computer settings are disabled (flags 2 = computer part off, 3 = everything off) do not apply
+        off = {g["guid"].upper() for g in self.m.get("gpos", []) if int(g.get("flags") or 0) & 2}
+        out: list[str] = []
         for lk in seq:
             g = lk["guid"].upper()
-            if lk.get("enabled") and g not in out:
+            if lk.get("enabled") and g not in off:
+                if g in out:
+                    out.remove(g)              # linked twice: the later (stronger) position counts
                 out.append(g)
         return out
 

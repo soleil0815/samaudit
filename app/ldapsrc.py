@@ -162,18 +162,7 @@ def open_connection(bind_name: str, password: str):
                     raise AuthError("tls_failed", str(conn.result))
             _check_pin(pin_key, conn)  # before sending the password
             if not conn.bind():
-                res = conn.result or {}
-                desc = (res.get("description") or "").lower()
-                msg = res.get("message") or ""
-                if desc == "invalidcredentials" or "52e" in msg:
-                    raise AuthError("bad_credentials")
-                if "775" in msg:
-                    raise AuthError("account_locked")
-                if "533" in msg or "532" in msg or "701" in msg or "773" in msg:
-                    raise AuthError("account_unusable", msg)
-                if desc in ("strongerauthrequired", "confidentialityrequired"):
-                    raise AuthError("tls_required", msg)
-                raise AuthError("bind_failed", f"{desc} {msg}".strip())
+                _bind_error(conn)
             conn._samaudit_host = host
             return conn
         except AuthError as e:
@@ -251,10 +240,33 @@ def _check_result(conn, base: str) -> None:
     raise SearchFailed(f"{base}: {res.get('description')} ({code}) {res.get('message') or ''}".strip())
 
 
-def base_entry(conn, dn: str, attrs: list[str], sd: bool = False) -> Entry | None:
+def _bind_error(conn) -> None:
+    """Raises the AuthError for a failed bind. A Windows DC reports a locked, disabled or expired account
+    as invalidCredentials too – the sub-code ("data 775") decides, so check it first."""
+    res = conn.result or {}
+    desc = (res.get("description") or "").lower()
+    msg = res.get("message") or ""
+    m = re.search(r"\bdata ([0-9a-f]{3,4})\b", msg, re.IGNORECASE)
+    sub = m.group(1).lower() if m else ""
+    if sub == "775":
+        raise AuthError("account_locked")
+    if sub in ("533", "532", "701", "773"):
+        raise AuthError("account_unusable", msg)
+    if desc == "invalidcredentials" or sub in ("52e", "525"):
+        raise AuthError("bad_credentials")
+    if desc in ("strongerauthrequired", "confidentialityrequired"):
+        raise AuthError("tls_required", msg)
+    raise AuthError("bind_failed", f"{desc} {msg}".strip())
+
+
+def base_entry(conn, dn: str, attrs: list[str], sd: bool = False, strict: bool = False) -> Entry | None:
+    """One object. strict=True: read errors are raised (only "does not exist" gives None), so that the
+    calling section is marked as failed and its rules say "not checkable" instead of a false "passed"."""
     try:
         res = search(conn, dn, "(objectClass=*)", attrs, scope="BASE", sd=sd, paged=False)
     except Exception as e:  # noqa: BLE001
+        if strict:
+            raise
         log.debug("base_entry %s: %s", dn, e)
         return None
     return res[0] if res else None
@@ -492,7 +504,7 @@ def authenticate(username: str, password: str) -> AuthResult:
 USER_ATTRS = ["sAMAccountName", "userPrincipalName", "displayName", "userAccountControl", "lastLogonTimestamp",
               "pwdLastSet", "whenCreated", "adminCount", "servicePrincipalName", "primaryGroupID", "sIDHistory",
               "objectSid", "msDS-SupportedEncryptionTypes", "msDS-AllowedToDelegateTo",
-              "msDS-AllowedToActOnBehalfOfOtherIdentity", "userPassword", "unixUserPassword", "objectClass",
+              "msDS-AllowedToActOnBehalfOfOtherIdentity", "objectClass",
               "msDS-KeyCredentialLink", "altSecurityIdentities", "msDS-GroupMSAMembership"]
 COMPUTER_ATTRS = ["sAMAccountName", "dNSHostName", "operatingSystem", "operatingSystemVersion",
                   "userAccountControl", "lastLogonTimestamp", "pwdLastSet", "whenCreated", "servicePrincipalName",
@@ -544,7 +556,7 @@ def _account(e: Entry, computer: bool) -> dict:
         d.update({
             "upn": as_str(e.get("userPrincipalName")) or "",
             "display": as_str(e.get("displayName")) or "",
-            "has_userpassword": bool(e.get("userPassword") or e.get("unixUserPassword")),
+            "has_userpassword": False,   # set by a presence filter in collect() – the values are never read
             # managed service accounts (gMSA and sMSA): random, automatically rotated passwords
             "is_gmsa": bool({"msds-groupmanagedserviceaccount", "msds-managedserviceaccount",
                              "msds-delegatedmanagedserviceaccount"} & set(d["classes"])),
@@ -558,7 +570,8 @@ def _account(e: Entry, computer: bool) -> dict:
 
 def _parse_gplink(v: str | None) -> list[dict]:
     out = []
-    for m in re.finditer(r"\[LDAP://([^;\]]+);(\d+)\]", v or "", re.IGNORECASE):
+    # "[" excluded and lengths bounded: linear even for crafted values (no backtracking across entries)
+    for m in re.finditer(r"\[LDAP://([^;\][]{1,2048});(\d{1,10})\]", (v or "")[:262_144], re.IGNORECASE):
         dn, opt = m.group(1), int(m.group(2))
         g = re.search(r"\{[0-9A-Fa-f-]{36}\}", dn)
         if g:
@@ -606,7 +619,8 @@ def collect(conn, progress) -> dict:
     domain = {
         "dn": dn, "fqdn": settings.domain_fqdn or ".".join(p.split("=", 1)[1] for p in dn.split(",")),
         "netbios": netbios, "sid": domain_sid, "root_sid": root_sid,
-        "is_root": root_sid == domain_sid,
+        # from the naming contexts: an unreadable root SID must not turn a child domain into the root domain
+        "is_root": not dse.get("root_nc") or dse["root_nc"].lower() == dn.lower(),
         "domain_level": dse.get("domain_level"), "forest_level": dse.get("forest_level"),
         "created": gentime_to_dt(d.get("whenCreated")),
         "maq": as_int(d.get("ms-DS-MachineAccountQuota")),
@@ -635,6 +649,12 @@ def collect(conn, progress) -> dict:
         conn, dn, "(|(objectClass=msDS-GroupManagedServiceAccount)(objectClass=msDS-ManagedServiceAccount)"
                   "(objectClass=msDS-DelegatedManagedServiceAccount))",
         USER_ATTRS)], []) or []
+
+    # userPassword / unixUserPassword: only whether they are set (filter), never their content
+    pw = safe("userpassword", lambda: {e.dn.lower() for e in search(
+        conn, dn, "(&(objectClass=user)(|(userPassword=*)(unixUserPassword=*)))", ["objectClass"])})
+    for u in users:
+        u["has_userpassword"] = pw is not None and u["dn"].lower() in pw
 
     progress(35, "phase_computers")
     computers = [_account(e, True) for e in search(conn, dn, "(objectCategory=computer)", COMPUTER_ATTRS)]
@@ -684,15 +704,15 @@ def collect(conn, progress) -> dict:
 
     progress(72, "phase_config")
     sdh = safe("adminsdholder", lambda: base_entry(conn, f"CN=AdminSDHolder,CN=System,{dn}",
-                                                    ["nTSecurityDescriptor"], sd=True))
+                                                    ["nTSecurityDescriptor"], sd=True, strict=True))
     acl["adminsdholder"] = parse_sd(sdh.get("nTSecurityDescriptor")) if sdh else None
 
     ds = safe("dsheuristics", lambda: base_entry(
-        conn, f"CN=Directory Service,CN=Windows NT,CN=Services,{config_nc}", ["dSHeuristics", "tombstoneLifetime"]))
+        conn, f"CN=Directory Service,CN=Windows NT,CN=Services,{config_nc}", ["dSHeuristics", "tombstoneLifetime"], strict=True))
     rb = safe("recyclebin", lambda: base_entry(
         conn, f"CN=Recycle Bin Feature,CN=Optional Features,CN=Directory Service,CN=Windows NT,CN=Services,{config_nc}",
-        ["msDS-EnabledFeatureBL"]))
-    schema = safe("schema", lambda: base_entry(conn, schema_nc, ["objectVersion"]))
+        ["msDS-EnabledFeatureBL"], strict=True))
+    schema = safe("schema", lambda: base_entry(conn, schema_nc, ["objectVersion"], strict=True))
     laps_attrs = safe("laps_schema", lambda: [as_str(x.get("lDAPDisplayName")) for x in search(
         conn, schema_nc, "(|(lDAPDisplayName=ms-Mcs-AdmPwd)(lDAPDisplayName=msLAPS-Password))",
         ["lDAPDisplayName"], paged=False)], []) or []
@@ -767,7 +787,8 @@ def collect(conn, progress) -> dict:
     pki_objects = []
     for odn in (pki_base, f"CN=Certificate Templates,{pki_base}", f"CN=NTAuthCertificates,{pki_base}",
                 f"CN=Enrollment Services,{pki_base}", f"CN=Certification Authorities,{pki_base}"):
-        e = safe("pki_obj", lambda odn=odn: base_entry(conn, odn, ["nTSecurityDescriptor", "cACertificate"], sd=True))
+        e = safe("pki_obj", lambda odn=odn: base_entry(conn, odn, ["nTSecurityDescriptor", "cACertificate"], sd=True,
+                                                                strict=True))
         if e is not None:
             pki_objects.append({"dn": odn, "sd": parse_sd(e.get("nTSecurityDescriptor")),
                                 "certs": [bytes(c) for c in (e.get("cACertificate") or [])
@@ -782,7 +803,7 @@ def collect(conn, progress) -> dict:
                      "path": as_str(e.get("gPCFileSysPath")) or "", "flags": as_int(e.get("flags"), 0),
                      "changed": gentime_to_dt(e.get("whenChanged")), "sd": parse_sd(e.get("nTSecurityDescriptor"))})
     dc_ou = safe("dc_ou", lambda: base_entry(conn, f"OU=Domain Controllers,{dn}", ["gPLink", "nTSecurityDescriptor"],
-                                             sd=True))
+                                             sd=True, strict=True))
     acl["dc_ou"] = parse_sd(dc_ou.get("nTSecurityDescriptor")) if dc_ou else None
     all_links: list[dict] = []
     for e in (safe("all_links", lambda: search(conn, dn, "(gPLink=*)", ["gPLink"]), []) or []) + \

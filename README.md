@@ -201,7 +201,7 @@ The group name can be changed with `ALLOWED_GROUPS` (e.g. `SAMAUDIT-Users`).
 
 Groups are identified by RID/SID, so detection works regardless of the domain language. `DENIED_GROUPS` blocks additional groups (e.g. your own Tier 0 groups); the built-in blocks cannot be disabled.
 
-Further protection: lockout after 5 failed attempts (per user and IP), 30-minute session timeout, CSRF protection, `HttpOnly` / `Secure` / `SameSite=Strict` cookies, Content Security Policy, and an activity log of all sign-ins (including rejected ones), scans and certificate events.
+Further protection: lockout after 5 failed attempts per user or 15 per IP, 30-minute session timeout, CSRF protection, `HttpOnly` / `Secure` cookies (sign-in and session cookie `SameSite=Strict`, language/notices `Lax`), Content Security Policy, and an activity log of all sign-ins (including rejected ones), scans and certificate events.
 
 **What happens to the password?** After sign-in it is kept encrypted (key held in memory only) for the duration of the session, so that a scan can run with your rights. It is never written to the database, to disk or to logs.
 
@@ -253,9 +253,9 @@ curl -k https://localhost:9400/healthz    # version and state
 docker compose pull && docker compose up -d
 ```
 
-or `sh update.sh` – which additionally remembers the running version as `previous`, waits for the health check and starts the previous version again on problems (after asking, automatically with `-y`). If the `docker-compose.yml` inside the image is newer, it stores it and keeps the previous one as `docker-compose.yml.alt`. `update.sh` runs with `/bin/sh`, also on a NAS (e.g. Synology), and needs Docker with Compose.
+or `sh update.sh` – which additionally remembers the running version as `previous`, waits for the health check and starts the previous version again on problems (after asking, automatically with `-y`). If the `docker-compose.yml` inside the image is newer, it saves it as `docker-compose.yml.neu` and only installs it after an explicit "y" at a terminal (never with `-y`) – it decides the container's rights on the host. The previous one is then kept as `docker-compose.yml.alt` and comes back if the update is rolled back. `update.sh` runs with `/bin/sh`, also on a NAS (e.g. Synology), and needs Docker with Compose.
 
-**On every version change – however the update arrives –** SAMAUDIT backs up the database on first start to `data/backups/samaudit-vor-<version>-<time>.db` and only then adapts the database. The last 5 of these backups are kept (`BACKUP_KEEP`). If `docker-compose.yml` is outdated, a notice appears in the log and on the overview.
+**On every version change – however the update arrives –** SAMAUDIT backs up the database on first start to `data/backups/samaudit-vor-<version>-<time>.db` and only then adapts the database. Backups of the last 5 versions are kept (`BACKUP_KEEP`); like the reports, they are deleted after the shorter of the two retention periods at the latest. If `docker-compose.yml` is outdated, a notice appears in the log and on the overview.
 
 ### Pinning a version and going back
 
@@ -303,7 +303,7 @@ Everything SAMAUDIT stores is in `./data`:
 | File | Content |
 |---|---|
 | `samaudit.db` + `-wal`/`-shm` | reports, audit log, remembered DC certificates |
-| `backups/samaudit-vor-<version>-<time>.db` | automatic backup before every version change (the last 5) |
+| `backups/samaudit-vor-<version>-<time>.db` | automatic backup before every version change (oldest and newest per version for the last 5 versions; deleted after the shorter retention period at the latest) |
 | `tls/cert.pem`, `tls/key.pem` | self-signed web UI certificate |
 | `tls/custom/` | certificate uploaded via the web UI (chain + key) |
 
@@ -332,6 +332,7 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 | `LDAP_SSL` / `LDAP_PORT` | `true` / `636` | LDAPS |
 | `LDAP_STARTTLS` | `false` | StartTLS on 389 instead of LDAPS |
 | `LDAP_CERT_MODE` | `auto` | `auto` (trust automatically and pin), `trust`, `verify` |
+| `LDAP_ALLOW_PLAIN` | `false` | allow unencrypted LDAP sign-in – tests only, the password then crosses the network in clear text |
 | `PIN_RESET_WEB` | `false` | allow resetting remembered DC certificates in the web interface (otherwise only `docker exec samaudit python -m app.pins reset`) |
 | `LDAP_CA_FILE` | – | CA certificate (PEM) in the `certs` folder, only for `verify` |
 | `LDAP_TIMEOUT` | `10` | seconds |
@@ -353,7 +354,7 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 | `DEFAULT_LANG` | `de` | `de` or `en` (can be switched in the interface) |
 | `DEMO_MODE` | `false` | sample data, sign-in demo/demo |
 | `EGRESS_GUARD` | `true` | in-app outbound lock (DCs only) |
-| `EGRESS_ALLOW` | – | additional allowed targets (IP, network, name; `;`-separated) |
+| `EGRESS_ALLOW` | – | additional allowed targets (IP, network, name; `;`-separated) – on the LDAP/SMB ports only |
 | `UPDATE_HINT_DAYS` | `60` | hint on the overview when this version is older (days, no internet; `0` = off) |
 | `UPDATE_CHECK` | `false` | daily online check for a newer version (GitHub API, port 443) |
 | `REPORT_RETENTION_DAYS` | `365` | delete reports after x days (`0` = never) |

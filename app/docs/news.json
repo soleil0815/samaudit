@@ -1,5 +1,26 @@
 [
   {
+    "version": "2.5.1",
+    "date": "2026-11-23",
+    "items": [
+      {
+        "type": "security",
+        "de": "Code-Audit: update.sh übernimmt eine neue docker-compose.yml nur noch nach ausdrücklicher Rückfrage, das Sicherheitsupdate veröffentlicht nie unveröffentlichten Code, und das Aktivitätsprotokoll lässt sich über die Anmeldeseite nicht mehr fluten.",
+        "en": "Code audit: update.sh installs a new docker-compose.yml only after an explicit question, the security update never publishes unpublished code, and the activity log can no longer be flooded via the sign-in page."
+      },
+      {
+        "type": "fix",
+        "de": "Richtigere Ergebnisse: erzwungene Gruppenrichtlinien haben Vorrang, unvollständig lesbares SYSVOL ergibt „nicht prüfbar“ statt „bestanden“, gesperrte AD-Konten werden bei der Anmeldung erkannt.",
+        "en": "More accurate results: enforced group policies take precedence, incompletely readable SYSVOL gives “not checkable” instead of “passed”, locked AD accounts are recognised at sign-in."
+      },
+      {
+        "type": "fix",
+        "de": "Diagnosepaket anonymisiert gründlicher, Sicherungen folgen den Löschfristen, kaputte Zertifikatsdateien verhindern den Start nicht mehr.",
+        "en": "The diagnostics package anonymises more thoroughly, backups follow the retention periods, broken certificate files no longer stop the start."
+      }
+    ]
+  },
+  {
     "version": "2.5.0",
     "date": "2026-11-20",
     "items": [

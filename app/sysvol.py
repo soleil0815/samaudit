@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+import errno
 import re
 import struct
 from typing import Any
@@ -20,7 +21,8 @@ GPP_FILES = {"groups.xml", "services.xml", "scheduledtasks.xml", "datasources.xm
              "registry.xml"}
 _CPASS = re.compile(rb'cpassword="([^"]+)"', re.IGNORECASE)
 _USER = re.compile(rb'(?:userName|accountName|runAs|newName)="([^"]*)"', re.IGNORECASE)
-_AUTOLOGON = re.compile(rb'name="DefaultPassword"[^>]*value="([^"]+)"', re.IGNORECASE)
+# bounded gaps keep the search linear – an unbounded [^>]* backtracks quadratically on crafted GPP files
+_AUTOLOGON = re.compile(rb'name="DefaultPassword"[^>]{0,2048}?value="([^"]{1,4096})"', re.IGNORECASE)
 
 SCRIPT_EXT = (".bat", ".cmd", ".ps1", ".psm1", ".vbs", ".kix", ".js", ".wsf", ".ini", ".cfg", ".txt")
 MAX_SCRIPT_FILES = 1500
@@ -195,13 +197,24 @@ def scan(server: str, fqdn: str, username: str, password: str, gpos: list[dict],
         result.update(status="error", error=str(e)[:300])
         return result
 
+    read_errors: set[str] = set()   # GUIDs with read errors other than "file does not exist"
+
     def read(path: str, limit: int = 2_000_000) -> bytes | None:
         try:
             with smbclient.open_file(path, mode="rb") as fh:
                 result["files_scanned"] += 1
                 return fh.read(limit)
-        except Exception as e:  # noqa: BLE001
-            log.debug("read %s: %s", path, e)
+        except FileNotFoundError:
+            return None
+        except Exception as e:  # noqa: BLE001 – access denied, connection lost …: not the same as "not configured"
+            name = type(e).__name__
+            # smbprotocol raises SMBOSError (an OSError) with errno ENOENT for missing files
+            if getattr(e, "errno", None) == errno.ENOENT or "notfound" in name.lower():
+                return None
+            log.warning("SYSVOL: %s not readable (%s)", path, name)
+            g = re.search(r"\{[0-9A-Fa-f-]{36}\}", path)
+            if g:
+                read_errors.add(g.group(0).upper())
             return None
 
     budget = {"gpo": MAX_SCRIPT_FILES, "netlogon": MAX_SCRIPT_FILES}
@@ -296,6 +309,9 @@ def scan(server: str, fqdn: str, username: str, password: str, gpos: list[dict],
                 result["unreadable_gpos"].append(guid)
         # 5) NETLOGON (separate budget)
         scan_scripts(rf"{sysvol}\scripts", "NETLOGON", "netlogon")
+        for g in sorted(read_errors):            # read errors: the GPO counts as unreadable, not as "empty"
+            if g not in result["unreadable_gpos"]:
+                result["unreadable_gpos"].append(g)
     except Exception as e:  # noqa: BLE001
         result.update(status="error", error=str(e)[:300])
     finally:

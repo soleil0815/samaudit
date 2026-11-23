@@ -47,11 +47,11 @@ docker compose up -d
 
 `https://<server>:9400` öffnen. Beim ersten Start erzeugt SAMAUDIT ein selbstsigniertes Zertifikat, daher warnt der Browser einmal ([eigenes Zertifikat verwenden](#eigenes-https-zertifikat)).
 
-**Vor der ersten Anmeldung** die Prüfer-Gruppe `SAMAUDIT-Benutzer` (oder `SAMAUDIT-Users`) im AD anlegen und die *normalen* Benutzerkonten aufnehmen, die die Berichte sehen dürfen – Admin-Konten werden grundsätzlich abgewiesen ([Einzelheiten](#wer-darf-sich-anmelden)):
+**Vor der ersten Anmeldung** die Prüfer-Gruppe `SAMAUDIT-Users` im AD anlegen (der frühere Name `SAMAUDIT-Benutzer` wird weiter angenommen) und die *normalen* Benutzerkonten aufnehmen, die die Berichte sehen dürfen – Admin-Konten werden grundsätzlich abgewiesen ([Einzelheiten](#wer-darf-sich-anmelden)):
 
 ```powershell
-New-ADGroup -Name "SAMAUDIT-Benutzer" -GroupScope Global -GroupCategory Security
-Add-ADGroupMember -Identity "SAMAUDIT-Benutzer" -Members "m.muster"
+New-ADGroup -Name "SAMAUDIT-Users" -GroupScope Global -GroupCategory Security
+Add-ADGroupMember -Identity "SAMAUDIT-Users" -Members "m.muster"
 ```
 
 **Erst einmal nur ansehen?** In der `.env` `DEMO_MODE=true` setzen, `docker compose up -d` und mit `demo` / `demo` anmelden – ohne Domäne. Für den Echtbetrieb wieder `false`.
@@ -94,7 +94,7 @@ Ohne `curl`: Die beiden Dateien hängen auch an jedem [Release](https://github.c
 | | |
 |---|---|
 | **Anmeldung** | Mit dem eigenen **normalen** Domänenkonto direkt gegen den Domänencontroller (LDAPS). **Kein Dienstkonto, kein Admin-Konto.** |
-| **Zugriff** | Nur Mitglieder der Prüfer-Gruppe (`ALLOWED_GROUPS`, Standard `SAMAUDIT-Benutzer` oder `SAMAUDIT-Users`). Privilegierte Konten werden immer abgewiesen. Geprüft über die effektiven Gruppen (`tokenGroups`, inkl. Verschachtelung). |
+| **Zugriff** | Nur Mitglieder der Prüfer-Gruppe (`ALLOWED_GROUPS`, Standard `SAMAUDIT-Users`, ohne Einstellung auch der frühere Name `SAMAUDIT-Benutzer`). Privilegierte Konten werden immer abgewiesen. Geprüft über die effektiven Gruppen (`tokenGroups`, inkl. Verschachtelung). |
 | **Scan** | Manuell per Knopfdruck mit den Rechten des angemeldeten Prüfers. Vor jedem Scan wird die Berechtigung erneut geprüft. |
 | **Domänentyp** | Windows AD oder Samba AD wird automatisch erkannt. |
 | **Bewertung** | Vier Bereiche (Veraltete Objekte, Privilegierte Konten, Vertrauensstellungen, Anomalien), je 0–100 Punkte. Gesamtwert = höchster Bereichswert. |
@@ -176,14 +176,14 @@ SAMAUDIT wird bewusst **nicht** mit Admin-Konten benutzt. Wer sich in eine Weban
 
 Windows AD:
 ```powershell
-New-ADGroup -Name "SAMAUDIT-Benutzer" -GroupScope Global -GroupCategory Security -Description "Darf SAMAUDIT benutzen"
-Add-ADGroupMember -Identity "SAMAUDIT-Benutzer" -Members "m.mustermann"
+New-ADGroup -Name "SAMAUDIT-Users" -GroupScope Global -GroupCategory Security -Description "Darf SAMAUDIT benutzen"
+Add-ADGroupMember -Identity "SAMAUDIT-Users" -Members "m.mustermann"
 ```
 
 Samba AD:
 ```bash
-samba-tool group add "SAMAUDIT-Benutzer" --description="Darf SAMAUDIT benutzen"
-samba-tool group addmembers "SAMAUDIT-Benutzer" m.mustermann
+samba-tool group add "SAMAUDIT-Users" --description="Darf SAMAUDIT benutzen"
+samba-tool group addmembers "SAMAUDIT-Users" m.mustermann
 ```
 
 **2. Regeln bei der Anmeldung**
@@ -196,7 +196,7 @@ samba-tool group addmembers "SAMAUDIT-Benutzer" m.mustermann
 
 Die Gruppen werden über RIDs/SIDs erkannt, also sprachunabhängig. Mit `DENIED_GROUPS` lassen sich weitere Gruppen sperren (z. B. eigene Tier-0-Gruppen); die eingebauten Sperren lassen sich nicht abschalten.
 
-Weitere Schutzmechanismen: Sperre nach 5 Fehlversuchen (pro Benutzer und IP), Sitzungs-Timeout 30 Minuten, CSRF-Schutz, Cookies `HttpOnly` / `Secure` / `SameSite=Strict`, Content-Security-Policy, Protokoll aller Anmeldungen (auch abgewiesener), Scans und Zertifikatsereignisse.
+Weitere Schutzmechanismen: Sperre nach 5 Fehlversuchen pro Benutzer bzw. 15 pro IP, Sitzungs-Timeout 30 Minuten, CSRF-Schutz, Cookies `HttpOnly` / `Secure` (Anmelde- und Sitzungs-Cookie `SameSite=Strict`, Sprache/Hinweise `Lax`), Content-Security-Policy, Protokoll aller Anmeldungen (auch abgewiesener), Scans und Zertifikatsereignisse.
 
 **Was passiert mit dem Passwort?** Es wird nach der Anmeldung verschlüsselt (Schlüssel nur im Arbeitsspeicher) für die Dauer der Sitzung gehalten, damit ein Scan mit Ihren Rechten laufen kann. Es wird nie in die Datenbank, auf die Festplatte oder in Logs geschrieben.
 
@@ -247,9 +247,9 @@ curl -k https://localhost:9400/healthz    # Version und Zustand
 docker compose pull && docker compose up -d
 ```
 
-oder `sh update.sh` – das merkt sich zusätzlich die laufende Version als `previous`, wartet auf den Gesundheitscheck und startet bei Problemen wieder die vorige Version (nach Rückfrage, mit `-y` automatisch). Ist die `docker-compose.yml` im Image neuer, legt es sie ab und behält die bisherige als `docker-compose.yml.alt`. `update.sh` läuft mit `/bin/sh`, auch auf einem NAS (z. B. Synology), und braucht Docker mit Compose.
+oder `sh update.sh` – das merkt sich zusätzlich die laufende Version als `previous`, wartet auf den Gesundheitscheck und startet bei Problemen wieder die vorige Version (nach Rückfrage, mit `-y` automatisch). Ist die `docker-compose.yml` im Image neuer, legt es sie als `docker-compose.yml.neu` daneben und übernimmt sie nur nach ausdrücklichem „j“ im Terminal (nie mit `-y`) – sie bestimmt die Rechte des Containers auf dem Host. Die bisherige bleibt dann als `docker-compose.yml.alt`; fällt das Update zurück, kommt auch sie zurück. `update.sh` läuft mit `/bin/sh`, auch auf einem NAS (z. B. Synology), und braucht Docker mit Compose.
 
-**Bei jedem Versionswechsel – egal, wie das Update kommt** – sichert SAMAUDIT beim ersten Start die Datenbank nach `data/backups/samaudit-vor-<Version>-<Zeit>.db` und passt erst danach die Datenbank an. Die letzten 5 dieser Sicherungen bleiben (`BACKUP_KEEP`). Ist die `docker-compose.yml` veraltet, steht ein Hinweis im Log und auf der Übersicht.
+**Bei jedem Versionswechsel – egal, wie das Update kommt** – sichert SAMAUDIT beim ersten Start die Datenbank nach `data/backups/samaudit-vor-<Version>-<Zeit>.db` und passt erst danach die Datenbank an. Die Sicherungen der letzten 5 Versionen bleiben (`BACKUP_KEEP`); wie die Berichte werden sie spätestens nach der kürzeren der beiden Löschfristen gelöscht. Ist die `docker-compose.yml` veraltet, steht ein Hinweis im Log und auf der Übersicht.
 
 ### Version festlegen und zurückgehen
 
@@ -297,7 +297,7 @@ Alles, was SAMAUDIT speichert, liegt in `./data`:
 | Datei | Inhalt |
 |---|---|
 | `samaudit.db` + `-wal`/`-shm` | Berichte, Protokoll, gemerkte DC-Zertifikate |
-| `backups/samaudit-vor-<Version>-<Zeit>.db` | automatische Sicherung vor jedem Versionswechsel (die letzten 5) |
+| `backups/samaudit-vor-<Version>-<Zeit>.db` | automatische Sicherung vor jedem Versionswechsel (je Version die älteste und neueste, für die letzten 5 Versionen; spätestens nach der kürzeren Löschfrist gelöscht) |
 | `tls/cert.pem`, `tls/key.pem` | selbstsigniertes Zertifikat der Weboberfläche |
 | `tls/custom/` | über die Weboberfläche hochgeladenes Zertifikat (Kette + Schlüssel) |
 
@@ -326,6 +326,7 @@ Alle Werte werden in der `.env` gesetzt (Schreibweise `NAME=wert`, Vorlage mit E
 | `LDAP_SSL` / `LDAP_PORT` | `true` / `636` | LDAPS |
 | `LDAP_STARTTLS` | `false` | StartTLS auf 389 statt LDAPS |
 | `LDAP_CERT_MODE` | `auto` | `auto` (automatisch vertrauen und merken), `trust`, `verify` |
+| `LDAP_ALLOW_PLAIN` | `false` | unverschlüsselte LDAP-Anmeldung erlauben – nur für Tests, das Passwort geht dann im Klartext übers Netz |
 | `PIN_RESET_WEB` | `false` | gemerkte DC-Zertifikate in der Weboberfläche zurücksetzen erlauben (sonst nur `docker exec samaudit python -m app.pins reset`) |
 | `LDAP_CA_FILE` | – | CA-Zertifikat (PEM) im Ordner `certs`, nur für `verify` |
 | `LDAP_TIMEOUT` | `10` | Sekunden |
@@ -347,7 +348,7 @@ Alle Werte werden in der `.env` gesetzt (Schreibweise `NAME=wert`, Vorlage mit E
 | `DEFAULT_LANG` | `de` | `de` oder `en` (umschaltbar in der Oberfläche) |
 | `DEMO_MODE` | `false` | Beispieldaten, Anmeldung demo/demo |
 | `EGRESS_GUARD` | `true` | programminterne Sperre ausgehender Verbindungen (nur DCs) |
-| `EGRESS_ALLOW` | – | weitere erlaubte Ziele (IP, Netz, Name; `;`-getrennt) |
+| `EGRESS_ALLOW` | – | weitere erlaubte Ziele (IP, Netz, Name; `;`-getrennt) – nur auf den LDAP-/SMB-Ports |
 | `UPDATE_HINT_DAYS` | `60` | Hinweis auf der Übersicht, wenn die Version älter ist (Tage, ohne Internet; `0` = aus) |
 | `UPDATE_CHECK` | `false` | tägliche Online-Prüfung auf eine neuere Version (GitHub-API, Port 443) |
 | `REPORT_RETENTION_DAYS` | `365` | Berichte nach x Tagen löschen (`0` = nie) |
@@ -356,7 +357,7 @@ Alle Werte werden in der `.env` gesetzt (Schreibweise `NAME=wert`, Vorlage mit E
 | `LOG_LEVEL` | `INFO` | |
 | `SAMAUDIT_VERSION` | `latest` | Version des Images (z. B. `2.0.0` oder `2.0.0-s1`) |
 | `SAMAUDIT_IMAGE` | `ghcr.io/soleil0815/samaudit` | anderes Image, z. B. ein Fork |
-| `BACKUP_KEEP` | `5` | Anzahl der automatischen Sicherungen vor Versionswechseln (`0` = alle behalten) |
+| `BACKUP_KEEP` | `5` | Anzahl der Versionen, deren automatische Sicherungen bleiben (`0` = alle behalten; die Löschfristen gelten trotzdem) |
 
 ## Sicherheitsupdates und Versionen
 

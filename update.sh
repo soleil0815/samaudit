@@ -225,7 +225,9 @@ cleanup() {
   for d in samaudit* SAMAUDIT* Samaudit*; do
     [ -d "$d" ] && [ ! -L "$d" ] && grep -qs 'APP_NAME = "SAMAUDIT"' "$d/app/version.py" || continue
     case "$d" in *"$NL"*) continue ;; esac
-    if [ -e "$d/data" ] || [ -n "$(find "$d" \( -name '*.db' -o -name '*.tgz' -o -name '.env' \) 2>/dev/null | head -n 1)" ]; then
+    if [ -e "$d/data" ] || [ -n "$(find "$d" \( -name '*.db' -o -name '*.db.*' -o -name '*.sqlite*' -o -name '*.tgz' \
+         -o -name '.env' -o -name '.env.*' -o -name '*.pfx' -o -name '*.p12' -o -name '*.key' -o -name '*.pem' \
+         -o -name '*.crt' -o -name '*.bak' -o -name 'docker-compose.override.yml' -o -name backups \) 2>/dev/null | head -n 1)" ]; then
       skipped="$skipped  $d/ (contains data or settings)$NL"; continue
     fi
     add "$d"
@@ -318,10 +320,19 @@ take_files_from_image() {  # take_files_from_image IMAGE
          It was NOT replaced; the new one is saved next to it as docker-compose.yml.neu. Please move your own
          paths into a docker-compose.override.yml, then rename docker-compose.yml.neu → docker-compose.yml."
         else
-          cp -p docker-compose.yml docker-compose.yml.alt
-          cp "$tmpd/docker-compose.yml" docker-compose.yml.new.$$ && mv -f docker-compose.yml.new.$$ docker-compose.yml
-          warn "New docker-compose.yml (version ${old_v:-none} → $new_v) installed; the previous one is kept as docker-compose.yml.alt.
+          # docker-compose.yml decides the container's rights on the host (privileged, mounts, capabilities) –
+          # like update.sh it is never replaced without asking (not even with -y, never without a terminal)
+          cp "$tmpd/docker-compose.yml" docker-compose.yml.neu
+          echo "   The image contains a newer docker-compose.yml (version ${old_v:-none} → $new_v), saved as docker-compose.yml.neu"
+          echo "   (differences: diff docker-compose.yml docker-compose.yml.neu)."
+          if ask_strict "   Use the new docker-compose.yml now?"; then
+            cp -p docker-compose.yml docker-compose.yml.alt
+            mv -f docker-compose.yml.neu docker-compose.yml && COMPOSE_REPLACED=1
+            warn "New docker-compose.yml installed; the previous one is kept as docker-compose.yml.alt.
          Please move your own changes into docker-compose.override.yml."
+          else
+            warn "docker-compose.yml was NOT replaced. To use the new one later: mv docker-compose.yml.neu docker-compose.yml"
+          fi
         fi
       fi
     fi
@@ -411,6 +422,9 @@ rollback() {
   [ "$back_tag" = previous ] && back_tag=latest
   docker tag "$OLD_ID" "$REPO:$back_tag"
   env_set SAMAUDIT_VERSION "$back_tag"
+  if [ "${COMPOSE_REPLACED:-0}" = 1 ] && [ -f docker-compose.yml.alt ]; then   # the old version with its old file
+    cp -p docker-compose.yml.alt docker-compose.yml && echo "   previous docker-compose.yml restored."
+  fi
   ROLLED_BACK=1
   compose up -d >/dev/null 2>&1 || true
   if wait_healthy; then
@@ -424,7 +438,7 @@ rollback() {
 }
 
 # On abort leave nothing half-done: restore .env, start the stopped service again
-ENV_CHANGED=0; STOPPED=0; ROLLED_BACK=0; LEGACY_ASIDE=0
+ENV_CHANGED=0; STOPPED=0; ROLLED_BACK=0; LEGACY_ASIDE=0; COMPOSE_REPLACED=0
 on_exit() {
   rc=$?
   [ "$rc" = 0 ] && return 0
@@ -434,6 +448,9 @@ on_exit() {
   fi
   if [ "$LEGACY_ASIDE" = 1 ]; then legacy_back || true
   elif [ "$STOPPED" = 1 ] && [ "$ROLLED_BACK" = 0 ] && [ "$(health_of)" != healthy ]; then
+    if [ "$COMPOSE_REPLACED" = 1 ] && [ -f docker-compose.yml.alt ]; then
+      cp -p docker-compose.yml.alt docker-compose.yml && echo "   previous docker-compose.yml restored."
+    fi
     echo "   starting the previous version again …"; compose up -d >/dev/null 2>&1 || true
   fi
   exit "$rc"

@@ -14,7 +14,7 @@
 | **Zugriffskontrolle** | Nur Mitglieder der Prüfer-Gruppe; Admin-Konten werden abgewiesen. Sperre nach Fehlversuchen, Sitzungs-Timeout, CSRF-Schutz. |
 | **Vertraulichkeit** | HTTPS; Passwort der Prüfer nur verschlüsselt im Arbeitsspeicher; Datenordner nur für den Programmbenutzer lesbar (`chmod 700`); Container ohne Root-Rechte, schreibgeschützt. |
 | **Nachvollziehbarkeit** | Protokoll aller Anmeldungen (auch abgewiesener), Scans, Exporte, Löschungen und blockierten Verbindungen. |
-| **Cookies** | Nur technisch notwendige (Sitzung, CSRF, Sprache, zuletzt gesehene Version der Neuigkeiten, ausgeblendeter Update-Hinweis) – kein Einwilligungsbanner erforderlich (§ 25 Abs. 2 TDDDG). |
+| **Cookies** | Nur technisch notwendige (Sitzung, CSRF, Sprache, zuletzt gesehene Version der Neuigkeiten, ausgeblendeter Update-Hinweis); die Wahl hell/dunkel nur im Browser-Speicher (`localStorage`) – kein Einwilligungsbanner erforderlich (§ 25 Abs. 2 TDDDG). |
 | **Transparenz** | Öffentliche Seite `/privacy` („Datenschutz“) mit Zweck, Datenarten, Speicherdauer und Rechten; Kontakt über `PRIVACY_CONTACT`. |
 | **Diagnosepaket** | Nur auf Knopfdruck eines Prüfers (Protokoll) oder per Befehl auf dem Server; wird nirgends hin gesendet. Namen, Adressen und Kennungen sind durch Platzhalter ersetzt, Inhalte von Befunden, Kennwörter und Zertifikate nie enthalten; eine Schlussprüfung verhindert das Paket, wenn ein bekannter echter Name stehen bliebe. Warnungen dafür liegen nur im Arbeitsspeicher. |
 | **Löschung auf Anforderung** | Einzelne Berichte unter „Berichte“ löschbar; vollständige Löschung durch Entfernen des Ordners `data`. |
@@ -53,4 +53,4 @@
 - Festplatte des Docker-Hosts verschlüsseln (z. B. LUKS), da die Datenbank selbst nicht verschlüsselt ist.
 - Zugriff auf den Docker-Host (SSH, sudo) auf wenige Administratoren beschränken – wer Root auf dem Host hat, kann den Ordner `data` lesen.
 - Eigenes TLS-Zertifikat aus Ihrer CA verwenden statt des selbstsignierten.
-- Sicherungen des Ordners `data` verschlüsseln und mit derselben Frist löschen.
+- Sicherungen des Ordners `data` verschlüsseln und mit derselben Frist löschen. Die automatischen Sicherungen in `data/backups` löscht SAMAUDIT seit 2.5.1 selbst spätestens nach der kürzeren der beiden Fristen.

@@ -27,12 +27,13 @@
     <li>Berichte: {% if rd %}{{ rd }} {{ t('days', lang) }}, danach automatische Löschung{% else %}{{ t('never_auto', lang) }}{% endif %} (oder manuell unter „Berichte“).</li>
     <li>Protokoll: {% if ad %}{{ ad }} {{ t('days', lang) }}{% else %}{{ t('never_auto', lang) }}{% endif %}.</li>
     <li>Sitzungen: Ende bei Abmeldung, nach {{ settings.session_timeout_min }} Minuten Inaktivität oder Neustart.</li>
+    <li>Automatische Sicherungen vor Versionswechseln (enthalten Berichte und Protokoll): spätestens nach der kürzeren der beiden Fristen gelöscht.</li>
   </ul>
   <h3>Empfänger und Übermittlung</h3>
   <p>Keine. Alle Daten bleiben auf diesem Server. SAMAUDIT lädt keine Inhalte aus dem Internet nach, nutzt keine Analyse- oder Tracking-Dienste und darf ausgehend nur die eigenen Domänencontroller erreichen. Keine Übermittlung in Drittländer.</p>
   {% if settings.update_check %}<p>Ausnahme Update-Prüfung (vom Betreiber eingeschaltet): Einmal am Tag fragt der Server bei GitHub (USA) nach der neuesten Versionsnummer von SAMAUDIT. Dabei wird nichts außer der Anfrage selbst übertragen; GitHub sieht die IP-Adresse des Servers bzw. seines Internetanschlusses, aber keine Daten aus dem Active Directory oder über Personen.</p>{% endif %}
   <h3>Cookies und Browser-Speicher</h3>
-  <p>Nur technisch notwendige Cookies: Sitzung, Schutz vor Formular-Missbrauch (CSRF), gewählte Sprache und die zuletzt gesehene Version der Neuigkeiten (nur die Versionsnummer). Die gewählte Darstellung (hell/dunkel) wird nur im eigenen Browser gespeichert. Es gibt keine Werbe- oder Statistik-Cookies, daher ist kein Einwilligungsbanner nötig.</p>
+  <p>Nur technisch notwendige Cookies: Sitzung, Schutz vor Formular-Missbrauch (CSRF), gewählte Sprache, die zuletzt gesehene Version der Neuigkeiten und ein ausgeblendeter Update-Hinweis (nur Versionsnummern). Die gewählte Darstellung (hell/dunkel) wird nur im eigenen Browser gespeichert. Es gibt keine Werbe- oder Statistik-Cookies, daher ist kein Einwilligungsbanner nötig.</p>
   <h3>Zugriff</h3>
   <p>Nur Mitglieder der Prüfer-Gruppe ({{ settings.accepted_groups|join(', ') }}); Administrator-Konten sind ausgeschlossen. Alle Anmeldungen und Aktionen werden protokolliert.</p>
   <h3>Ihre Rechte</h3>
@@ -53,12 +54,13 @@
     <li>Reports: {% if rd %}{{ rd }} {{ t('days', lang) }}, then deleted automatically{% else %}{{ t('never_auto', lang) }}{% endif %} (or manually under "Reports").</li>
     <li>Activity log: {% if ad %}{{ ad }} {{ t('days', lang) }}{% else %}{{ t('never_auto', lang) }}{% endif %}.</li>
     <li>Sessions: end at sign-out, after {{ settings.session_timeout_min }} minutes of inactivity or on restart.</li>
+    <li>Automatic backups before version changes (contain reports and the activity log): deleted after the shorter of the two periods at the latest.</li>
   </ul>
   <h3>Recipients and transfers</h3>
   <p>None. All data stays on this server. SAMAUDIT loads nothing from the internet, uses no analytics or tracking and may only connect to the domain controllers. No transfers to third countries.</p>
   {% if settings.update_check %}<p>Exception update check (switched on by the operator): once a day the server asks GitHub (USA) for the latest SAMAUDIT version number. Nothing is transferred apart from the request itself; GitHub sees the IP address of the server or its internet connection, but no data from Active Directory or about people.</p>{% endif %}
   <h3>Cookies and browser storage</h3>
-  <p>Only technically necessary cookies: session, CSRF protection, language and the last version of “What’s new” you saw (version number only). The chosen theme is stored in your browser only. No advertising or statistics cookies, so no consent banner is required.</p>
+  <p>Only technically necessary cookies: session, CSRF protection, language, the last version of “What’s new” you saw and a dismissed update hint (version numbers only). The chosen theme is stored in your browser only. No advertising or statistics cookies, so no consent banner is required.</p>
   <h3>Access</h3>
   <p>Members of the auditor group only ({{ settings.accepted_groups|join(', ') }}); administrator accounts are excluded. All sign-ins and actions are logged.</p>
   <h3>Your rights</h3>
