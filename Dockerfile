@@ -13,7 +13,7 @@
 # Kerberos libraries of the same Debian snapshot. Compiler, headers and build tools (requirements-build.txt, with
 # hashes) stay in that stage; the final image only gets the two wheels and the Kerberos runtime libraries.
 ARG PYTHON_IMAGE=python:3.13.18-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
-ARG DEBIAN_SNAPSHOT=20261109T000000Z
+ARG DEBIAN_SNAPSHOT=20261123T190000Z
 ARG DEBIAN_CODENAME=trixie
 
 # ---------------------------------------------------------------------------------------------------------------
