@@ -32,7 +32,7 @@
 | Datenkategorien | Kontoname, Anzeigename (nur bei Prüfern), Gruppenmitgliedschaften, Zeitpunkt letzte Anmeldung/Passwortänderung, Konto-Einstellungen, Computername/Betriebssystem; bei Prüfern zusätzlich IP-Adresse und Zeitpunkt der Nutzung |
 | Besondere Kategorien (Art. 9) | keine |
 | Empfänger | nur Mitglieder der Prüfer-Gruppe; keine externen Empfänger |
-| Verbindung zum DC | LDAPS bzw. StartTLS mit gemerktem Zertifikat. Nur mit `LDAP_NTLM=true` (Windows-DC ohne Zertifikat) gehen Verzeichnisdaten unverschlüsselt über das interne Netz – das Passwort nie; besser dem DC ein Zertifikat geben. |
+| Verbindung zum DC | LDAPS bzw. StartTLS mit gemerktem Zertifikat; bei Windows-DCs ohne Zertifikat Kerberos auf Port 389, verschlüsselt („Sign and Seal“), mit `LDAP_NTLM=true` als Notlösung NTLM (ebenfalls verschlüsselt, DC aber nicht geprüft). Kerberos-Tickets liegen nur im Arbeitsspeicher und werden nach Anmeldung bzw. Prüfung gelöscht; die Kerberos-Einstellungen (ohne Geheimnisse) schreibt SAMAUDIT als temporäre Datei in den Container. |
 | Drittlandübermittlung | keine (bei eingeschalteter Update-Prüfung `UPDATE_CHECK`: nur die IP-Adresse des Servers an GitHub, USA, ohne personenbezogene Daten aus dem AD) |
 | Löschfristen | Berichte *365* Tage, Protokoll *90* Tage, Sitzungen max. 12 Stunden |
 | Technische und organisatorische Maßnahmen | siehe Abschnitt 1 und 4 |

@@ -64,9 +64,10 @@ def _tls():
 
 
 def _server(host: str, mode: str = ""):
-    """mode: "" = as configured, "starttls" = StartTLS on 389 (fallback), "ntlm" = port 389 without TLS."""
+    """mode: "" = as configured, "starttls" = StartTLS on 389 (fallback), "sasl" = port 389 without TLS, encrypted
+    with Kerberos/NTLM after the bind (app/ldapseal.py)."""
     ldap3 = _ldap3()
-    if mode == "ntlm":
+    if mode == "sasl":
         return ldap3.Server(host, port=389, use_ssl=False, tls=None, get_info=ldap3.NONE,
                             connect_timeout=settings.ldap_timeout)
     if mode == "starttls":
@@ -80,20 +81,35 @@ def _server(host: str, mode: str = ""):
 
 def _modes() -> list[str]:
     """Connection methods in order: as configured (LDAPS/StartTLS), then StartTLS on 389 if LDAPS is not
-    available (Windows DC without certificate), then NTLM on 389 only if LDAP_NTLM is switched on."""
+    available (Windows DC without certificate), then port 389 encrypted with Kerberos (LDAP_KERBEROS, default on)
+    or – only if LDAP_NTLM is switched on – NTLM ("sign and seal" in both cases)."""
     out = [""] if (settings.ldap_ssl or settings.ldap_starttls or settings.ldap_allow_plain) else []
     if settings.ldap_ssl and settings.ldap_port == 636:
         out.append("starttls")
-    if settings.ldap_ntlm:
-        out.append("ntlm")
+    if settings.ldap_kerberos or settings.ldap_ntlm:
+        out.append("sasl")
     return out
 
 
-def nt_hash_password(password: str) -> str:
-    """ldap3 computes the NT hash with hashlib's MD4, which OpenSSL 3 no longer offers. ldap3 also accepts
-    "LM:NT" hex hashes – the NT hash is computed with the pure-Python MD4 of pyspnego (in memory only)."""
-    from spnego._ntlm_raw.md4 import md4
-    return "0" * 32 + ":" + md4(password.encode("utf-16-le")).hex()
+def kerberos_target(host: str, bind_name: str) -> dict | None:
+    """Kerberos principal and target for a DC name, or {"skip": reason} if Kerberos is not possible for it, or None
+    if LDAP_KERBEROS=false. The target name comes from DC_HOSTS – never from the network."""
+    if not settings.ldap_kerberos:
+        return None
+    from . import kerberos
+    if not kerberos.libraries():
+        return {"skip": "missing"}
+    if not kerberos.is_dns_name(host):
+        return {"skip": "ip"}
+    principal = kerberos.principal(bind_name, settings.domain_fqdn)
+    if not principal:
+        return {"skip": "upn"}
+    try:
+        kerberos.ensure_config(settings.domain_fqdn, kerberos.kdcs())
+    except (ValueError, OSError) as e:
+        log.warning("Kerberos configuration not written: %s", e)
+        return {"skip": "realm"}
+    return {"principal": principal, "target": host.strip().lower()}
 
 
 def _targets() -> list[tuple[str, str, str]]:
@@ -121,7 +137,7 @@ def _targets() -> list[tuple[str, str, str]]:
 
 def _check_pin(host: str, conn, mode: str = "") -> None:
     """LDAPS auto-trust: remember the certificate chain on first contact, compare it afterwards."""
-    if mode == "ntlm" or settings.ldap_cert_mode != "auto" or \
+    if mode == "sasl" or settings.ldap_cert_mode != "auto" or \
             not (settings.ldap_ssl or settings.ldap_starttls or mode == "starttls"):
         return
     from . import pins
@@ -144,19 +160,32 @@ def _check_pin(host: str, conn, mode: str = "") -> None:
         raise AuthError("cert_changed", str(e)) from e
 
 
-def _connect(bind_name: str, password: str, addr: str, pin_key: str, mode: str):
-    """One connection attempt with one method; raises AuthError or ldap3 exceptions."""
+def _connect(bind_name: str, password: str, addr: str, pin_key: str, mode: str, host: str = "",
+             ntlm_ok: bool = False, keep_ticket: bool = False):
+    """One connection attempt with one method; raises AuthError, SealError or ldap3 exceptions."""
     ldap3 = _ldap3()
-    if mode == "ntlm":
+    if mode == "sasl":
+        from . import ldapseal
         domain = settings.netbios or settings.domain_fqdn
         sam = bind_name.split("@")[0]
         conn = ldap3.Connection(
-            _server(addr, "ntlm"), user=f"{domain}\\{sam}", password=nt_hash_password(password),
-            authentication=ldap3.NTLM, auto_bind=ldap3.AUTO_BIND_NONE, read_only=True, raise_exceptions=False,
-            auto_range=False, auto_referrals=False, receive_timeout=max(settings.ldap_timeout, 30))
+            _server(addr, "sasl"), authentication=ldap3.ANONYMOUS, auto_bind=ldap3.AUTO_BIND_NONE, read_only=True,
+            raise_exceptions=False, auto_range=False, auto_referrals=False,
+            receive_timeout=max(settings.ldap_timeout, 30))
         conn.open()
-        if not conn.bind():
-            _bind_error(conn)
+        try:
+            kind, ticket, why = ldapseal.sealed_bind(
+                conn, password, host or addr, kerberos_target(host or addr, bind_name),
+                f"{domain}\\{sam}" if ntlm_ok else None, keep_ticket=keep_ticket)
+        except BaseException:
+            try:
+                conn.unbind()
+            except Exception:  # noqa: BLE001
+                pass
+            raise
+        conn._samaudit_kind = kind
+        conn._samaudit_ticket = ticket
+        conn._samaudit_kerberos_why = why
         return conn
     conn = ldap3.Connection(
         _server(addr, mode), user=bind_name, password=password,
@@ -207,10 +236,15 @@ def normalize_username(username: str) -> tuple[str, str]:
     return f"{u}@{settings.domain_fqdn}", u
 
 
-def open_connection(bind_name: str, password: str):
-    """Bind against the first reachable DC. Returns a bound connection."""
+def open_connection(bind_name: str, password: str, keep_ticket: bool = False):
+    """Bind against the first reachable DC. Returns a bound connection.
+
+    keep_ticket=True (scan): a Kerberos ticket of the sign-in stays in conn._samaudit_ticket for SMB – the caller
+    destroys it (kerberos.destroy_ticket)."""
     _ldap3()
     from ldap3.core import exceptions as lexc
+
+    from .ldapseal import SealError
 
     if not password:
         raise AuthError("bad_credentials")
@@ -221,22 +255,29 @@ def open_connection(bind_name: str, password: str):
     for host, addr, pin_key in _targets():
         cert_failed = False
         for mode in _modes():
-            if mode == "ntlm":
+            ntlm_ok = False
+            if mode == "sasl":
                 from . import db
-                if db.get_pin(pin_key) is not None or cert_failed:
-                    # this DC had a certificate, or its certificate failed validation: never fall back to NTLM
-                    # (an attacker could block or break TLS on purpose)
+                # NTLM only if switched on, and never for a DC that had a certificate or whose certificate failed
+                # validation (an attacker could block or break TLS on purpose). Kerberos is always allowed: the DC
+                # proves its identity with its Kerberos key.
+                ntlm_ok = settings.ldap_ntlm and db.get_pin(pin_key) is None and not cert_failed
+                if not settings.ldap_kerberos and not ntlm_ok:
                     continue
             try:
-                conn = _connect(bind_name, password, addr, pin_key, mode)
+                conn = _connect(bind_name, password, addr, pin_key, mode, host=host, ntlm_ok=ntlm_ok,
+                                keep_ticket=keep_ticket)
                 conn._samaudit_host = host
-                conn._samaudit_mode = mode or ("ldaps" if settings.ldap_ssl else "starttls" if settings.ldap_starttls
-                                               else "plain")
+                conn._samaudit_mode = getattr(conn, "_samaudit_kind", "") if mode == "sasl" else (
+                    mode or ("ldaps" if settings.ldap_ssl else "starttls" if settings.ldap_starttls else "plain"))
                 try:
                     conn._samaudit_addr = conn.socket.getpeername()[0]   # the address that was actually checked
                 except Exception:  # noqa: BLE001
                     conn._samaudit_addr = addr
                 _remember_mode(conn._samaudit_mode)
+                if mode == "sasl":
+                    from . import kerberos
+                    kerberos.remember_reason(getattr(conn, "_samaudit_kerberos_why", ""))
                 return conn
             except AuthError as e:
                 if e.code in ("bad_credentials", "account_locked", "account_unusable", "cert_changed"):
@@ -244,6 +285,16 @@ def open_connection(bind_name: str, password: str):
                 last_err = e
                 if e.code == "dc_pending":
                     break                      # this DC waits for approval – next DC, not a weaker method
+            except SealError as e:
+                from . import kerberos
+                kerberos.remember_reason(e.reason)
+                # Kerberos not even tried (DC given as IP …) or the DC is down altogether: the earlier error
+                # (e.g. "DC not reachable", "no certificate") says more
+                if last_err is not None and (e.reason in ("ip", "upn", "missing", "realm") or
+                                             (e.reason == "kdc_unreachable" and last_err.code == "dc_unreachable")):
+                    continue
+                last_err = AuthError("kerberos_failed" if not ntlm_ok else "bind_failed", f"{pin_key}: {e}")
+                last_err.reason = e.reason  # type: ignore[attr-defined]
             except lexc.LDAPSocketOpenError as e:
                 text = str(e)
                 if "certificate" in text.lower():

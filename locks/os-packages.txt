@@ -27,6 +27,7 @@ libc-bin 2.41-12+deb13u4
 libc6 2.41-12+deb13u4
 libcap-ng0 0.8.5-4+b1
 libcap2 1:2.75-10+deb13u1+b3
+libcom-err2 1.47.2-3+b12
 libcrypt1 1:4.4.38-1
 libdb5.3t64 5.3.28+dfsg2-9
 libdebconfclient0 0.280
@@ -34,7 +35,12 @@ libffi8 3.4.8-2
 libgcc-s1 14.2.0-19
 libgdbm6t64 1.24-2
 libgmp10 2:6.3.0+dfsg-3
+libgssapi-krb5-2 1.21.3-5+deb13u2
 libhogweed6t64 3.10.1-1
+libk5crypto3 1.21.3-5+deb13u2
+libkeyutils1 1.6.3-6
+libkrb5-3 1.21.3-5+deb13u2
+libkrb5support0 1.21.3-5+deb13u2
 liblastlog2-2 2.41.5-0+deb13u1
 liblz4-1 1.10.0-4
 liblzma5 5.8.1-1+deb13u2

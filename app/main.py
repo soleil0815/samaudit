@@ -227,7 +227,9 @@ async def login_page(request: Request):
         return RedirectResponse("/", status_code=303)
     token = auth.new_login_token()
     err = request.query_params.get("e")
+    reason = (db.get_kv("kerberos_reason") or "") if err == "kerberos_failed" else ""
     resp = render(request, "login.html", {"token": token, "error": f"err_{err}" if err and f"err_{err}" in T else None,
+                                          "kerberos_reason": reason if f"kerberos_reason_{reason}" in T else "",
                                           "config_problems": settings.validate()})
     resp.set_cookie(LOGIN_COOKIE, token, httponly=True, secure=settings.cookie_secure, samesite="strict", max_age=900)
     return resp
@@ -551,6 +553,7 @@ def _connection(request: Request, cert_msg: str | None = None, cert_err: str | N
     from . import pins, webcert
     return render(request, "connection.html", {"pins": db.list_pins(), "webcert": webcert.INFO,
                                                "pending": pins.pending(), "ldap_mode": db.get_kv("ldap_mode") or "",
+                                               "kerberos_reason": db.get_kv("kerberos_reason") or "",
                                                "cert_msg": cert_msg, "cert_err": cert_err}, status=status)
 
 

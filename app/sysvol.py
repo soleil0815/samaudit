@@ -177,7 +177,61 @@ def _scan_script(data: bytes, path: str, found: list) -> None:
             return
 
 
-def scan(server: str, fqdn: str, username: str, password: str, gpos: list[dict], gpo_links: dict) -> dict:
+_smb_kerberos_seen: set[str] = set()     # DC names with which SMB Kerberos worked in this process
+
+
+def kerberos_ticket(host: str, bind_name: str, password: str):
+    """Kerberos ticket for SMB when LDAP did not use Kerberos (e.g. LDAPS): the password has just been accepted by
+    the DC, so this request cannot count towards the account lockout. None if Kerberos is not possible."""
+    if not settings.smb_checks:
+        return None
+    from . import kerberos, ldapseal, ldapsrc
+    target = ldapsrc.kerberos_target(host, bind_name)
+    if not target or not target.get("principal") or ldapseal.kerberos_failed_recently(target["target"]):
+        return None
+    try:
+        return kerberos.new_ticket(target["principal"], password)
+    except Exception as e:  # noqa: BLE001
+        log.info("SYSVOL: no Kerberos ticket (%s) – NTLM is used", kerberos.reason(e))
+        return None
+
+
+def _register(server: str, username: str, password: str, kerberos: dict | None, result: dict) -> str:
+    """SMB session: Kerberos with the ticket of the scan (if any), else NTLM. Returns the server name to use.
+    Never pyspnego's "negotiate": it would try Kerberos and then NTLM with the password on its own."""
+    import smbclient
+    if kerberos:
+        host = str(kerberos["host"]).lower()
+        try:
+            import spnego
+            smbclient.register_session(host, username=spnego.KerberosCCache(ccache=kerberos["ccache"]),
+                                       password=None, connection_timeout=settings.smb_timeout,
+                                       require_signing=True, auth_protocol="kerberos")
+            _smb_kerberos_seen.add(host)
+            result["auth"] = "kerberos"
+            return host
+        except Exception as e:  # noqa: BLE001
+            from . import kerberos as krb
+            result["kerberos_error"] = krb.reason(e)
+            try:
+                smbclient.reset_connection_cache(fail_on_error=False)
+            except Exception:  # noqa: BLE001
+                pass
+            if host in _smb_kerberos_seen:
+                # it worked before: someone blocking port 88 must not be able to force NTLM
+                raise RuntimeError(f"SMB Kerberos to {host} not possible (it worked before) – no fallback to NTLM") from None
+            log.info("SYSVOL: Kerberos to %s not possible (%s) – NTLM is used", host, result["kerberos_error"])
+    # NTLM: to the address LDAP has just verified, so NTLM goes to the checked DC, not to a new DNS answer
+    result["auth"] = "ntlm"
+    smbclient.register_session(server, username=username, password=password,
+                               connection_timeout=settings.smb_timeout, require_signing=True,
+                               auth_protocol="ntlm")
+    return server
+
+
+def scan(server: str, fqdn: str, username: str, password: str, gpos: list[dict], gpo_links: dict,
+         kerberos: dict | None = None) -> dict:
+    """kerberos: {"ccache": "MEMORY:…", "host": "dc01.firma.local"} – the ticket of the scan for SMB, or None."""
     result: dict[str, Any] = {"status": "ok", "error": None, "gpp_passwords": [], "secedit": {}, "regpol": {}, "audit": {},
               "script_secrets": [], "files_scanned": 0, "unreadable_gpos": [], "limits": []}
     if not settings.smb_checks:
@@ -190,15 +244,8 @@ def scan(server: str, fqdn: str, username: str, password: str, gpos: list[dict],
         result.update(status="error", error=f"@err_smb_missing|{e}")   # translated with tv() in the report
         return result
 
-    # Kerberos needs gssapi/krb5, which are not part of the image (no Linux wheels) – then NTLM.
-    # The server is the address LDAPS has just verified, so NTLM goes to the checked DC, not to a new DNS answer.
-    import importlib.util
-    kerberos = importlib.util.find_spec("gssapi") is not None or importlib.util.find_spec("krb5") is not None
-    result["auth"] = "negotiate" if kerberos else "ntlm"
     try:
-        smbclient.register_session(server, username=username, password=password,
-                                   connection_timeout=settings.smb_timeout, require_signing=True,
-                                   auth_protocol="negotiate" if kerberos else "ntlm")
+        server = _register(server, username, password, kerberos, result)
     except Exception as e:  # noqa: BLE001
         result.update(status="error", error=str(e)[:300])
         return result

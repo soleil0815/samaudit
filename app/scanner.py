@@ -149,7 +149,8 @@ def build_overview(model: dict) -> dict:
         "policy": d.get("policy", {}), "maq": d.get("maq"),
         "priv_groups": priv,
         "sysvol": {"status": sv.get("status", "disabled"), "error": sv.get("error"),
-                   "files": sv.get("files_scanned", 0), "auth": sv.get("auth")},
+                   "files": sv.get("files_scanned", 0), "auth": sv.get("auth"),
+                   "kerberos_error": sv.get("kerberos_error")},
         "pki_cas": [c.get("name") for c in (model.get("pki") or {}).get("cas", [])],
         "warnings": model.get("meta", {}).get("warnings", []),
         "last_backup": (lambda lb: fmt_date(lb) if hasattr(lb, "year") else lb)((model.get("config") or {}).get("last_backup")),
@@ -180,20 +181,29 @@ def _run(scan_id: int, bind_name: str, password: str) -> None:
             # Check authorisation again (group membership may have been revoked)
             ldapsrc.authenticate(bind_name, password)
             progress(3, "phase_start")
-            conn = ldapsrc.open_connection(bind_name, password)
+            conn = ldapsrc.open_connection(bind_name, password, keep_ticket=True)
+            ticket = getattr(conn, "_samaudit_ticket", None)
             try:
-                model = ldapsrc.collect(conn, progress)
-                _remember_dc_names(model)
-            finally:
                 try:
-                    conn.unbind()
-                except Exception:  # noqa: BLE001
-                    pass
-            progress(88, "phase_sysvol")
-            # SMB to the address whose certificate LDAPS has just checked (not a new DNS lookup)
-            smb_target = model["meta"].get("dc_addr") or model["meta"]["dc_host"]
-            model["sysvol"] = sysvol.scan(smb_target, model["domain"]["fqdn"], bind_name, password,
-                                          model.get("gpos", []), model.get("gpo_links", {}))
+                    model = ldapsrc.collect(conn, progress)
+                    _remember_dc_names(model)
+                finally:
+                    try:
+                        conn.unbind()
+                    except Exception:  # noqa: BLE001
+                        pass
+                progress(88, "phase_sysvol")
+                # SMB to the address whose certificate LDAPS has just checked (not a new DNS lookup) – or, with
+                # Kerberos, to the DC's name from DC_HOSTS (the ticket is issued for that name; Kerberos checks the DC)
+                smb_target = model["meta"].get("dc_addr") or model["meta"]["dc_host"]
+                if ticket is None:
+                    ticket = sysvol.kerberos_ticket(model["meta"]["dc_host"], bind_name, password)
+                krb = {"ccache": ticket.name, "host": model["meta"]["dc_host"]} if ticket is not None else None
+                model["sysvol"] = sysvol.scan(smb_target, model["domain"]["fqdn"], bind_name, password,
+                                              model.get("gpos", []), model.get("gpo_links", {}), kerberos=krb)
+            finally:
+                from . import kerberos
+                kerberos.destroy_ticket(ticket)
         password = ""  # noqa: F841 – drop the reference as early as possible
         progress(94, "phase_rules")
         results, scores = evaluate(model)

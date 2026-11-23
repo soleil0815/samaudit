@@ -130,10 +130,17 @@ Other modes: `trust` (always trust, no check – test labs only) and `verify` (c
 
 ### DC without a certificate (Windows without an enterprise CA)
 
-A Windows DC only offers LDAPS once it has a certificate – with an enterprise CA it gets one automatically, without a CA it does not. SAMAUDIT tries **LDAPS (636)**, **StartTLS (389)** and – only with `LDAP_NTLM=true` – **NTLM on 389**, in that order. The method used is shown under **Connection** and in the report.
+A Windows DC only offers LDAPS once it has a certificate – with an enterprise CA it gets one automatically, without a CA it does not. SAMAUDIT tries **LDAPS (636)**, **StartTLS (389)** and then **port 389 with Kerberos** – encrypted with "sign and seal", like the Windows admin tools (RSAT). The method used is shown under **Connection** and in the report.
 
-- **NTLM** does not send the password over the network, but the directory data travels **unencrypted** and the DC is not authenticated (someone in between could capture the sign-in and try to crack it offline). SAMAUDIT never falls back to NTLM for a DC that already had a certificate, or after a certificate error. If the DC requires LDAP signing (default from Windows Server 2025), NTLM does not work anyway.
-- **Better:** give the DC a certificate – even without a CA. On the DC in an admin PowerShell:
+- **Kerberos** (`LDAP_KERBEROS=true`, default): the DC proves its identity with its Kerberos key, the data is encrypted with AES, and it also works in domains in which NTLM is switched off. Requirements:
+  - the DC is listed by its **DNS name** in `DC_HOSTS` (e.g. `dc01.firma.local`, not an IP – the ticket is issued for this name; a name from the network is deliberately not used),
+  - **port 88 (TCP)** from the container to the DC is open,
+  - the **clocks** of the Docker host and the DC differ by at most 5 minutes,
+  - sign-in with the user name or `user@<DOMAIN_FQDN>`.
+
+  SAMAUDIT writes the Kerberos settings itself (AES only, no DNS search for KDCs). The ticket only lives in memory and is deleted after the sign-in or after the scan. If the DC refuses a password, SAMAUDIT does not try it with NTLM as well (it would count twice towards the account lockout). If Kerberos does not work, the sign-in page and **Connection** name the reason (e.g. clock, port 88, DC listed by IP).
+- **NTLM** (`LDAP_NTLM=true`, last resort only): encrypted too, but the DC is not authenticated – someone in between could capture the sign-in and try to crack it offline. Never for a DC that already had a certificate, after a certificate error, or once Kerberos has worked with that DC (blocking port 88 must not force NTLM).
+- **LDAPS remains the simplest:** give the DC a certificate – even without a CA. On the DC in an admin PowerShell:
   ```powershell
   New-SelfSignedCertificate -DnsName "dc1.firma.local","firma.local" -CertStoreLocation Cert:\LocalMachine\My `
     -KeyAlgorithm RSA -KeyLength 2048 -NotAfter (Get-Date).AddYears(5) `
@@ -141,7 +148,7 @@ A Windows DC only offers LDAPS once it has a certificate – with an enterprise 
   ```
   After a restart (or a few minutes) the DC serves LDAPS with this certificate; SAMAUDIT pins it on first contact.
 
-**SYSVOL (SMB)** is read via the address whose certificate LDAPS has just checked – not via a new DNS lookup. The sign-in there uses NTLM with SMB signing (Kerberos is not part of the image); the report says so.
+**SYSVOL (SMB)** is read with **Kerberos** when possible (with the ticket of the scan, without sending the password again) and SMB signing. Otherwise with NTLM to exactly the address whose certificate LDAPS has just checked – not via a new DNS lookup. Once Kerberos has worked with the DC, there is no fallback to NTLM. The report names the method.
 
 ## Your own HTTPS certificate
 
@@ -166,12 +173,13 @@ Before installing, SAMAUDIT checks that certificate and key match, that the cert
 | From container to DC | Purpose |
 |---|---|
 | TCP 636 (LDAPS) – or 389 with StartTLS | Sign-in and data collection |
+| TCP 389 and TCP 88 (Kerberos) | only for DCs without a certificate (Kerberos, see [DC without a certificate](#dc-without-a-certificate-windows-without-an-enterprise-ca)); 88 also for SYSVOL with Kerberos |
 | TCP 445 (SMB) | SYSVOL/NETLOGON: GPOs, GPP passwords, scripts, audit and security policies. Can be disabled with `SMB_CHECKS=false` (these checks then show as "not checkable"). |
 | DNS | The container must be able to resolve the DC names (otherwise `dns` / `extra_hosts` in `docker-compose.override.yml`, see [Quick start](#quick-start)). |
 
 ## Outbound connections
 
-SAMAUDIT only connects to the domain controllers. The in-app guard (`EGRESS_GUARD=true`, default) only allows connections to the DC addresses on the LDAP/SMB ports; any other attempt is rejected and recorded in the activity log as "Outbound connection blocked". Allow further targets with `EGRESS_ALLOW` if needed (IP, network or name, separated by `;`). If you want to isolate the container at network level as well, use your own firewall (Docker network `samaudit-net`, bridge `br-samaudit`). The only exception is the update check, which you have to switch on yourself (next section).
+SAMAUDIT only connects to the domain controllers. The in-app guard (`EGRESS_GUARD=true`, default) only allows connections to the DC addresses on the LDAP/SMB/Kerberos ports (Kerberos requests to port 88 are made by the MIT library itself – only to the DCs from `DC_HOSTS`, which SAMAUDIT writes into its settings); any other attempt is rejected and recorded in the activity log as "Outbound connection blocked". Allow further targets with `EGRESS_ALLOW` if needed (IP, network or name, separated by `;`). If you want to isolate the container at network level as well, use your own firewall (Docker network `samaudit-net`, bridge `br-samaudit`). The only exception is the update check, which you have to switch on yourself (next section).
 
 ## Newer version available?
 
@@ -353,7 +361,8 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 | `LDAP_ALLOW_PLAIN` | `false` | allow unencrypted LDAP sign-in – tests only, the password then crosses the network in clear text |
 | `PIN_RESET_WEB` | `false` | allow resetting remembered DC certificates in the web interface (otherwise only `docker exec samaudit python -m app.pins reset`) |
 | `PIN_NEW_DC` | `approve` | further DC with a self-signed certificate: `approve` = only after approval, `auto` = trust on first contact |
-| `LDAP_NTLM` | `false` | without LDAPS/StartTLS, sign in with NTLM on port 389 (password not on the network, data unencrypted) |
+| `LDAP_KERBEROS` | `true` | without LDAPS/StartTLS, sign in with Kerberos on port 389, encrypted; also for SYSVOL (needs the DC name in `DC_HOSTS`, port 88, correct time) |
+| `LDAP_NTLM` | `false` | last resort: sign in with NTLM on port 389, encrypted but without authenticating the DC |
 | `LDAP_CA_FILE` | – | CA certificate (PEM) in the `certs` folder, only for `verify` |
 | `LDAP_TIMEOUT` | `10` | seconds |
 | `ALLOWED_GROUPS` | `SAMAUDIT-Users` | auditor group(s): name, DN, SID or `RID:x`. Without the setting, the former name `SAMAUDIT-Benutzer` is accepted as well. |
@@ -387,7 +396,7 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 
 ## Security updates and versions
 
-**Pinned versions.** Everything that goes into the image is recorded in the repository: base image with version and digest (`Dockerfile`, `ARG PYTHON_IMAGE`), the Debian package state as a snapshot.debian.org date (`ARG DEBIAN_SNAPSHOT`) with the expected package list (`locks/os-packages.txt`), every Python package with version and hashes (`requirements.txt`, test tools in `requirements-dev.txt`). The wanted packages are listed in `requirements.in`; `tools/update-locks.sh` recomputes everything from it.
+**Pinned versions.** Everything that goes into the image is recorded in the repository: base image with version and digest (`Dockerfile`, `ARG PYTHON_IMAGE`), the Debian package state as a snapshot.debian.org date (`ARG DEBIAN_SNAPSHOT`) with the expected package list (`locks/os-packages.txt`), every Python package with version and hashes (`requirements.txt`, test tools in `requirements-dev.txt`). Only ready-made packages are installed – except gssapi and krb5 (Kerberos): there are no ready-made Linux packages for them, so a separate stage in the `Dockerfile` builds them from their hash-checked sources; compiler and build tools (`requirements-build.txt`, also with hashes) do not end up in the image. The wanted packages are listed in `requirements.in`; `tools/update-locks.sh` recomputes everything from it.
 
 **The base** is defined in `tools/lock-policy.env`: Debian 13 "trixie" (part of the base image name, never a tag that changes silently) and Python 3.13. It is never changed automatically.
 
@@ -461,6 +470,8 @@ app/
   auth.py        sessions, lockout after failed attempts, CSRF
   ruleids.py     rule IDs (STL/PRV/TRS/ANM) and mapping of old IDs
   ldapsrc.py     LDAP sign-in, authorisation check, data collection
+  ldapseal.py    encrypted LDAP on port 389 without a certificate (Kerberos/NTLM, "sign and seal")
+  kerberos.py    Kerberos settings and tickets (in memory only)
   pins.py        automatic LDAPS trust (pin and verify certificates)
   webcert.py     HTTPS certificate (your own from certs/ or self-signed)
   mdhelp.py      manual as help page

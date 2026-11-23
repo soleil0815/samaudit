@@ -4,7 +4,7 @@
 
 Every outbound connection attempt of the program is
 checked: only the IP addresses of the DCs (DC_HOSTS or DOMAIN_FQDN) on the
-LDAP/SMB ports are allowed, plus connections inside the container (localhost) and – only with
+LDAP/SMB/Kerberos ports are allowed, plus connections inside the container (localhost) and – only with
 UPDATE_CHECK=true – the GitHub API on port 443 for the version check (app/updatecheck.py).
 Everything else is rejected and logged."""
 from __future__ import annotations
@@ -20,7 +20,7 @@ from .config import settings
 
 log = logging.getLogger("samaudit.egress")
 
-ALLOWED_PORTS = {389, 636, 445, 3268, 3269}
+ALLOWED_PORTS = {88, 389, 636, 445, 3268, 3269}   # 88: Kerberos (the MIT library connects itself, see app/kerberos.py)
 _lock = threading.Lock()
 _cache: dict[str, Any] = {"ips": set(), "ts": 0.0}
 _last_log: dict[str, float] = {}

@@ -68,6 +68,7 @@
 <section class="section" id="pins">
   <h2>{{ t('pins_title', lang) }}</h2>
   {% if ldap_mode %}<p class="{{ 'warn-text' if ldap_mode in ('ntlm', 'plain') else 'muted' }}">{{ t('ldap_mode_title', lang) }}: {{ t('ldap_mode_' ~ ldap_mode, lang) }}</p>{% endif %}
+  {% if kerberos_reason and ldap_mode in ('ntlm', '') %}<p class="small"><b>{{ t('kerberos_reason_title', lang) }}:</b> {{ t('kerberos_reason_' ~ kerberos_reason, lang) }}</p>{% endif %}
   {% if pending %}
   <div class="panel u-m-10-0-4"><div class="panel-body table-wrap u-pad-10-20">
     <h3>{{ t('pins_pending_title', lang) }}</h3>

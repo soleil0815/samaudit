@@ -7,12 +7,50 @@
 #   requirements.txt every Python package incl. sub-dependencies, exact version + SHA-256 hashes
 # The resulting package lists are written to /app/os-packages.txt and /app/package-versions.txt
 # and checked against locks/os-packages.txt in CI. Package managers (pip, apt) are removed.
+#
+# Only ready-made wheels are installed – with one exception: gssapi and krb5 (Kerberos, see app/kerberos.py) have no
+# Linux wheels on PyPI. The stage "kerberos" compiles them from their hash-checked source archives against the MIT
+# Kerberos libraries of the same Debian snapshot. Compiler, headers and build tools (requirements-build.txt, with
+# hashes) stay in that stage; the final image only gets the two wheels and the Kerberos runtime libraries.
 ARG PYTHON_IMAGE=python:3.13.18-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
-FROM ${PYTHON_IMAGE}
-
 ARG DEBIAN_SNAPSHOT=20261109T000000Z
 ARG DEBIAN_CODENAME=trixie
-ARG APP_VERSION=2.6.0
+
+# ---------------------------------------------------------------------------------------------------------------
+# Stage "kerberos": build the wheels of gssapi and krb5 (not part of the image)
+# ---------------------------------------------------------------------------------------------------------------
+FROM ${PYTHON_IMAGE} AS kerberos
+ARG DEBIAN_SNAPSHOT
+ARG DEBIAN_CODENAME
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1 SOURCE_DATE_EPOCH=1700000000 \
+    CFLAGS="-g0 -O2 -ffile-prefix-map=/tmp/=/" LDFLAGS="-Wl,--strip-all"
+WORKDIR /build
+RUN set -eu; \
+    . /etc/os-release; \
+    [ "$VERSION_CODENAME" = "$DEBIAN_CODENAME" ] || { echo "Base image is Debian $VERSION_CODENAME, expected $DEBIAN_CODENAME" >&2; exit 1; }; \
+    sed -i -e "s#http://deb.debian.org/debian-security#https://snapshot.debian.org/archive/debian-security/$DEBIAN_SNAPSHOT#g" \
+           -e "s#http://deb.debian.org/debian#https://snapshot.debian.org/archive/debian/$DEBIAN_SNAPSHOT#g" \
+           /etc/apt/sources.list.d/debian.sources; \
+    grep -q "snapshot.debian.org" /etc/apt/sources.list.d/debian.sources; \
+    apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Retries=5 update; \
+    DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Retries=5 \
+      -y --no-install-recommends install gcc libc6-dev libkrb5-dev
+COPY requirements.txt requirements-build.txt ./
+RUN --mount=type=bind,source=tools/lockutil.py,target=/tmp/lockutil.py \
+    set -eu; \
+    pip install --no-deps --require-hashes --only-binary=:all: -r requirements-build.txt; \
+    python /tmp/lockutil.py select requirements.txt gssapi krb5 > kerberos.txt; \
+    pip wheel --no-deps --no-build-isolation --require-hashes --no-binary=gssapi,krb5 -w /wheels -r kerberos.txt; \
+    ls /wheels/gssapi-*.whl /wheels/krb5-*.whl
+
+# ---------------------------------------------------------------------------------------------------------------
+# The image
+# ---------------------------------------------------------------------------------------------------------------
+FROM ${PYTHON_IMAGE}
+
+ARG DEBIAN_SNAPSHOT
+ARG DEBIAN_CODENAME
+ARG APP_VERSION=2.7.0
 # version of this image: program version, or "<program version>-s<n>" for a security update
 ARG IMAGE_VERSION=
 LABEL org.opencontainers.image.title="SAMAUDIT" \
@@ -32,7 +70,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# 1) Debian: stay on the pinned release and upgrade ALL packages to the pinned snapshot.
+# 1) Debian: stay on the pinned release and upgrade ALL packages to the pinned snapshot; Kerberos runtime (MIT).
 RUN set -eu; \
     . /etc/os-release; \
     [ "$VERSION_CODENAME" = "$DEBIAN_CODENAME" ] || { echo "Base image is Debian $VERSION_CODENAME, expected $DEBIAN_CODENAME" >&2; exit 1; }; \
@@ -43,14 +81,23 @@ RUN set -eu; \
     apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Retries=5 update; \
     DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Retries=5 \
       -y --no-install-recommends upgrade; \
+    DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Retries=5 \
+      -y --no-install-recommends install libgssapi-krb5-2 libkrb5-3; \
     apt-get clean; rm -rf /var/lib/apt/lists/*
 
-# 2) Python packages: exactly the lock file (hashes required, nothing resolved), then consistency
-#    check and the list of installed versions. Time zone data comes from the tzdata package.
+# 2) Python packages: exactly the lock file (hashes required, nothing resolved, only wheels), the two Kerberos
+#    wheels from the stage "kerberos" (built from hash-checked sources; mounted only for this step), then
+#    consistency check and the list of installed versions. Time zone data comes from the tzdata package.
 COPY requirements.txt .
-RUN set -eu; \
-    pip install --no-deps --require-hashes --only-binary=:all: --no-cache-dir -r requirements.txt; \
+RUN --mount=type=bind,from=kerberos,source=/wheels,target=/tmp/wheels \
+    --mount=type=bind,source=tools/lockutil.py,target=/tmp/lockutil.py \
+    set -eu; \
+    python /tmp/lockutil.py without requirements.txt gssapi krb5 > /tmp/requirements-wheels.txt; \
+    pip install --no-deps --require-hashes --only-binary=:all: --no-cache-dir -r /tmp/requirements-wheels.txt; \
+    pip install --no-deps --no-index --no-cache-dir /tmp/wheels/gssapi-*.whl /tmp/wheels/krb5-*.whl; \
+    rm -f /tmp/requirements-wheels.txt; \
     pip check; \
+    python -c "import gssapi, krb5"; \
     pip freeze --all --exclude pip > /app/package-versions.txt; \
     python -c "import os, shutil, tzdata; shutil.copytree(os.path.join(os.path.dirname(tzdata.__file__), 'zoneinfo'), '/usr/share/zoneinfo', dirs_exist_ok=True)"; \
     ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime; echo "$TZ" > /etc/timezone
