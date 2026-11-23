@@ -4,6 +4,13 @@
 
 Program versions. Monthly security updates on patch day, the second Tuesday (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.6.0 – approve new DCs, DCs without a certificate, cooldown for packages
+
+- **New DCs only after approval (Samba):** if a further DC with a self-signed certificate answers behind an already pinned name, it is no longer trusted automatically – anyone can put any name into such a certificate. It waits under **Connection** with its fingerprint for approval (or `python -m app.pins approve`); until then sign-in goes through the known DCs. `PIN_NEW_DC=auto` keeps the old behaviour.
+- **Windows DC without a certificate:** SAMAUDIT tries LDAPS, StartTLS and – only with `LDAP_NTLM=true` – NTLM on port 389, in that order. The password never crosses the network; after a certificate error or for a DC that already had a certificate it never falls back to NTLM. The connection page and the report show the method used; the README explains how a DC gets a certificate even without a CA.
+- **SYSVOL only to the checked DC:** the SMB connection goes to exactly the address whose certificate LDAPS has just checked (no new DNS lookup), with NTLM and SMB signing; the report names the method. Kerberos is not possible because the required libraries exist for Linux only as source code.
+- **Cooldown for new packages:** the monthly security update only takes Python packages and a Debian state that are at least 7 days old – a hijacked release is usually withdrawn by then. If Trivy reports fixable findings, it builds with the newest versions right away. When started by hand the period can be set (`cooldown_days`). Dependabot also suggests action versions only after 7 days.
+
 ## 2.5.1 – code audit
 
 Full code audit (sign-in, web interface, LDAP/SMB and rules, data and privacy, update path, supply chain, docs) with independent reviewers; every fixed finding has a test that fails on the previous version.

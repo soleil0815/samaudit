@@ -48,6 +48,7 @@ SETTINGS_POLICY: dict[str, str] = {
     "domain_type": "value", "domain_fqdn": "bool", "netbios": "bool", "dc_hosts": "count", "base_dn": "omit",
     "ldap_ssl": "value", "ldap_starttls": "value", "ldap_port": "value", "ldap_cert_mode": "value",
     "pin_reset_web": "value", "ldap_timeout": "value", "ldap_allow_plain": "value",
+    "pin_new_dc": "value", "ldap_ntlm": "value",
     "allowed_groups": "count", "legacy_groups": "count", "denied_groups": "count",
     "session_timeout_min": "value", "max_login_attempts": "value", "lockout_min": "value",
     "tls_enabled": "value", "certs_dir": "omit", "ldap_ca_file": "bool", "cookie_secure": "value",
@@ -88,12 +89,13 @@ ENV_POLICY: dict[str, str] = {
 
 # Keys of the key/value table (db.set_kv / datastate): value | sensitive (names, never exported) | omit
 KV_POLICY: dict[str, str] = {"app_version": "value", "schema_version": "value", "domain_type": "value",
-                             "domain_vendor": "value", "dc_names": "sensitive"}
+                             "domain_vendor": "value", "dc_names": "sensitive", "ldap_mode": "value",
+                             "pins_pending": "sensitive"}
 
 # Fields of the scan overview (scanner.build_overview)
 OVERVIEW_POLICY: dict[str, str] = {
     "fqdn": "pseudo", "netbios": "pseudo", "sid": "omit", "dn": "omit", "domain_type": "value",
-    "dc_host": "pseudo", "domain_level": "value", "forest_level": "value", "created": "omit", "is_root": "value",
+    "dc_host": "pseudo", "ldap_mode": "value", "domain_level": "value", "forest_level": "value", "created": "omit", "is_root": "value",
     "users": "value", "computers": "value", "groups": "value", "admins": "value", "laps": "value",
     "dcs": "special", "os_dist": "value", "trusts": "special", "policy": "value", "maq": "value",
     "priv_groups": "special", "sysvol": "special", "pki_cas": "count", "warnings": "text",
@@ -399,7 +401,8 @@ def _overview_part(p: Pseudo, ov: dict) -> dict:
             out[k] = [{"name": p.add(g.get("name"), "group"), "count": g.get("count"), "enabled": g.get("enabled")}
                       for g in v or []]
         elif kind == "special" and k == "sysvol":
-            out[k] = {"status": (v or {}).get("status"), "error": (v or {}).get("error"), "files": (v or {}).get("files")}
+            out[k] = {"status": (v or {}).get("status"), "error": (v or {}).get("error"), "files": (v or {}).get("files"),
+                      "auth": (v or {}).get("auth")}
     return out
 
 

@@ -1,5 +1,26 @@
 [
   {
+    "version": "2.6.0",
+    "date": "2026-11-23",
+    "items": [
+      {
+        "type": "security",
+        "de": "Ein weiterer Samba-DC mit selbst ausgestelltem Zertifikat wird erst nach Freigabe unter „Verbindung“ vertraut. SYSVOL wird nur noch über die Adresse gelesen, deren Zertifikat LDAPS gerade geprüft hat.",
+        "en": "A further Samba DC with a self-signed certificate is only trusted after approval under “Connection”. SYSVOL is only read via the address whose certificate LDAPS has just checked."
+      },
+      {
+        "type": "feature",
+        "de": "Windows-DCs ohne Zertifikat: SAMAUDIT versucht LDAPS, StartTLS und – mit LDAP_NTLM=true – NTLM auf Port 389. Verbindungsseite und Bericht zeigen den benutzten Weg.",
+        "en": "Windows DCs without a certificate: SAMAUDIT tries LDAPS, StartTLS and – with LDAP_NTLM=true – NTLM on port 389. The connection page and the report show the method used."
+      },
+      {
+        "type": "notice",
+        "de": "Sicherheitsupdates nehmen nur Pakete, die mindestens 7 Tage alt sind – außer Trivy meldet eine behebbare Lücke.",
+        "en": "Security updates only take packages that are at least 7 days old – unless Trivy reports a fixable finding."
+      }
+    ]
+  },
+  {
     "version": "2.5.1",
     "date": "2026-11-23",
     "items": [

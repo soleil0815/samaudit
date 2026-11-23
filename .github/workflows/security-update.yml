@@ -6,6 +6,8 @@
 #   tools/patchday.sh only lets the second one through (a cron line cannot say "second Tuesday").
 #   1. update all locks WITHIN the base (tools/update-locks.sh): same Python series, same Debian
 #      release, every package within its major version (0.x: minor); calendar versions unlimited
+#      Cooldown: only releases (and a Debian snapshot) at least 7 days old – a hijacked release is usually
+#      withdrawn within days. If Trivy reports fixable HIGH/CRITICAL, it is resolved again with the newest versions.
 #   2. nothing changed -> stop, nothing is published
 #   3. build without cache, tests inside the image, Trivy (fixable HIGH/CRITICAL blocks)
 #   4. only if everything passed: commit the locks + change log (pushed to main at the end), build and
@@ -22,6 +24,11 @@ on:
     - cron: "17 3 * * 2"     # Tuesdays 03:17 UTC: security update, only on patch day (job patchday)
     - cron: "17 3 * * 1"     # Mondays 03:17 UTC: base support check only
   workflow_dispatch:
+    inputs:
+      cooldown_days:
+        description: "Only packages at least this many days old (0 = newest, e.g. after a Trivy finding)"
+        default: "7"
+        required: false
 
 permissions: {}
 
@@ -117,12 +124,15 @@ jobs:
           fi
           echo "ok=true" >> "$GITHUB_OUTPUT"
       - id: locks
-        name: Update locks within the base (build without cache)
+        name: Update locks within the base (build without cache, with cooldown)
         if: steps.published.outputs.ok == 'true'
         shell: bash
+        env:
+          COOLDOWN_DAYS: ${{ inputs.cooldown_days || '7' }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/old" && git archive HEAD | tar -x -C "$RUNNER_TEMP/old"
+          echo "Cooldown: $COOLDOWN_DAYS days" | tee -a "$GITHUB_STEP_SUMMARY"
           if ! tools/update-locks.sh > "$RUNNER_TEMP/locks.log" 2>&1; then
             tail -30 "$RUNNER_TEMP/locks.log"
             echo "::error title=Security update: versions not determinable::tools/update-locks.sh failed (details in the log of this step)."
@@ -144,10 +154,35 @@ jobs:
       - id: trivy
         name: Vulnerability scan (Trivy)
         if: steps.locks.outputs.changed == 'true'
+        continue-on-error: true            # fixable findings: try again without cooldown (next steps)
         run: .github/scripts/trivy.sh samaudit:candidate
+      - id: relock
+        name: Fixable findings – newest versions without cooldown
+        if: steps.trivy.outcome == 'failure' && (inputs.cooldown_days || '7') != '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::notice title=Cooldown lifted::Trivy reports fixable findings – resolving again with the newest versions."
+          git checkout -- Dockerfile requirements.txt requirements-dev.txt locks/os-packages.txt
+          COOLDOWN_DAYS=0 tools/update-locks.sh > "$RUNNER_TEMP/locks0.log" 2>&1 || { tail -30 "$RUNNER_TEMP/locks0.log"; exit 1; }
+          python3 tools/lockutil.py diff "$RUNNER_TEMP/old" . > "$RUNNER_TEMP/changes.md"
+          { echo "## Changed packages (without cooldown)"; cat "$RUNNER_TEMP/changes.md"; } >> "$GITHUB_STEP_SUMMARY"
+      - id: verify2
+        name: Tests inside the image (without cooldown)
+        if: steps.relock.outcome == 'success'
+        run: .github/scripts/verify-image.sh samaudit:candidate
+      - id: trivy2
+        name: Vulnerability scan (without cooldown)
+        if: steps.relock.outcome == 'success'
+        run: .github/scripts/trivy.sh samaudit:candidate
+      - name: Fixable findings remain
+        if: steps.trivy.outcome == 'failure' && steps.trivy2.outcome != 'success'
+        run: |
+          echo "::error title=Security update blocked::Trivy reports fixable HIGH/CRITICAL findings (report attached)."
+          exit 1
       - id: upload
         name: Hand over the new locks
-        if: steps.locks.outputs.changed == 'true'
+        if: steps.locks.outputs.changed == 'true' && (steps.trivy.outcome == 'success' || steps.trivy2.outcome == 'success')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: new-locks

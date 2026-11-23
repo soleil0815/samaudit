@@ -76,7 +76,9 @@ All 118 checks with ID, area, severity and description. IDs start with `STL-` (s
 - **HTTPS certificate of the web interface:** shows the active certificate (source, issuer, expiry date, fingerprint) and warnings (expired, expiring soon, server name missing from the certificate).
   - **Upload your own certificate:** select a PFX file (e.g. exported from a Windows CA) with its password **or** certificate + private key → **Upload and activate**. It becomes active immediately, without a restart; reload the page afterwards. Before installing, SAMAUDIT checks that certificate and key match, that it is valid and that the key is strong enough (RSA at least 2048 bits).
   - **Remove uploaded certificate** restores the previous one.
-- **Trusted DC certificates:** SAMAUDIT remembers each DC's certificate and DNS name on first contact and later rejects a foreign certificate (protection against man-in-the-middle) – including one the same enterprise CA issued for another computer or user. A further address of the same name (second DC) is only adopted with a certificate of that CA for a known DC (known from the last scan, from `DC_HOSTS` or the domain name itself) and is noted in the activity log. With self-signed DC certificates (Samba) a further DC is pinned on first contact – if you do not want that, list the DCs in `DC_HOSTS`. Normal renewals stay valid. After an **intended** certificate or CA change (or a new DC), reset it – for security reasons on the server: `docker exec samaudit python -m app.pins reset <DC>`. With `PIN_RESET_WEB=true` in `.env` the **Reset** button here works as well.
+- **Trusted DC certificates:** SAMAUDIT remembers each DC's certificate and DNS name on first contact and later rejects a foreign certificate (protection against man-in-the-middle) – including one the same enterprise CA issued for another computer or user. A further address of the same name (second DC) is only adopted with a certificate of that CA for a known DC (known from the last scan, from `DC_HOSTS` or the domain name itself) and is noted in the activity log. With self-signed DC certificates (Samba) a further DC waits for **approval**: it is listed here under "Waiting for approval" with its fingerprint – compare it and click **Approve** (or `docker exec samaudit python -m app.pins approve "<entry>"`). `PIN_NEW_DC=auto` trusts on first contact as before. The top of the section also shows how SAMAUDIT is connected to the DC (LDAPS, StartTLS or NTLM). Normal renewals stay valid. After an **intended** certificate or CA change (or a new DC), reset it – for security reasons on the server: `docker exec samaudit python -m app.pins reset <DC>`. With `PIN_RESET_WEB=true` in `.env` the **Reset** button here works as well.
+
+- **DC without a certificate:** if a Windows DC offers no LDAPS (no enterprise CA), SAMAUDIT tries StartTLS and – only with `LDAP_NTLM=true` – NTLM on port 389. The password does not cross the network, but the data is unencrypted; the report and this page point that out. A certificate for the DC is better (instructions in the README, section "DC without a certificate").
 
 ### Activity log
 
@@ -152,6 +154,8 @@ All settings live in the `.env` file (annotated template: `.env.example`). After
 |---|---|---|
 | `DOMAIN_FQDN` | – | DNS name of the domain (required) |
 | `DC_HOSTS` | `DOMAIN_FQDN` | fixed DCs, separated by `;` |
+| `PIN_NEW_DC` | `approve` | further DC with a self-signed certificate only after approval (`auto` = trust at once) |
+| `LDAP_NTLM` | `false` | Windows DC without a certificate: sign in with NTLM on port 389 (data unencrypted) |
 | `ALLOWED_GROUPS` | `SAMAUDIT-Users` | auditor group(s); without the setting `SAMAUDIT-Benutzer` is accepted as well |
 | `DENIED_GROUPS` | – | additionally blocked groups |
 | `PUBLIC_HOSTNAME` | – | name used to open SAMAUDIT |

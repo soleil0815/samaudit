@@ -99,6 +99,39 @@ def within_bounds(old: dict[str, str], new: dict[str, str]) -> list[str]:
 
 
 # --------------------------------------------------------------------------- base image
+def uploaded_on_pypi(name: str, version: str) -> dt.datetime | None:
+    """Earliest upload time of a release on PyPI (None if unknown or not reachable)."""
+    import urllib.request
+    url = f"https://pypi.org/pypi/{name}/{version}/json"
+    try:
+        with urllib.request.urlopen(url, timeout=20) as r:  # noqa: S310 – fixed https URL
+            data = json.load(r)
+    except Exception:  # noqa: BLE001
+        return None
+    times = [u.get("upload_time_iso_8601") for u in data.get("urls") or [] if u.get("upload_time_iso_8601")]
+    if not times:
+        return None
+    return min(dt.datetime.fromisoformat(t.replace("Z", "+00:00")) for t in times)
+
+
+def too_young(old: dict[str, str], new: dict[str, str], days: int, uploaded=uploaded_on_pypi,
+              now: dt.datetime | None = None) -> list[str]:
+    """Cooldown: constraints that hold back every changed or new package released less than `days` ago.
+    A hijacked release is usually withdrawn within a few days – it never reaches the image this way.
+    Unknown upload times count as too young (fail safe)."""
+    if days <= 0:
+        return []
+    now = now or dt.datetime.now(dt.timezone.utc)
+    out = []
+    for name, ver in sorted(new.items()):
+        if old.get(name) == ver:
+            continue
+        t = uploaded(name, ver)
+        if t is None or (now - t).days < days:
+            out.append(f"{name}=={old[name]}" if name in old else f"{name}<{ver}")
+    return out
+
+
 def pick_base(library_text: str, series: str, codename: str) -> str:
     """Newest 'X.Y.Z-slim-<codename>' tag of the Python series from docker-library's 'library/python'."""
     pat = re.compile(rf"^{re.escape(series)}\.(\d+)-slim-{re.escape(codename)}$")
@@ -231,6 +264,10 @@ def main(argv: list[str]) -> int:
         for b in bad:
             print(b)
         return 1 if bad else 0
+    elif cmd == "too-young":
+        for line in too_young(parse_lock(Path(args[0]).read_text(encoding="utf-8")),
+                              parse_lock(Path(args[1]).read_text(encoding="utf-8")), int(args[2])):
+            print(line)
     elif cmd == "diff":
         sys.stdout.write(diff(Path(args[0]), Path(args[1])))
     elif cmd == "eol":

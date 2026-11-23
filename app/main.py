@@ -548,8 +548,9 @@ async def connection_page(request: Request):
 
 
 def _connection(request: Request, cert_msg: str | None = None, cert_err: str | None = None, status: int = 200):
-    from . import webcert
+    from . import pins, webcert
     return render(request, "connection.html", {"pins": db.list_pins(), "webcert": webcert.INFO,
+                                               "pending": pins.pending(), "ldap_mode": db.get_kv("ldap_mode") or "",
                                                "cert_msg": cert_msg, "cert_err": cert_err}, status=status)
 
 
@@ -584,6 +585,22 @@ async def cert_remove(request: Request):
         db.audit("act_cert_removed", request.state.sess.user, client_ip(request), "")
         return RedirectResponse("/connection?c=cert_removed#webcert", status_code=303)
     return RedirectResponse("/connection", status_code=303)
+
+
+@require
+async def pin_approve(request: Request):
+    """Approve or discard a DC that waits for approval (self-signed certificate, PIN_NEW_DC=approve)."""
+    from . import pins
+    form = await form_of(request)
+    if await check_csrf(request, form):
+        if (deny := await recheck(request)) is not None:
+            return deny
+        host = (form.get("host") or "").strip()
+        if form.get("action") == "discard":
+            pins.discard(host)
+        elif host and pins.approve(host, request.state.sess.user, (form.get("fingerprint") or "").strip()):
+            log.warning("LDAPS: %s approved by %s", host, request.state.sess.user)
+    return RedirectResponse("/connection#pins", status_code=303)
 
 
 @require
@@ -688,6 +705,7 @@ routes = [
     Route("/news", news_page),
     Route("/news/seen", news_seen),
     Route("/update/seen", update_seen),
+    Route("/connection/approve", pin_approve, methods=["POST"]),
     Route("/connection/reset", pin_reset, methods=["POST"]),
     Route("/connection/cert", cert_upload, methods=["POST"]),
     Route("/connection/cert/remove", cert_remove, methods=["POST"]),
