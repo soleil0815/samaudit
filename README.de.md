@@ -127,10 +127,17 @@ Weitere Modi: `trust` (immer vertrauen, keine Prüfung – nur Testlabor) und `v
 
 ### DC ohne Zertifikat (Windows ohne Unternehmens-CA)
 
-Ein Windows-DC bietet LDAPS erst an, wenn er ein Zertifikat hat – mit einer Unternehmens-CA bekommt er es automatisch, ohne CA nicht. SAMAUDIT versucht nacheinander **LDAPS (636)**, **StartTLS (389)** und – nur mit `LDAP_NTLM=true` – **NTLM auf 389**. Welcher Weg benutzt wurde, steht unter **Verbindung** und im Bericht.
+Ein Windows-DC bietet LDAPS erst an, wenn er ein Zertifikat hat – mit einer Unternehmens-CA bekommt er es automatisch, ohne CA nicht. SAMAUDIT versucht nacheinander **LDAPS (636)**, **StartTLS (389)** und dann **Port 389 mit Kerberos** – verschlüsselt mit „Sign and Seal“, wie die Windows-Verwaltungswerkzeuge (RSAT). Welcher Weg benutzt wurde, steht unter **Verbindung** und im Bericht.
 
-- **NTLM** schickt das Passwort nicht übers Netz, aber die Verzeichnisdaten gehen **unverschlüsselt** über die Leitung, und der DC wird nicht geprüft (wer im Netz dazwischen sitzt, könnte die Anmeldung abfangen und offline zu knacken versuchen). Für einen DC, der schon einmal ein Zertifikat hatte, oder nach einem Zertifikatsfehler wird nie auf NTLM ausgewichen. Verlangt der DC LDAP-Signierung (Standard ab Windows Server 2025), klappt NTLM ohnehin nicht.
-- **Besser:** dem DC ein Zertifikat geben – auch ohne CA. Auf dem DC in einer Admin-PowerShell:
+- **Kerberos** (`LDAP_KERBEROS=true`, Standard): Der DC weist sich mit seinem Kerberos-Schlüssel aus, die Daten sind mit AES verschlüsselt, und es klappt auch in Domänen, in denen NTLM abgeschaltet ist. Voraussetzungen:
+  - der DC steht mit seinem **DNS-Namen** in `DC_HOSTS` (z. B. `dc01.firma.local`, keine IP – das Ticket wird für diesen Namen ausgestellt; ein Name aus dem Netz wird bewusst nicht genommen),
+  - **Port 88 (TCP)** vom Container zum DC ist offen,
+  - die **Uhrzeit** von Docker-Host und DC weicht höchstens 5 Minuten ab,
+  - Anmeldung mit Benutzername oder `benutzer@<DOMAIN_FQDN>`.
+
+  SAMAUDIT schreibt die Kerberos-Einstellungen selbst (nur AES, keine DNS-Suche nach KDCs). Das Ticket liegt nur im Arbeitsspeicher und wird nach der Anmeldung bzw. nach der Prüfung gelöscht. Wird ein Kennwort vom DC abgelehnt, versucht SAMAUDIT es nicht zusätzlich mit NTLM (sonst zählte es doppelt für die Kontosperre). Klappt Kerberos nicht, nennen Anmeldeseite und **Verbindung** den Grund (z. B. Uhrzeit, Port 88, DC als IP eingetragen).
+- **NTLM** (`LDAP_NTLM=true`, nur als Notlösung): ebenfalls verschlüsselt, aber der DC wird nicht geprüft – wer im Netz dazwischen sitzt, könnte die Anmeldung abfangen und offline zu knacken versuchen. Nie für einen DC, der schon einmal ein Zertifikat hatte, nach einem Zertifikatsfehler oder nachdem Kerberos mit diesem DC schon einmal geklappt hat (wer Port 88 sperrt, soll kein NTLM erzwingen können).
+- **Am einfachsten bleibt LDAPS:** dem DC ein Zertifikat geben – auch ohne CA. Auf dem DC in einer Admin-PowerShell:
   ```powershell
   New-SelfSignedCertificate -DnsName "dc1.firma.local","firma.local" -CertStoreLocation Cert:\LocalMachine\My `
     -KeyAlgorithm RSA -KeyLength 2048 -NotAfter (Get-Date).AddYears(5) `
@@ -138,7 +145,7 @@ Ein Windows-DC bietet LDAPS erst an, wenn er ein Zertifikat hat – mit einer Un
   ```
   Nach einem Neustart (oder wenigen Minuten) liefert der DC LDAPS mit diesem Zertifikat; SAMAUDIT merkt es sich beim ersten Kontakt.
 
-**SYSVOL (SMB)** liest SAMAUDIT über die Adresse, deren Zertifikat LDAPS gerade geprüft hat – nicht über eine neue DNS-Abfrage. Die Anmeldung dort läuft per NTLM mit SMB-Signierung (Kerberos ist im Image nicht enthalten); der Bericht nennt das.
+**SYSVOL (SMB)** liest SAMAUDIT, wenn möglich, mit **Kerberos** (mit dem Ticket der Prüfung, ohne das Kennwort erneut zu senden) und SMB-Signierung. Geht das nicht, per NTLM an genau die Adresse, deren Zertifikat LDAPS gerade geprüft hat – nicht über eine neue DNS-Abfrage. Hat Kerberos mit dem DC schon einmal geklappt, gibt es keinen Rückfall auf NTLM. Der Bericht nennt das Verfahren.
 
 ## Eigenes HTTPS-Zertifikat
 
@@ -163,12 +170,13 @@ SAMAUDIT prüft vor dem Übernehmen, ob Zertifikat und Schlüssel zusammenpassen
 | Vom Container zum DC | Zweck |
 |---|---|
 | TCP 636 (LDAPS) – oder 389 mit StartTLS | Anmeldung und Datenabfrage |
+| TCP 389 und TCP 88 (Kerberos) | nur für DCs ohne Zertifikat (Kerberos, siehe [DC ohne Zertifikat](#dc-ohne-zertifikat-windows-ohne-unternehmens-ca)); 88 auch für SYSVOL per Kerberos |
 | TCP 445 (SMB) | SYSVOL/NETLOGON: GPOs, GPP-Passwörter, Skripte, Überwachungs- und Sicherheitsrichtlinien. Abschaltbar mit `SMB_CHECKS=false` (diese Prüfungen erscheinen dann als „nicht prüfbar“). |
 | DNS | Der Container muss die DC-Namen auflösen können (sonst `dns` / `extra_hosts` in der `docker-compose.override.yml`, siehe [Schnellstart](#schnellstart)). |
 
 ## Ausgehende Verbindungen
 
-SAMAUDIT verbindet sich nur zu den Domänencontrollern. Die programminterne Sperre (`EGRESS_GUARD=true`, Standard) lässt nur Verbindungen zu den DC-Adressen auf den LDAP-/SMB-Ports zu; jeder andere Versuch wird abgewiesen und im Protokoll als „Ausgehende Verbindung blockiert“ vermerkt. Weitere Ziele bei Bedarf mit `EGRESS_ALLOW` (IP, Netz oder Name, durch `;` getrennt). Wer den Container zusätzlich auf Netzwerkebene abschotten möchte, regelt das mit der eigenen Firewall (Docker-Netz `samaudit-net`, Bridge `br-samaudit`). Einzige Ausnahme ist die Update-Prüfung, die Sie selbst einschalten müssen (nächster Abschnitt).
+SAMAUDIT verbindet sich nur zu den Domänencontrollern. Die programminterne Sperre (`EGRESS_GUARD=true`, Standard) lässt nur Verbindungen zu den DC-Adressen auf den LDAP-/SMB-/Kerberos-Ports zu (Kerberos-Anfragen an Port 88 stellt die MIT-Bibliothek selbst – nur an die DCs aus `DC_HOSTS`, die SAMAUDIT in ihre Einstellungen schreibt); jeder andere Versuch wird abgewiesen und im Protokoll als „Ausgehende Verbindung blockiert“ vermerkt. Weitere Ziele bei Bedarf mit `EGRESS_ALLOW` (IP, Netz oder Name, durch `;` getrennt). Wer den Container zusätzlich auf Netzwerkebene abschotten möchte, regelt das mit der eigenen Firewall (Docker-Netz `samaudit-net`, Bridge `br-samaudit`). Einzige Ausnahme ist die Update-Prüfung, die Sie selbst einschalten müssen (nächster Abschnitt).
 
 ## Gibt es eine neuere Version?
 
@@ -347,7 +355,8 @@ Alle Werte werden in der `.env` gesetzt (Schreibweise `NAME=wert`, Vorlage mit E
 | `LDAP_ALLOW_PLAIN` | `false` | unverschlüsselte LDAP-Anmeldung erlauben – nur für Tests, das Passwort geht dann im Klartext übers Netz |
 | `PIN_RESET_WEB` | `false` | gemerkte DC-Zertifikate in der Weboberfläche zurücksetzen erlauben (sonst nur `docker exec samaudit python -m app.pins reset`) |
 | `PIN_NEW_DC` | `approve` | weiterer DC mit selbst ausgestelltem Zertifikat: `approve` = erst nach Freigabe, `auto` = beim ersten Kontakt vertrauen |
-| `LDAP_NTLM` | `false` | ohne LDAPS/StartTLS per NTLM auf Port 389 anmelden (Passwort nicht im Netz, Daten unverschlüsselt) |
+| `LDAP_KERBEROS` | `true` | ohne LDAPS/StartTLS per Kerberos auf Port 389 anmelden, verschlüsselt; auch für SYSVOL (braucht den DC-Namen in `DC_HOSTS`, Port 88, richtige Uhrzeit) |
+| `LDAP_NTLM` | `false` | Notlösung: per NTLM auf Port 389 anmelden, verschlüsselt, aber ohne Prüfung des DC |
 | `LDAP_CA_FILE` | – | CA-Zertifikat (PEM) im Ordner `certs`, nur für `verify` |
 | `LDAP_TIMEOUT` | `10` | Sekunden |
 | `ALLOWED_GROUPS` | `SAMAUDIT-Users` und `SAMAUDIT-Benutzer` | Prüfer-Gruppe(n): Name, DN, SID oder `RID:x`. Ohne Einstellung gelten beide Namen; mit Einstellung genau die angegebenen Gruppen. |
@@ -381,7 +390,7 @@ Alle Werte werden in der `.env` gesetzt (Schreibweise `NAME=wert`, Vorlage mit E
 
 ## Sicherheitsupdates und Versionen
 
-**Feste Versionen.** Was ins Image kommt, steht vollständig im Repository: Basisimage mit Version und Digest (`Dockerfile`, `ARG PYTHON_IMAGE`), Debian-Paketstand als Datum auf snapshot.debian.org (`ARG DEBIAN_SNAPSHOT`) mit der erwarteten Paketliste (`locks/os-packages.txt`), alle Python-Pakete mit Version und Prüfsummen (`requirements.txt`, Testwerkzeuge in `requirements-dev.txt`). Die gewünschten Pakete stehen in `requirements.in`; `tools/update-locks.sh` berechnet daraus alles neu.
+**Feste Versionen.** Was ins Image kommt, steht vollständig im Repository: Basisimage mit Version und Digest (`Dockerfile`, `ARG PYTHON_IMAGE`), Debian-Paketstand als Datum auf snapshot.debian.org (`ARG DEBIAN_SNAPSHOT`) mit der erwarteten Paketliste (`locks/os-packages.txt`), alle Python-Pakete mit Version und Prüfsummen (`requirements.txt`, Testwerkzeuge in `requirements-dev.txt`). Installiert werden nur fertige Pakete – außer gssapi und krb5 (Kerberos): Für sie gibt es keine fertigen Linux-Pakete, deshalb baut eine eigene Stufe im `Dockerfile` sie aus ihren per Prüfsumme geprüften Quellen; Compiler und Bauwerkzeuge (`requirements-build.txt`, ebenfalls mit Prüfsummen) landen nicht im Image. Die gewünschten Pakete stehen in `requirements.in`; `tools/update-locks.sh` berechnet daraus alles neu.
 
 **Der Unterbau** ist in `tools/lock-policy.env` festgelegt: Debian 13 „trixie“ (steht im Namen des Basisimages, nie ein Tag, das sich still ändert) und Python 3.13. Er wird nie automatisch gewechselt.
 
@@ -455,6 +464,8 @@ app/
   auth.py        Sitzungen, Sperre bei Fehlversuchen, CSRF
   ruleids.py     Regel-IDs (STL/PRV/TRS/ANM) und Zuordnung alter IDs
   ldapsrc.py     LDAP-Anmeldung, Berechtigungsprüfung, Datensammlung
+  ldapseal.py    verschlüsseltes LDAP auf Port 389 ohne Zertifikat (Kerberos/NTLM, „Sign and Seal“)
+  kerberos.py    Kerberos-Einstellungen und Tickets (nur im Arbeitsspeicher)
   pins.py        LDAPS-Autovertrauen (Zertifikat merken und prüfen)
   webcert.py     HTTPS-Zertifikat (eigenes aus certs/ oder selbstsigniert)
   mdhelp.py      Handbuch als Hilfe-Seite

@@ -14,7 +14,10 @@ Pinned in `requirements.txt` (with exact versions and hashes) and installed from
 | ldap3 | LGPL-3.0-or-later | LDAP access (used unmodified as a library) |
 | ReportLab (open-source edition) | BSD-3-Clause | PDF export |
 | cryptography | Apache-2.0 or BSD-3-Clause | TLS, certificates, encryption |
-| smbprotocol / pyspnego | MIT | SYSVOL access over SMB |
+| smbprotocol / pyspnego | MIT | SYSVOL access over SMB, NTLM/Kerberos sign-in and "sign and seal" |
+| python-gssapi | ISC | Kerberos (GSSAPI); built from its source archive in the image build |
+| krb5 (pykrb5) | MIT | Kerberos tickets; built from its source archive in the image build |
+| decorator | BSD-2-Clause | dependency of python-gssapi |
 | tzdata | Apache-2.0 | time zone data |
 | Pillow | MIT-CMU (HPND) | images in the PDF |
 | typing-extensions | PSF-2.0 | dependency |
@@ -23,9 +26,11 @@ Pinned in `requirements.txt` (with exact versions and hashes) and installed from
 
 The licence texts ship with the installed packages.
 
+The image also contains the **MIT Kerberos libraries** (Debian packages libgssapi-krb5-2, libkrb5-3 and their dependencies; MIT licence, see `/usr/share/doc/<package>/copyright` in the image).
+
 ## CI only (not part of the image)
 
-ruff (MIT), mypy (MIT), PyYAML (MIT) – `requirements-dev.txt`; Trivy (Apache-2.0) is only downloaded in CI.
+ruff (MIT), mypy (MIT), PyYAML (MIT) – `requirements-dev.txt`; Trivy (Apache-2.0) is only downloaded in CI. Cython (Apache-2.0) and setuptools (MIT) – `requirements-build.txt` – only build gssapi and krb5 in a separate build stage.
 
 ## Fonts (included in the repository)
 

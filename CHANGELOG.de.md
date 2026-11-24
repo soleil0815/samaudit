@@ -4,6 +4,14 @@
 
 Programmversionen. Die monatlichen Sicherheitsupdates am Patchday, dem zweiten Dienstag (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.7.0 – Kerberos
+
+- **Kerberos für DCs ohne Zertifikat:** Bietet der DC weder LDAPS noch StartTLS, meldet sich SAMAUDIT auf Port 389 mit Kerberos an und verschlüsselt die Verbindung („Sign and Seal“, wie die Windows-Verwaltungswerkzeuge). Der DC weist sich dabei aus, und es klappt auch in Domänen ohne NTLM. Voraussetzungen: DC mit DNS-Namen in `DC_HOSTS`, Port 88, Uhrzeit höchstens 5 Minuten abweichend. Neue Einstellung `LDAP_KERBEROS` (Standard: an). Die Kerberos-Einstellungen schreibt SAMAUDIT selbst (nur AES, keine DNS-Suche nach KDCs); Tickets liegen nur im Arbeitsspeicher und werden nach Anmeldung bzw. Prüfung gelöscht.
+- **NTLM verschlüsselt und nur noch Notlösung:** `LDAP_NTLM=true` nutzt jetzt ebenfalls „Sign and Seal“ (vorher gingen die Daten unverschlüsselt über die Leitung). Ein vom DC abgelehntes Kennwort wird nicht zusätzlich mit NTLM versucht (Kontosperre); nachdem Kerberos mit einem DC geklappt hat, gibt es für ihn keinen Rückfall auf NTLM mehr.
+- **SYSVOL mit Kerberos:** SMB nutzt, wenn möglich, das Kerberos-Ticket der Prüfung – auch wenn LDAP über LDAPS lief – und sonst wie bisher NTLM zur geprüften DC-Adresse. Nie mehr das automatische „Negotiate“ von pyspnego (Kerberos, dann NTLM mit demselben Kennwort).
+- **Gründe sichtbar:** Klappt Kerberos nicht, nennen Anmeldeseite und **Verbindung** den Grund (DC als IP eingetragen, Uhrzeit, Port 88, falscher DC-Name …); Bericht und Diagnosepaket zeigen das Verfahren für LDAP und SMB. Die Ausgangssperre erlaubt Port 88 zu den DCs, die Verbindungsdiagnose prüft ihn mit.
+- **Image:** enthält die MIT-Kerberos-Bibliotheken. gssapi und krb5 gibt es nicht als fertige Linux-Pakete; eine eigene Build-Stufe baut sie aus ihren per Prüfsumme geprüften Quellen (Bauwerkzeuge in `requirements-build.txt`, ebenfalls mit Prüfsummen), Compiler und Header kommen nicht ins Image. `tools/update-locks.sh` und die CI wurden angepasst.
+
 ## 2.6.0 – neue DCs freigeben, DCs ohne Zertifikat, Wartefrist für Pakete
 
 - **Neue DCs nur nach Freigabe (Samba):** Meldet sich hinter einem bereits gemerkten Namen ein weiterer DC mit selbst ausgestelltem Zertifikat, wird er nicht mehr automatisch vertraut – den Namen darin kann jeder eintragen. Er wartet unter **Verbindung** mit Fingerabdruck auf Freigabe (oder `python -m app.pins approve`); bis dahin geht die Anmeldung über die bekannten DCs. `PIN_NEW_DC=auto` behält das alte Verhalten.

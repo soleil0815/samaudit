@@ -4,6 +4,14 @@
 
 Program versions. Monthly security updates on patch day, the second Tuesday (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.7.0 – Kerberos
+
+- **Kerberos for DCs without a certificate:** if the DC offers neither LDAPS nor StartTLS, SAMAUDIT signs in on port 389 with Kerberos and encrypts the connection ("sign and seal", like the Windows admin tools). The DC proves its identity, and it also works in domains without NTLM. Requirements: the DC by DNS name in `DC_HOSTS`, port 88, clocks at most 5 minutes apart. New setting `LDAP_KERBEROS` (default: on). SAMAUDIT writes the Kerberos settings itself (AES only, no DNS search for KDCs); tickets only live in memory and are deleted after the sign-in or the scan.
+- **NTLM encrypted and only a last resort:** `LDAP_NTLM=true` now uses "sign and seal" as well (before, the data travelled unencrypted). A password refused by the DC is not tried with NTLM as well (account lockout); once Kerberos has worked with a DC, there is no fallback to NTLM for it.
+- **SYSVOL with Kerberos:** SMB uses the Kerberos ticket of the scan when possible – also when LDAP used LDAPS – and otherwise NTLM to the checked DC address as before. Never pyspnego's automatic "negotiate" again (Kerberos, then NTLM with the same password).
+- **Reasons shown:** if Kerberos does not work, the sign-in page and **Connection** name the reason (DC listed by IP, clock, port 88, wrong DC name …); the report and the diagnostics package show the method for LDAP and SMB. The egress guard allows port 88 to the DCs; the connection diagnostics probe it too.
+- **Image:** contains the MIT Kerberos libraries. gssapi and krb5 have no ready-made Linux packages; a separate build stage builds them from their hash-checked sources (build tools in `requirements-build.txt`, also with hashes); compiler and headers do not go into the image. `tools/update-locks.sh` and CI were adapted.
+
 ## 2.6.0 – approve new DCs, DCs without a certificate, cooldown for packages
 
 - **New DCs only after approval (Samba):** if a further DC with a self-signed certificate answers behind an already pinned name, it is no longer trusted automatically – anyone can put any name into such a certificate. It waits under **Connection** with its fingerprint for approval (or `python -m app.pins approve`); until then sign-in goes through the known DCs. `PIN_NEW_DC=auto` keeps the old behaviour.

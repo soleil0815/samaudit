@@ -16,7 +16,9 @@ Thanks for your interest! SAMAUDIT is a hobby project maintained in spare time â
 2. Keep changes focused; add or adjust tests in `tests/`.
 3. The checks must pass locally and on GitHub:
    ```bash
-   pip install --require-hashes -r requirements.txt -r requirements-dev.txt
+   # gssapi and krb5 are built from source: needs the Kerberos headers (Debian/Ubuntu: libkrb5-dev)
+   pip install --require-hashes -r requirements-build.txt
+   pip install --require-hashes --no-build-isolation -r requirements.txt -r requirements-dev.txt
    ruff check app tests tools run.py
    mypy
    python -m unittest discover -s tests -p 'test_*.py'

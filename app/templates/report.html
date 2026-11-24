@@ -54,7 +54,7 @@
         <div><dt>LAPS</dt><dd class="num">{% if ov.laps.total %}{{ (100 * ov.laps.covered / ov.laps.total)|round|int }} %{% else %}–{% endif %}</dd></div>
         <div><dt>{{ t('last_backup', lang) }}</dt><dd class="num u-fs15">{{ tv('@v_never', lang) if ov.last_backup == 'never' else (ov.last_backup or '–') }}</dd></div>
       </dl>
-      <p class="small muted u-mt12">{{ ov.netbios }} ({{ 'Samba AD' if ov.domain_type == 'samba' else 'Windows AD' }}), SID {{ ov.sid }}, {{ t('scanned_with', lang)|lower }} {{ ov.dc_host }}{% if ov.vendor %} ({{ ov.vendor }}){% endif %}{% if ov.ldap_mode %}<br>{{ t('ldap_mode_title', lang) }}: {{ t('ldap_mode_' ~ ov.ldap_mode, lang) }}{% endif %}{% if ov.sysvol.auth == 'ntlm' %}<br>{{ t('smb_auth_ntlm', lang) }}{% endif %}{% if ov.unprivileged %}<br>{{ t('scan_rights', lang) }}{% endif %}</p>
+      <p class="small muted u-mt12">{{ ov.netbios }} ({{ 'Samba AD' if ov.domain_type == 'samba' else 'Windows AD' }}), SID {{ ov.sid }}, {{ t('scanned_with', lang)|lower }} {{ ov.dc_host }}{% if ov.vendor %} ({{ ov.vendor }}){% endif %}{% if ov.ldap_mode %}<br>{{ t('ldap_mode_title', lang) }}: {{ t('ldap_mode_' ~ ov.ldap_mode, lang) }}{% endif %}{% if ov.sysvol.auth in ('ntlm', 'kerberos') %}<br>{{ t('smb_auth_' ~ ov.sysvol.auth, lang) }}{% endif %}{% if ov.unprivileged %}<br>{{ t('scan_rights', lang) }}{% endif %}</p>
     </div>
   </section>
 </div>

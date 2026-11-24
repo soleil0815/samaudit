@@ -95,8 +95,8 @@ class Approval(unittest.TestCase):
     def test_pending_dc_is_skipped_not_weakened(self):
         calls = []
 
-        def fake_connect(bind, pw, addr, key, mode):
-            calls.append((key, mode))
+        def fake_connect(bind, pw, addr, key, mode, **kw):
+            calls.append((key, mode, kw.get("ntlm_ok")))
             if key.endswith("[10.0.1.2]"):
                 raise ldapsrc.AuthError("dc_pending", key)
             conn = types.SimpleNamespace(socket=types.SimpleNamespace(getpeername=lambda: ("10.0.1.1", 636)))
@@ -108,65 +108,74 @@ class Approval(unittest.TestCase):
              mock.patch.object(settings, "ldap_ntlm", True):
             conn = ldapsrc.open_connection("u@samba.lan", "pw")
         self.assertEqual(conn._samaudit_addr, "10.0.1.1")
-        self.assertNotIn(("samba.lan [10.0.1.2]", "ntlm"), calls)
+        self.assertFalse([c for c in calls if c[0] == "samba.lan [10.0.1.2]" and c[1] == "sasl"])
 
 
 class LdapWithoutCertificate(unittest.TestCase):
+    """2.7.0: port 389 is encrypted ("sign and seal"); Kerberos first, NTLM only with LDAP_NTLM=true."""
+
     def setUp(self):
         db.init()
         db.delete_pins()
 
-    def _run(self, fails: dict, ntlm=True, pinned=False):
+    def _run(self, fails: dict, ntlm=True, pinned=False, kerberos=True):
         calls = []
 
-        def fake_connect(bind, pw, addr, key, mode):
-            calls.append(mode)
+        def fake_connect(bind, pw, addr, key, mode, **kw):
+            calls.append((mode, kw.get("ntlm_ok")))
             if mode in fails:
                 raise fails[mode]
-            return types.SimpleNamespace(socket=types.SimpleNamespace(getpeername=lambda: ("10.0.10.1", 389)))
+            kind = "ntlm" if kw.get("ntlm_ok") else "kerberos"
+            return types.SimpleNamespace(socket=types.SimpleNamespace(getpeername=lambda: ("10.0.10.1", 389)),
+                                         _samaudit_kind=kind if mode == "sasl" else "", _samaudit_kerberos_why="")
         if pinned:
             db.save_pin("dc1.firma.local", "ab" * 32, "CN=dc1", "2030-01-01", False, b"x", "dc1.firma.local")
         with mock.patch.dict(sys.modules, _ldap3_standin()), \
              mock.patch.object(ldapsrc, "_targets", lambda: [("dc1.firma.local", "dc1.firma.local", "dc1.firma.local")]), \
              mock.patch.object(ldapsrc, "_connect", fake_connect), mock.patch.object(settings, "ldap_ntlm", ntlm), \
+             mock.patch.object(settings, "ldap_kerberos", kerberos), \
              mock.patch.object(settings, "ldap_ssl", True), mock.patch.object(settings, "ldap_port", 636):
             try:
                 return ldapsrc.open_connection("u@firma.local", "pw"), calls
             except ldapsrc.AuthError as e:
                 return e, calls
 
-    def test_order_ldaps_starttls_ntlm(self):
+    def test_order_ldaps_starttls_sasl(self):
         no_tls = ldapsrc.AuthError("tls_failed", "no certificate")
         conn, calls = self._run({"": no_tls, "starttls": no_tls})
-        self.assertEqual(calls, ["", "starttls", "ntlm"])
+        self.assertEqual(calls, [("", False), ("starttls", False), ("sasl", True)])
         self.assertEqual(conn._samaudit_mode, "ntlm")
         self.assertEqual(db.get_kv("ldap_mode"), "ntlm")
 
-    def test_ntlm_only_when_switched_on(self):
+    def test_kerberos_without_ntlm(self):
         no_tls = ldapsrc.AuthError("tls_failed", "no certificate")
-        err, calls = self._run({"": no_tls, "starttls": no_tls}, ntlm=False)
+        conn, calls = self._run({"": no_tls, "starttls": no_tls}, ntlm=False)
+        self.assertEqual(calls[-1], ("sasl", False))
+        self.assertEqual(conn._samaudit_mode, "kerberos")
+
+    def test_no_389_when_both_switched_off(self):
+        no_tls = ldapsrc.AuthError("tls_failed", "no certificate")
+        err, calls = self._run({"": no_tls, "starttls": no_tls}, ntlm=False, kerberos=False)
         self.assertIsInstance(err, ldapsrc.AuthError)
-        self.assertNotIn("ntlm", calls)
+        self.assertNotIn("sasl", [c[0] for c in calls])
 
     def test_never_ntlm_for_a_dc_that_had_a_certificate(self):
         no_tls = ldapsrc.AuthError("tls_failed", "blocked")
-        err, calls = self._run({"": no_tls, "starttls": no_tls}, pinned=True)
+        _conn, calls = self._run({"": no_tls, "starttls": no_tls}, pinned=True)
+        self.assertEqual(calls[-1], ("sasl", False), "only Kerberos (the DC proves its identity), never NTLM")
+        err, calls = self._run({"": no_tls, "starttls": no_tls}, pinned=True, kerberos=False)
         self.assertIsInstance(err, ldapsrc.AuthError)
-        self.assertNotIn("ntlm", calls)
+        self.assertNotIn("sasl", [c[0] for c in calls])
 
     def test_never_ntlm_after_a_certificate_error_or_mismatch(self):
         err, calls = self._run({"": ldapsrc.AuthError("cert_changed", "x")})
         self.assertEqual(err.code, "cert_changed")
-        self.assertEqual(calls, [""])
+        self.assertEqual(calls, [("", False)])
 
     def test_plain_simple_bind_never_without_allow_plain(self):
         with mock.patch.object(settings, "ldap_ssl", False), mock.patch.object(settings, "ldap_starttls", False), \
              mock.patch.object(settings, "ldap_allow_plain", False), mock.patch.object(settings, "ldap_ntlm", True):
-            self.assertEqual(ldapsrc._modes(), ["ntlm"])
-
-    @unittest.skipUnless(importlib.util.find_spec("spnego"), "pyspnego not installed")
-    def test_nt_hash(self):
-        self.assertEqual(ldapsrc.nt_hash_password("password"), "0" * 32 + ":8846f7eaee8fb117ad06bdd830b7586c")
+            self.assertEqual(ldapsrc._modes(), ["sasl"])
 
 
 class SmbToTheCheckedAddress(unittest.TestCase):
@@ -187,7 +196,8 @@ class SmbToTheCheckedAddress(unittest.TestCase):
             res = sysvol.scan("10.0.10.1", "firma.local", "u@firma.local", "pw", [], {})
         self.assertEqual(seen["server"], "10.0.10.1")
         self.assertTrue(seen["require_signing"])
-        self.assertEqual(res["auth"], "negotiate" if importlib.util.find_spec("gssapi") else "ntlm")
+        self.assertEqual(seen["auth_protocol"], "ntlm", "never pyspnego's negotiate (Kerberos then NTLM on its own)")
+        self.assertEqual(res["auth"], "ntlm")
 
     def test_scanner_passes_the_checked_address(self):
         src = (ROOT / "app" / "scanner.py").read_text(encoding="utf-8")
@@ -252,7 +262,7 @@ class WebApproval(unittest.TestCase):
     def test_texts_exist(self):
         from app.i18n import T
         for k in ("err_dc_pending", "pins_pending_title", "ldap_mode_ntlm", "ldap_mode_ldaps", "ldap_mode_starttls",
-                  "ldap_mode_plain", "smb_auth_ntlm", "act_cert_pending", "act_cert_approved"):
+                  "ldap_mode_plain", "smb_auth_ntlm", "ldap_mode_kerberos", "smb_auth_kerberos", "err_kerberos_failed", "act_cert_pending", "act_cert_approved"):
             self.assertIn(k, T)
 
 

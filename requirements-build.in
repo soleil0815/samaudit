@@ -1,0 +1,4 @@
+# Build tools for the Kerberos packages gssapi and krb5 – used ONLY in the build stage "kerberos" of the Dockerfile
+# (and by the CI self-tests), never part of the image. Lock: requirements-build.txt
+Cython>=3.0.3,<4
+setuptools>=70.1

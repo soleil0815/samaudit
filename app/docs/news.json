@@ -1,5 +1,31 @@
 [
   {
+    "version": "2.7.0",
+    "date": "2026-11-23",
+    "items": [
+      {
+        "type": "feature",
+        "de": "Kerberos: Bei DCs ohne Zertifikat meldet sich SAMAUDIT auf Port 389 mit Kerberos an und verschlüsselt die Verbindung („Sign and Seal“) – auch in Domänen ohne NTLM. Der DC weist sich dabei aus. Voraussetzung: DC mit DNS-Namen in DC_HOSTS, Port 88, richtige Uhrzeit (LDAP_KERBEROS, Standard: an).",
+        "en": "Kerberos: with DCs without a certificate SAMAUDIT signs in on port 389 with Kerberos and encrypts the connection (“sign and seal”) – also in domains without NTLM. The DC proves its identity. Requirements: the DC by DNS name in DC_HOSTS, port 88, correct time (LDAP_KERBEROS, default: on)."
+      },
+      {
+        "type": "security",
+        "de": "Der NTLM-Weg (LDAP_NTLM=true) ist jetzt ebenfalls verschlüsselt. Nach einer Kerberos-Anmeldung an einem DC gibt es für ihn keinen Rückfall auf NTLM mehr, und ein abgelehntes Kennwort wird nicht zusätzlich mit NTLM versucht (Kontosperre).",
+        "en": "The NTLM method (LDAP_NTLM=true) is now encrypted too. Once Kerberos worked with a DC there is no fallback to NTLM for it, and a refused password is not tried with NTLM as well (account lockout)."
+      },
+      {
+        "type": "feature",
+        "de": "SYSVOL wird per SMB mit Kerberos gelesen, wenn möglich – mit dem Ticket der Prüfung, ohne das Kennwort erneut zu senden. Sonst wie bisher NTLM. Bericht und Verbindungsseite zeigen den Weg und, falls Kerberos nicht ging, den Grund.",
+        "en": "SYSVOL is read via SMB with Kerberos when possible – with the ticket of the scan, without sending the password again. Otherwise NTLM as before. The report and the connection page show the method and, if Kerberos did not work, the reason."
+      },
+      {
+        "type": "notice",
+        "de": "Das Image enthält jetzt die MIT-Kerberos-Bibliotheken; die Python-Pakete gssapi und krb5 werden im Build aus ihren geprüften Quellen gebaut (keine fertigen Linux-Pakete verfügbar).",
+        "en": "The image now contains the MIT Kerberos libraries; the Python packages gssapi and krb5 are built from their checked sources during the build (no ready-made Linux packages exist)."
+      }
+    ]
+  },
+  {
     "version": "2.6.0",
     "date": "2026-11-23",
     "items": [

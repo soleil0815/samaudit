@@ -68,9 +68,12 @@ class Settings:
         # approval (connection page or docker exec samaudit python -m app.pins approve), "auto" = trust on first contact
         nd = os.environ.get("PIN_NEW_DC", "").strip().lower()
         self.pin_new_dc = nd if nd in ("approve", "auto") else "approve"
-        # Windows DCs without a certificate: sign in with NTLM on port 389 when neither LDAPS nor StartTLS works.
-        # The password never crosses the network, but the directory data is not encrypted and the DC is not
-        # authenticated – therefore only when switched on, and never for a DC that already had a pinned certificate.
+        # Windows DCs without a certificate: port 389, encrypted after the bind ("sign and seal"), when neither
+        # LDAPS nor StartTLS works. Kerberos (default on): the DC proves its identity – needs the DC's DNS name in
+        # DC_HOSTS, port 88 and the right time. Also used for SMB (SYSVOL) when possible.
+        self.ldap_kerberos = _bool("LDAP_KERBEROS", True)
+        # NTLM as the last resort: encrypted too, but the DC is not authenticated – therefore only when switched on,
+        # never for a DC that already had a pinned certificate and never after Kerberos worked with that DC.
         self.ldap_ntlm = _bool("LDAP_NTLM", False)
         self.ldap_timeout = _int("LDAP_TIMEOUT", 10)
         # A plain-text bind without TLS is deliberately possible only when explicitly allowed

@@ -16,6 +16,8 @@ Command line (used by tools/update-locks.sh and the GitHub workflows):
   lockutil.py is-highest CANDIDATE TAG...            -> exit 0 if CANDIDATE is the highest version
   lockutil.py diff OLD_DIR NEW_DIR                   -> Markdown table of changed packages ("" if none)
   lockutil.py eol PRODUCT NAME DATE_JSON [TODAY]     -> ok / notice / fail for an end-of-life date
+  lockutil.py select REQUIREMENTS_TXT NAME...        -> only the blocks (with hashes) of these packages
+  lockutil.py without REQUIREMENTS_TXT NAME...       -> the lock file without these packages
 """
 from __future__ import annotations
 
@@ -80,6 +82,25 @@ def constraints(lock_text: str) -> str:
         ub = upper_bound(name, ver)
         lines.append(f"{name}>={ver},<{ub}" if ub else f"{name}>={ver}")
     return "\n".join(lines) + ("\n" if lines else "")
+
+
+SOURCE_BUILT = ("gssapi", "krb5")                 # no Linux wheels: built in the Dockerfile stage "kerberos"
+
+
+def blocks(lock_text: str, names: list[str], keep: bool) -> str:
+    """Split a pip-compile lock file into its package blocks (requirement line, hashes, "via" comments) and keep
+    only the named packages (keep=True) or all others (keep=False). Header comments stay with keep=False."""
+    wanted = {normalize(n) for n in names}
+    out = []
+    for block in re.split(r"\n(?=[A-Za-z0-9])", lock_text):
+        m = re.match(r"([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?==", block)
+        if m is None:
+            if not keep:
+                out.append(block.rstrip("\n"))
+            continue
+        if (normalize(m.group(1)) in wanted) == keep:
+            out.append(block.rstrip("\n"))
+    return "\n".join(out) + ("\n" if out else "")
 
 
 def within_bounds(old: dict[str, str], new: dict[str, str]) -> list[str]:
@@ -270,6 +291,12 @@ def main(argv: list[str]) -> int:
             print(line)
     elif cmd == "diff":
         sys.stdout.write(diff(Path(args[0]), Path(args[1])))
+    elif cmd in ("select", "without"):
+        text = blocks(Path(args[0]).read_text(encoding="utf-8"), args[1:], keep=cmd == "select")
+        if cmd == "select" and len(parse_lock(text)) != len(args[1:]):
+            print(f"not all of {args[1:]} found in {args[0]}", file=sys.stderr)
+            return 1
+        sys.stdout.write(text)
     elif cmd == "eol":
         product, name, path = args[0], args[1], args[2]
         today = dt.date.fromisoformat(args[3]) if len(args) > 3 else dt.date.today()

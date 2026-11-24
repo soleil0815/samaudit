@@ -163,7 +163,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "::notice title=Cooldown lifted::Trivy reports fixable findings – resolving again with the newest versions."
-          git checkout -- Dockerfile requirements.txt requirements-dev.txt locks/os-packages.txt
+          git checkout -- Dockerfile requirements.txt requirements-dev.txt requirements-build.txt locks/os-packages.txt
           COOLDOWN_DAYS=0 tools/update-locks.sh > "$RUNNER_TEMP/locks0.log" 2>&1 || { tail -30 "$RUNNER_TEMP/locks0.log"; exit 1; }
           python3 tools/lockutil.py diff "$RUNNER_TEMP/old" . > "$RUNNER_TEMP/changes.md"
           { echo "## Changed packages (without cooldown)"; cat "$RUNNER_TEMP/changes.md"; } >> "$GITHUB_STEP_SUMMARY"
@@ -190,6 +190,7 @@ jobs:
             Dockerfile
             requirements.txt
             requirements-dev.txt
+            requirements-build.txt
             locks/os-packages.txt
           retention-days: 7
       - name: Upload scan report
@@ -263,7 +264,7 @@ jobs:
           PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Dockerfile requirements.txt requirements-dev.txt locks/os-packages.txt CHANGELOG-SECURITY.md
+          git add Dockerfile requirements.txt requirements-dev.txt requirements-build.txt locks/os-packages.txt CHANGELOG-SECURITY.md
           git commit -q -m "Security update $VERSION: updated packages" -m "Same program, newer package versions (see CHANGELOG-SECURITY.md)."
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Hand over the commit (exactly this commit is built on both platforms and pushed later)

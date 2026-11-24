@@ -11,6 +11,10 @@ ldap3>=2.9.1
 reportlab>=5.0.1
 cryptography>=50.0.1
 smbprotocol>=1.14.0
+# Kerberos for LDAP and SMB without NTLM (pyspnego uses them when present). There are no Linux wheels: the
+# Dockerfile compiles both in its own build stage against the MIT Kerberos libraries (requirements-build.txt).
+gssapi>=1.9,<2
+krb5>=0.7,<1
 tzdata>=2025.2
 # security floors for sub-dependencies (CVE fixes, see 1.9.3)
 pillow>=13.0.0

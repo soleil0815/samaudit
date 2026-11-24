@@ -48,7 +48,7 @@ SETTINGS_POLICY: dict[str, str] = {
     "domain_type": "value", "domain_fqdn": "bool", "netbios": "bool", "dc_hosts": "count", "base_dn": "omit",
     "ldap_ssl": "value", "ldap_starttls": "value", "ldap_port": "value", "ldap_cert_mode": "value",
     "pin_reset_web": "value", "ldap_timeout": "value", "ldap_allow_plain": "value",
-    "pin_new_dc": "value", "ldap_ntlm": "value",
+    "pin_new_dc": "value", "ldap_ntlm": "value", "ldap_kerberos": "value",
     "allowed_groups": "count", "legacy_groups": "count", "denied_groups": "count",
     "session_timeout_min": "value", "max_login_attempts": "value", "lockout_min": "value",
     "tls_enabled": "value", "certs_dir": "omit", "ldap_ca_file": "bool", "cookie_secure": "value",
@@ -90,7 +90,7 @@ ENV_POLICY: dict[str, str] = {
 # Keys of the key/value table (db.set_kv / datastate): value | sensitive (names, never exported) | omit
 KV_POLICY: dict[str, str] = {"app_version": "value", "schema_version": "value", "domain_type": "value",
                              "domain_vendor": "value", "dc_names": "sensitive", "ldap_mode": "value",
-                             "pins_pending": "sensitive"}
+                             "pins_pending": "sensitive", "kerberos_reason": "value"}
 
 # Fields of the scan overview (scanner.build_overview)
 OVERVIEW_POLICY: dict[str, str] = {
@@ -402,7 +402,7 @@ def _overview_part(p: Pseudo, ov: dict) -> dict:
                       for g in v or []]
         elif kind == "special" and k == "sysvol":
             out[k] = {"status": (v or {}).get("status"), "error": (v or {}).get("error"), "files": (v or {}).get("files"),
-                      "auth": (v or {}).get("auth")}
+                      "auth": (v or {}).get("auth"), "kerberos_error": (v or {}).get("kerberos_error")}
     return out
 
 
@@ -452,7 +452,8 @@ def _probe(host: str, port: int, timeout: float = 3.0) -> str:
 def _connection_part(p: Pseudo, settings, probe: bool) -> dict:
     from . import db
     out: dict[str, Any] = {"cert_mode": settings.ldap_cert_mode, "targets": [], "pins": []}
-    ports = sorted({settings.ldap_port, 389, 636} | ({445} if settings.smb_checks else set()))
+    ports = sorted({settings.ldap_port, 389, 636} | ({445} if settings.smb_checks else set()) |
+                   ({88} if settings.ldap_kerberos else set()))
     if probe and not settings.demo_mode:
         from concurrent.futures import ThreadPoolExecutor
 
@@ -500,6 +501,11 @@ def _runtime_part(settings) -> dict:
     out: dict[str, Any] = {"python": platform.python_version(), "machine": platform.machine(),
                            "uptime_s": int(time.time() - _started) if _installed else None,
                            "user_id": os.getuid() if hasattr(os, "getuid") else None}
+    try:
+        from . import kerberos
+        out["kerberos_libraries"] = kerberos.libraries()
+    except Exception:  # noqa: BLE001
+        out["kerberos_libraries"] = False
     try:
         out["db_size_kb"] = os.path.getsize(settings.db_path) // 1024
         st = os.statvfs(settings.data_dir)
