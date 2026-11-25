@@ -4,6 +4,12 @@
 
 Program versions. Monthly security updates on patch day, the second Tuesday (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.7.1 – temporary exception for new Trivy findings
+
+- **Releases no longer wait for Debian:** a fixable HIGH finding that has been known for at most 14 days (CRITICAL: 7 days) no longer stops the build. The fix often reaches Debian or our pinned package state only days later, and a new program version should not get stuck because of that. The finding is shown as a warning with its end date; afterwards it blocks again and the daily check of the published image turns red. Without a publication date or with a failed scan there is never an exception.
+- **Security update still strict:** for a finding it first tries the newest packages without cooldown and uses the exception only if there is no fix even then.
+- The program itself does not change.
+
 ## 2.7.0 – Kerberos
 
 - **Kerberos for DCs without a certificate:** if the DC offers neither LDAPS nor StartTLS, SAMAUDIT signs in on port 389 with Kerberos and encrypts the connection ("sign and seal", like the Windows admin tools). The DC proves its identity, and it also works in domains without NTLM. Requirements: the DC by DNS name in `DC_HOSTS`, port 88, clocks at most 5 minutes apart. New setting `LDAP_KERBEROS` (default: on). SAMAUDIT writes the Kerberos settings itself (AES only, no DNS search for KDCs); tickets only live in memory and are deleted after the sign-in or the scan.

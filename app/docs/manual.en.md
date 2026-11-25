@@ -223,11 +223,12 @@ In addition, the published image is scanned daily, and every week it is checked 
 
 | Reason | What to do |
 |---|---|
-| Trivy reports CRITICAL/HIGH | The fix usually arrives within days – wait for the next patch day or rerun later via *Actions → Security update → Run workflow*. If it stays red: have the package raised specifically, or assess the finding and add it to `.trivyignore` with a reason and an expiry date. |
+| Trivy: *temporary exception* (warning) | A newly known finding (HIGH up to 14, CRITICAL up to 7 days after publication) does not block yet; its end date is shown. Nothing to do. |
+| Trivy reports CRITICAL/HIGH | The finding is older than the temporary exception. The fix usually arrives within days – wait for the next patch day or rerun later via *Actions → Security update → Run workflow*. If it stays red: have the package raised specifically, or assess the finding and add it to `.trivyignore` with a reason and an expiry date. |
 | *Security update: versions not determinable* / *Build failed* | Usually a source was briefly unreachable – rerun. If it stays red, have it checked. |
 | *Tests in the image failed* | A new package version does not fit – have it checked. |
 | Lift the base soon / now | Plan and deliberately carry out the move to the next Python or Debian release (`tools/lock-policy.env`, `tools/update-locks.sh --major`, new program version). |
-| Daily scan red | New vulnerability in the published image – start the security update manually, otherwise as for Trivy. |
+| Daily scan red | Fixable vulnerability in the published image whose temporary exception has ended – start the security update manually, otherwise as for Trivy. |
 
 ### Outbound connections
 

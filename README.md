@@ -407,7 +407,7 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 3. build without cache, remove pip and apt, tests inside the finished image, Trivy scan.
 4. Only if everything passed: build the image, check exactly that image and publish it as `<version>-s<n>` and `latest`, add an entry with the changed packages to [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md), git tag and GitHub release. The counter `n` starts at 1 again with every new program version (`1.9.7-s1`, `1.9.7-s2`, … `1.9.8-s1`).
 
-**Trivy** is downloaded as a fixed version with a verified SHA-256 checksum (no Trivy GitHub Action – its tags were compromised in March 2026, CVE-2026-33634). Only **CRITICAL/HIGH findings with an available fix** stop a release; everything else is listed in the report (summary and artifact `trivy-report`). Deliberately accepted findings are listed in `.trivyignore`, each with a reason and an expiry date (`CVE-… exp:YYYY-MM-DD  # reason`); after that date Trivy reports them again.
+**Trivy** is downloaded as a fixed version with a verified SHA-256 checksum (no Trivy GitHub Action – its tags were compromised in March 2026, CVE-2026-33634). Only **CRITICAL/HIGH findings with an available fix** stop a release; everything else is listed in the report (summary and artifact `trivy-report`). **Temporary exception:** a finding of that kind that became known only recently – HIGH up to 14 days, CRITICAL up to 7 days after its publication – does not block yet, because the fix often reaches Debian or our pinned package state only days later. It is shown as a warning with its end date; afterwards it blocks again and the daily check turns red. Findings without a publication date and a failed scan never get an exception. The security update first tries the newest packages for a finding and uses the exception only after that. Deliberately accepted findings are listed in `.trivyignore`, each with a reason and an expiry date (`CVE-… exp:YYYY-MM-DD  # reason`); after that date Trivy reports them again.
 
 **Daily checks** (`scan-published.yml`, 05:43 UTC): scans the published `latest` again, because vulnerabilities often become known after the build, and checks like an anonymous user that the image can be pulled (amd64 and arm64) and the quick-start files can be downloaded from the latest release.
 
@@ -419,12 +419,13 @@ All values are set in `.env` (format `NAME=value`, annotated template: `.env.exa
 
 | Message | What to do |
 |---|---|
-| *Trivy found CRITICAL/HIGH vulnerabilities* | Debian or the package often ships the fix within days – wait for the next patch day or start the run manually later. If it stays red: raise the affected package specifically (new program version) or, after assessing it, add the finding to `.trivyignore` with a reason and an expiry date. |
+| *Trivy found CRITICAL/HIGH vulnerabilities* | The finding is older than the temporary exception (HIGH 14, CRITICAL 7 days). Debian or the package often ships the fix within days – wait for the next patch day or start the run manually later. If it stays red: raise the affected package specifically (new program version) or, after assessing it, add the finding to `.trivyignore` with a reason and an expiry date. |
 | *Security update: versions not determinable* / build failed | Usually a source was briefly unreachable – rerun. If it stays red, a new package version does not fit; check it specifically. |
 | Tests inside the image failed | A new package version behaves differently. Nothing published; check the package and limit it in `requirements.in` if needed. |
 | *Lift the base soon* (notice) | Plan the move to the next Python or Debian release. |
 | *Lift the base* (red) | Lift the base deliberately: change `tools/lock-policy.env`, run `tools/update-locks.sh --major`, test and publish as a new program version. |
-| Daily checks red: *Trivy …* | A new vulnerability became known in the published image. If a fix exists, start the security update manually; otherwise as for Trivy above. |
+| Warning *Trivy: temporary exception* | A newly known finding is under the temporary exception; its end date is shown. Nothing to do – if the fix arrives in time, the security update brings it; otherwise the daily check turns red when it ends. |
+| Daily checks red: *Trivy …* | The published image contains a fixable vulnerability whose temporary exception has ended (or that has been known for longer). If a fix exists, start the security update manually; otherwise as for Trivy above. |
 | Daily checks red: *Image not publicly reachable* / *Release file missing* | The package or a release file is no longer public. Check *Packages → samaudit → Package settings → visibility* and the latest release; then start *Daily checks* manually. |
 
 ## GitHub: repository and container image

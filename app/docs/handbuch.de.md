@@ -223,11 +223,12 @@ Zusätzlich wird das veröffentlichte Image täglich gescannt, und jede Woche wi
 
 | Grund | Was tun |
 |---|---|
-| Trivy meldet CRITICAL/HIGH | Meist kommt die Korrektur in den nächsten Tagen – nächsten Patchday abwarten oder den Lauf später unter *Actions → Security update → Run workflow* neu starten. Bleibt er rot: Paket gezielt anheben lassen oder den Fund bewerten und mit Begründung und Ablaufdatum in `.trivyignore` eintragen. |
+| Trivy: *temporary exception* (Warnung) | Ein frisch bekannter Fund (HIGH bis 14, CRITICAL bis 7 Tage nach Veröffentlichung) sperrt noch nicht; das Enddatum steht dabei. Nichts zu tun. |
+| Trivy meldet CRITICAL/HIGH | Der Fund ist älter als die befristete Ausnahme. Meist kommt die Korrektur in den nächsten Tagen – nächsten Patchday abwarten oder den Lauf später unter *Actions → Security update → Run workflow* neu starten. Bleibt er rot: Paket gezielt anheben lassen oder den Fund bewerten und mit Begründung und Ablaufdatum in `.trivyignore` eintragen. |
 | *Security update: versions not determinable* / *Build failed* | Meist kurzzeitig eine Quelle nicht erreichbar – Lauf neu starten. Bleibt er rot, prüfen lassen. |
 | *Tests in the image failed* | Eine neue Paketversion passt nicht – prüfen lassen. |
 | Unterbau bald / jetzt anheben | Wechsel auf die nächste Python- bzw. Debian-Version planen und bewusst durchführen (`tools/lock-policy.env`, `tools/update-locks.sh --major`, neue Programmversion). |
-| Täglicher Scan rot | Neue Schwachstelle im veröffentlichten Image – Sicherheitsupdate von Hand starten, sonst wie bei Trivy. |
+| Täglicher Scan rot | Behebbare Schwachstelle im veröffentlichten Image, deren befristete Ausnahme abgelaufen ist – Sicherheitsupdate von Hand starten, sonst wie bei Trivy. |
 
 ### Ausgehende Verbindungen
 
