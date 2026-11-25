@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.7.1",
+    "date": "2026-11-25",
+    "items": [
+      {
+        "type": "notice",
+        "de": "Ein erst kurz bekannter, behebbarer Trivy-Fund (HIGH bis 14, CRITICAL bis 7 Tage) hält eine neue Version nicht mehr auf, solange Debian die Korrektur noch nicht liefert. Er steht als Warnung im Lauf und sperrt nach Ablauf der Frist wieder. Am Programm ändert sich nichts.",
+        "en": "A fixable Trivy finding that became known only recently (HIGH up to 14, CRITICAL up to 7 days) no longer holds up a new version while Debian does not ship the fix yet. It is shown as a warning and blocks again when the period ends. The program does not change."
+      }
+    ]
+  },
+  {
     "version": "2.7.0",
     "date": "2026-11-23",
     "items": [

@@ -7,6 +7,7 @@ end-of-life thresholds and the Trivy gate with a stand-in for trivy."""
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
 import re
 import stat
@@ -373,23 +374,38 @@ class EndOfLife(unittest.TestCase):
 
 
 class TrivyGate(unittest.TestCase):
-    """trivy.sh with a stand-in: exit 3 = fixable HIGH/CRITICAL found, other = scan failure."""
+    """trivy.sh with a stand-in: exit 3 = fixable HIGH/CRITICAL found, other = scan failure.
+    Temporary exception: recently published findings (HIGH 14 days, CRITICAL 7 days) do not block yet."""
 
-    def run_gate(self, gate_rc: int) -> subprocess.CompletedProcess:
+    TODAY = "2026-11-25"
+
+    def run_gate(self, gate_rc: int, vulns=None, strict: bool = False) -> subprocess.CompletedProcess:
+        if vulns is None:
+            vulns = [{"Severity": "HIGH", "PkgName": "demo", "InstalledVersion": "1", "FixedVersion": "2",
+                      "VulnerabilityID": "CVE-0000-1", "PublishedDate": "2026-01-01T10:00:00Z"}]
         tmp = Path(tempfile.mkdtemp())
+        self.tmp = tmp
+        (tmp / "report.json").write_text(json.dumps({"Results": [{"Target": "Python", "Vulnerabilities": vulns}]}))
         fake = tmp / "trivy"
         fake.write_text("#!/bin/sh\n"
                         "case \"$*\" in *--version*) echo 'Version: fake'; exit 0;; esac\n"
                         "case \"$*\" in *--exit-code*) out=''; prev=''\n"
                         "  for a in \"$@\"; do [ \"$prev\" = --output ] && out=\"$a\"; prev=\"$a\"; done\n"
-                        "  printf '%s' '{\"Results\":[{\"Target\":\"Python\",\"Vulnerabilities\":"
-                        "[{\"Severity\":\"HIGH\",\"PkgName\":\"demo\",\"InstalledVersion\":\"1\","
-                        "\"FixedVersion\":\"2\",\"VulnerabilityID\":\"CVE-0000-1\"}]}]}' > \"$out\"\n"
+                        f"  cp '{tmp / 'report.json'}' \"$out\"\n"
                         f"  exit {gate_rc};;\nesac\nexit 0\n")
         fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
-        env = dict(os.environ, TRIVY_BIN=str(fake), RUNNER_TEMP=str(tmp), GITHUB_STEP_SUMMARY=str(tmp / "sum.md"))
+        env = dict(os.environ, TRIVY_BIN=str(fake), RUNNER_TEMP=str(tmp), GITHUB_STEP_SUMMARY=str(tmp / "sum.md"),
+                   TRIVY_TODAY=self.TODAY, TRIVY_STRICT="1" if strict else "")
         return subprocess.run(["bash", str(ROOT / ".github/scripts/trivy.sh"), "image:test"],
                               cwd=ROOT, env=env, capture_output=True, text=True)
+
+    @staticmethod
+    def vuln(sev: str, published: str | None, cve: str = "CVE-2026-1") -> dict:
+        v = {"Severity": sev, "PkgName": "libdemo", "InstalledVersion": "1", "FixedVersion": "2",
+             "VulnerabilityID": cve}
+        if published is not None:
+            v["PublishedDate"] = published + "T08:00:00Z"
+        return v
 
     def test_clean_passes(self):
         self.assertEqual(self.run_gate(0).returncode, 0)
@@ -404,6 +420,54 @@ class TrivyGate(unittest.TestCase):
         r = self.run_gate(1)
         self.assertEqual(r.returncode, 1)
         self.assertIn("scan failed", r.stdout)
+
+    def test_recent_high_gets_temporary_exception(self):
+        r = self.run_gate(3, [self.vuln("HIGH", "2026-11-12")])          # 13 days ago
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("::warning title=Trivy: temporary exception", r.stdout)
+        self.assertIn("exception until 2026-11-26", r.stdout)
+        self.assertNotIn("::error", r.stdout)
+        self.assertIn("Temporary exception", (self.tmp / "sum.md").read_text())
+
+    def test_high_exception_ends_after_14_days(self):
+        self.assertEqual(self.run_gate(3, [self.vuln("HIGH", "2026-11-11")]).returncode, 0)  # last day
+        r = self.run_gate(3, [self.vuln("HIGH", "2026-11-10")])                               # 15 days
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("::error title=Trivy", r.stdout)
+
+    def test_critical_exception_only_7_days(self):
+        self.assertEqual(self.run_gate(3, [self.vuln("CRITICAL", "2026-11-18")]).returncode, 0)
+        self.assertEqual(self.run_gate(3, [self.vuln("CRITICAL", "2026-11-17")]).returncode, 1)
+
+    def test_no_publication_date_never_excepted(self):
+        self.assertEqual(self.run_gate(3, [self.vuln("HIGH", None)]).returncode, 1)
+        self.assertEqual(self.run_gate(3, [self.vuln("HIGH", "garbage")]).returncode, 1)
+
+    def test_future_publication_date_not_excepted(self):
+        self.assertEqual(self.run_gate(3, [self.vuln("HIGH", "2027-01-01")]).returncode, 1)
+
+    def test_one_old_finding_blocks_even_with_recent_ones(self):
+        r = self.run_gate(3, [self.vuln("HIGH", "2026-11-20", "CVE-2026-NEW"),
+                              self.vuln("HIGH", "2026-01-01", "CVE-2026-OLD")])
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("CVE-2026-OLD", r.stdout.split("::error", 1)[1])
+        self.assertNotIn("CVE-2026-NEW", r.stdout.split("::error", 1)[1])
+        self.assertIn("::warning title=Trivy: temporary exception", r.stdout)
+
+    def test_strict_mode_has_no_exception(self):
+        self.assertEqual(self.run_gate(3, [self.vuln("HIGH", "2026-11-24")], strict=True).returncode, 1)
+
+    def test_unreadable_report_blocks(self):
+        r = self.run_gate(3, [])                  # trivy says "found", but nothing in the report
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("scan failed", r.stdout)
+
+    def test_security_update_first_scan_is_strict(self):
+        w = (ROOT / ".github/workflows/security-update.yml").read_text(encoding="utf-8")
+        first = w[w.index("      - id: trivy\n"):w.index("      - id: relock")]
+        self.assertIn("TRIVY_STRICT:", first)
+        second = w[w.index("      - id: trivy2"):]
+        self.assertNotIn("TRIVY_STRICT", second.split("      - name:", 1)[0])
 
     def test_trivy_pinned_by_checksum(self):
         s = (ROOT / ".github/scripts/trivy.sh").read_text(encoding="utf-8")

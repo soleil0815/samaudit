@@ -155,6 +155,9 @@ jobs:
         name: Vulnerability scan (Trivy)
         if: steps.locks.outputs.changed == 'true'
         continue-on-error: true            # fixable findings: try again without cooldown (next steps)
+        env:
+          # no temporary exception here: a fixable finding should first make us try the newest packages
+          TRIVY_STRICT: ${{ (inputs.cooldown_days || '7') != '0' && '1' || '' }}
         run: .github/scripts/trivy.sh samaudit:candidate
       - id: relock
         name: Fixable findings – newest versions without cooldown

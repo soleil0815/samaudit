@@ -4,6 +4,12 @@
 
 Programmversionen. Die monatlichen Sicherheitsupdates am Patchday, dem zweiten Dienstag (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.7.1 – befristete Ausnahme für frische Trivy-Funde
+
+- **Veröffentlichung wartet nicht mehr auf Debian:** Ein behebbarer Fund der Stufe HIGH, der erst bis zu 14 Tage bekannt ist (CRITICAL: 7 Tage), stoppt den Bau nicht mehr. Die Korrektur kommt oft erst Tage später bei Debian oder in unserem festen Paketstand an, und eine neue Programmversion soll deshalb nicht hängen bleiben. Der Fund steht als Warnung mit Enddatum im Lauf; danach sperrt er wieder, und die tägliche Prüfung des veröffentlichten Images wird rot. Ohne Veröffentlichungsdatum oder bei einem fehlgeschlagenen Scan gibt es nie eine Ausnahme.
+- **Sicherheitsupdate unverändert streng:** Es versucht bei einem Fund zuerst die neuesten Pakete ohne Wartefrist und nutzt die Ausnahme erst, wenn es auch damit noch keine Korrektur gibt.
+- Am Programm selbst ändert sich nichts.
+
 ## 2.7.0 – Kerberos
 
 - **Kerberos für DCs ohne Zertifikat:** Bietet der DC weder LDAPS noch StartTLS, meldet sich SAMAUDIT auf Port 389 mit Kerberos an und verschlüsselt die Verbindung („Sign and Seal“, wie die Windows-Verwaltungswerkzeuge). Der DC weist sich dabei aus, und es klappt auch in Domänen ohne NTLM. Voraussetzungen: DC mit DNS-Namen in `DC_HOSTS`, Port 88, Uhrzeit höchstens 5 Minuten abweichend. Neue Einstellung `LDAP_KERBEROS` (Standard: an). Die Kerberos-Einstellungen schreibt SAMAUDIT selbst (nur AES, keine DNS-Suche nach KDCs); Tickets liegen nur im Arbeitsspeicher und werden nach Anmeldung bzw. Prüfung gelöscht.
