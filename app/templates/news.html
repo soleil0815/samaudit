@@ -17,7 +17,7 @@
     <header>
       <h2>v{{ r.version }}</h2>
       {% if r.date %}<span class="muted small">{{ r.date[8:10] ~ '.' ~ r.date[5:7] ~ '.' ~ r.date[:4] if lang == 'de' else r.date }}</span>{% endif %}
-      {% if r.version == VERSION %}<span class="tag-new">{{ t('news_current', lang) }}</span>{% elif r.version in news_new %}<span class="tag-new">{{ t('news_unread', lang) }}</span>{% endif %}
+      {% if r.version == IMAGE_VERSION %}<span class="tag-new">{{ t('news_current', lang) }}</span>{% elif r.version in news_new %}<span class="tag-new">{{ t('news_unread', lang) }}</span>{% endif %}
     </header>
     <ul>
     {% for i in r['items'] %}

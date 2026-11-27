@@ -3,14 +3,16 @@
 """What's new: changes per version (features, security, fixes, notices).
 
 The entries live in app/docs/news.json and ship with every version – nothing is loaded from
-the internet. Which version a browser saw last is stored only in a cookie."""
+the internet. Which version a browser saw last is stored only in a cookie. Security updates
+("<version>-s<n>") get their entry from the security update workflow (tools/lockutil.py add-news)."""
 from __future__ import annotations
 
 import json
 import logging
 import os
+import re
 
-from .version import VERSION
+from .version import IMAGE_VERSION
 
 log = logging.getLogger("samaudit.news")
 
@@ -20,10 +22,9 @@ _PATH = os.path.join(os.path.dirname(__file__), "docs", "news.json")
 
 
 def _vkey(v: str) -> tuple:
-    try:
-        return tuple(int(x) for x in str(v).split("."))
-    except ValueError:
-        return (0,)
+    """"2.7.1" -> (2, 7, 1, 0); security update "2.7.1-s2" -> (2, 7, 1, 2)."""
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-s(\d+))?", str(v or "").strip())
+    return tuple(int(x or 0) for x in m.groups()) if m else (0, 0, 0, 0)
 
 
 def _load() -> list[dict]:
@@ -37,7 +38,7 @@ def _load() -> list[dict]:
     for r in raw if isinstance(raw, list) else []:
         v = str(r.get("version", ""))
         items = [i for i in r.get("items", []) if i.get("type") in TYPES and (i.get("de") or i.get("en"))]
-        if v and items and _vkey(v) <= _vkey(VERSION):     # show nothing from the future
+        if v and items and _vkey(v) <= _vkey(IMAGE_VERSION):   # nothing from the future
             out.append({"version": v, "date": r.get("date") or "", "items": items,
                         "security": any(i["type"] == "security" for i in items)})
     return sorted(out, key=lambda r: _vkey(r["version"]), reverse=True)
@@ -48,11 +49,12 @@ ENTRIES = _load()
 
 def unseen(seen: str | None) -> list[dict]:
     """Entries newer than the version seen last.
-    Without a cookie (first visit) only the current version counts as new."""
+    Without a cookie (first visit) only the current version counts as new. Versions are image versions:
+    a security update ("2.7.1-s1") has its own entry and counts as new after "2.7.1"."""
     if not ENTRIES:
         return []
     if not seen:
-        return ENTRIES[:1] if ENTRIES[0]["version"] == VERSION else []
+        return ENTRIES[:1] if ENTRIES[0]["version"] == IMAGE_VERSION else []
     return [r for r in ENTRIES if _vkey(r["version"]) > _vkey(seen)]
 
 

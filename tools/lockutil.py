@@ -15,6 +15,8 @@ Command line (used by tools/update-locks.sh and the GitHub workflows):
   lockutil.py next-version APP_VERSION TAG...        -> e.g. 1.9.7-s2
   lockutil.py is-highest CANDIDATE TAG...            -> exit 0 if CANDIDATE is the highest version
   lockutil.py diff OLD_DIR NEW_DIR                   -> Markdown table of changed packages ("" if none)
+  lockutil.py add-news OLD_DIR NEW_DIR VERSION DATE NEWS_JSON -> short entry for the security update in the
+                                                        program's news (app/docs/news.json), newest first
   lockutil.py eol PRODUCT NAME DATE_JSON [TODAY]     -> ok / notice / fail for an end-of-life date
   lockutil.py select REQUIREMENTS_TXT NAME...        -> only the blocks (with hashes) of these packages
   lockutil.py without REQUIREMENTS_TXT NAME...       -> the lock file without these packages
@@ -210,8 +212,8 @@ def base_of(dockerfile: str) -> str:
     return m.group(1) if m else ""
 
 
-def diff(old_dir: Path, new_dir: Path) -> str:
-    """Markdown table of changed packages between two checkouts (empty string: nothing changed)."""
+def changed_packages(old_dir: Path, new_dir: Path) -> list[tuple[str, str, str, str]]:
+    """(area, package, before, now) for every changed package between two checkouts."""
     rows = []
     ob, nb = base_of(_read(old_dir / "Dockerfile")), base_of(_read(new_dir / "Dockerfile"))
     if ob != nb:
@@ -222,11 +224,61 @@ def diff(old_dir: Path, new_dir: Path) -> str:
         for name in sorted(set(o) | set(n)):
             if o.get(name) != n.get(name):
                 rows.append((area, name, o.get(name, "–"), n.get(name, "–")))
+    return rows
+
+
+def diff(old_dir: Path, new_dir: Path) -> str:
+    """Markdown table of changed packages between two checkouts (empty string: nothing changed)."""
+    rows = changed_packages(old_dir, new_dir)
     if not rows:
         return ""
     lines = ["| Area | Package | before | now |", "|---|---|---|---|"]
     lines += [f"| {a} | {p} | {o} | {n} |" for a, p, o, n in rows]
     return "\n".join(lines) + "\n"
+
+
+NEWS_MAX_NAMES = 8
+
+
+def news_entry(rows: list[tuple[str, str, str, str]], version: str, date: str) -> dict:
+    """Entry for app/docs/news.json: what a security update changed, in one short line per language."""
+    app = version.split("-s", 1)[0]
+    groups: dict[str, list[str]] = {}
+    for area, name, _old, new in rows:
+        if area == "Base image":
+            groups.setdefault(area, []).append(f"Python {new.split('-', 1)[0]}")
+        else:
+            groups.setdefault(area, []).append(name)
+
+    def names(lang: str) -> str:
+        label = {"Base image": ("Basisimage", "base image"), "Debian": ("Debian", "Debian"),
+                 "Python": ("Python-Pakete", "Python packages")}
+        parts = []
+        for area in ("Base image", "Debian", "Python"):
+            items = sorted(set(groups.get(area, [])))
+            if not items:
+                continue
+            shown, rest = items[:NEWS_MAX_NAMES], len(items) - NEWS_MAX_NAMES
+            more = (f" und {rest} weitere" if lang == "de" else f" and {rest} more") if rest > 0 else ""
+            parts.append(f"{label[area][0 if lang == 'de' else 1]}: {', '.join(shown)}{more}")
+        return "; ".join(parts)
+
+    return {"version": version, "date": date, "items": [{
+        "type": "security",
+        "de": f"Sicherheitsupdate: gleiches Programm ({app}), neuere Pakete – {names('de')}. "
+              "Die einzelnen Versionen stehen in CHANGELOG-SECURITY.md.",
+        "en": f"Security update: same program ({app}), newer packages – {names('en')}. "
+              "The exact versions are listed in CHANGELOG-SECURITY.md.",
+    }]}
+
+
+def add_news(news_path: Path, entry: dict) -> None:
+    """Put the entry at the top of news.json (once per version)."""
+    data = json.loads(news_path.read_text(encoding="utf-8"))
+    if not isinstance(data, list):
+        raise ValueError("news.json must be a list")
+    data = [e for e in data if e.get("version") != entry["version"]]
+    news_path.write_text(json.dumps([entry] + data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def _short(image: str) -> str:
@@ -291,6 +343,12 @@ def main(argv: list[str]) -> int:
             print(line)
     elif cmd == "diff":
         sys.stdout.write(diff(Path(args[0]), Path(args[1])))
+    elif cmd == "add-news":
+        rows = changed_packages(Path(args[0]), Path(args[1]))
+        if not rows:
+            print("no changed packages", file=sys.stderr)
+            return 1
+        add_news(Path(args[4]), news_entry(rows, args[2], args[3]))
     elif cmd in ("select", "without"):
         text = blocks(Path(args[0]).read_text(encoding="utf-8"), args[1:], keep=cmd == "select")
         if cmd == "select" and len(parse_lock(text)) != len(args[1:]):

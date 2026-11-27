@@ -10,7 +10,7 @@
 #      withdrawn within days. If Trivy reports fixable HIGH/CRITICAL, it is resolved again with the newest versions.
 #   2. nothing changed -> stop, nothing is published
 #   3. build without cache, tests inside the image, Trivy (fixable HIGH/CRITICAL blocks)
-#   4. only if everything passed: commit the locks + change log (pushed to main at the end), build and
+#   4. only if everything passed: commit the locks + change log + news entry (pushed to main at the end), build and
 #      check amd64 and arm64 at the same time, each on its own runner (no emulation), publish
 #      <version>-s<n> (and latest if it is the highest version), git tag + GitHub release
 #   A failure publishes nothing; the reason is shown at the run (annotation + summary).
@@ -265,9 +265,11 @@ jobs:
           assert marker in text, "marker missing in CHANGELOG-SECURITY.md"
           p.write_text(text.replace(marker, marker + "\n" + entry, 1), encoding="utf-8")
           PY
+          # short entry under "News" in the program (same packages, one line per language)
+          python3 tools/lockutil.py add-news "$RUNNER_TEMP/old" . "$VERSION" "$(date -u +%Y-%m-%d)" app/docs/news.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Dockerfile requirements.txt requirements-dev.txt requirements-build.txt locks/os-packages.txt CHANGELOG-SECURITY.md
+          git add Dockerfile requirements.txt requirements-dev.txt requirements-build.txt locks/os-packages.txt CHANGELOG-SECURITY.md app/docs/news.json
           git commit -q -m "Security update $VERSION: updated packages" -m "Same program, newer package versions (see CHANGELOG-SECURITY.md)."
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Hand over the commit (exactly this commit is built on both platforms and pushed later)

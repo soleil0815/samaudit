@@ -4,6 +4,11 @@
 
 Program versions. Monthly security updates on patch day, the second Tuesday (same program, new package versions only) are listed in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md) (German).
 
+## 2.7.2 – security updates under News
+
+- **Own entry for every security update:** **News** now also lists a security update (e.g. `v2.7.2-s1`) with the changed packages – base image, Debian, Python. It is marked as unread like a new version and shown at the top of the overview. The exact versions are still listed in `CHANGELOG-SECURITY.md`. The security update on GitHub writes the entry itself.
+- The hint "this version is older than …" counts from the security update's date.
+
 ## 2.7.1 – temporary exception for new Trivy findings
 
 - **Releases no longer wait for Debian:** a fixable HIGH finding that has been known for at most 14 days (CRITICAL: 7 days) no longer stops the build. The fix often reaches Debian or our pinned package state only days later, and a new program version should not get stuck because of that. The finding is shown as a warning with its end date; afterwards it blocks again and the daily check of the published image turns red. Without a publication date or with a failed scan there is never an exception.

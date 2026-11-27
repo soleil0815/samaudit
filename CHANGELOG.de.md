@@ -4,6 +4,11 @@
 
 Programmversionen. Die monatlichen Sicherheitsupdates am Patchday, dem zweiten Dienstag (gleiches Programm, nur neue Paketstände) stehen in [CHANGELOG-SECURITY.md](CHANGELOG-SECURITY.md).
 
+## 2.7.2 – Sicherheitsupdates unter Neuigkeiten
+
+- **Eigener Eintrag für jedes Sicherheitsupdate:** Unter **Neuigkeiten** erscheint jetzt auch ein Sicherheitsupdate (z. B. `v2.7.2-s1`) mit den geänderten Paketen – Basisimage, Debian, Python. Er wird wie eine neue Version als ungelesen markiert und oben auf der Übersicht angezeigt. Die genauen Versionen stehen weiterhin in `CHANGELOG-SECURITY.md`. Den Eintrag schreibt das Sicherheitsupdate auf GitHub selbst.
+- Der Hinweis „Diese Version ist älter als …“ zählt bei einem Sicherheitsupdate ab dessen Datum.
+
 ## 2.7.1 – befristete Ausnahme für frische Trivy-Funde
 
 - **Veröffentlichung wartet nicht mehr auf Debian:** Ein behebbarer Fund der Stufe HIGH, der erst bis zu 14 Tage bekannt ist (CRITICAL: 7 Tage), stoppt den Bau nicht mehr. Die Korrektur kommt oft erst Tage später bei Debian oder in unserem festen Paketstand an, und eine neue Programmversion soll deshalb nicht hängen bleiben. Der Fund steht als Warnung mit Enddatum im Lauf; danach sperrt er wieder, und die tägliche Prüfung des veröffentlichten Images wird rot. Ohne Veröffentlichungsdatum oder bei einem fehlgeschlagenen Scan gibt es nie eine Ausnahme.
