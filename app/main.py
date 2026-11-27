@@ -506,7 +506,7 @@ async def privacy_page(request: Request):
 
 def _mark_news_seen(resp: Response) -> Response:
     from . import news
-    resp.set_cookie(news.COOKIE, VERSION, max_age=365 * 86400, samesite="lax", secure=settings.cookie_secure,
+    resp.set_cookie(news.COOKIE, IMAGE_VERSION, max_age=365 * 86400, samesite="lax", secure=settings.cookie_secure,
                     httponly=True)
     return resp
 

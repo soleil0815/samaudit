@@ -1,5 +1,16 @@
 [
   {
+    "version": "2.7.2",
+    "date": "2026-11-27",
+    "items": [
+      {
+        "type": "feature",
+        "de": "Sicherheitsupdates (z. B. 2.7.2-s1) erscheinen jetzt auch hier unter Neuigkeiten – mit den geänderten Paketen und als ungelesen markiert. Die genauen Versionen stehen in CHANGELOG-SECURITY.md.",
+        "en": "Security updates (e.g. 2.7.2-s1) now also appear here under News – with the changed packages and marked as unread. The exact versions are listed in CHANGELOG-SECURITY.md."
+      }
+    ]
+  },
+  {
     "version": "2.7.1",
     "date": "2026-11-25",
     "items": [

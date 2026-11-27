@@ -161,13 +161,15 @@ def set_state(**kw) -> None:
 # --- what the overview shows -----------------------------------------------------
 
 def release_date() -> date | None:
+    """Date of the running image: the security update's entry if there is one, else the program version's."""
     from . import news
-    for r in news.ENTRIES:
-        if r["version"] == VERSION:
-            try:
-                return date.fromisoformat(r["date"])
-            except ValueError:
-                return None
+    for wanted in dict.fromkeys((IMAGE_VERSION, VERSION)):
+        for r in news.ENTRIES:
+            if r["version"] == wanted:
+                try:
+                    return date.fromisoformat(r["date"])
+                except ValueError:
+                    return None
     return None
 
 

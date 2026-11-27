@@ -50,7 +50,7 @@ FROM ${PYTHON_IMAGE}
 
 ARG DEBIAN_SNAPSHOT
 ARG DEBIAN_CODENAME
-ARG APP_VERSION=2.7.1
+ARG APP_VERSION=2.7.2
 # version of this image: program version, or "<program version>-s<n>" for a security update
 ARG IMAGE_VERSION=
 LABEL org.opencontainers.image.title="SAMAUDIT" \

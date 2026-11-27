@@ -213,7 +213,7 @@ Or in one step: `sh update.sh --restore --version=2.0.0`.
 
 ### Security updates and versions
 
-Every component of the image has a pinned version: the base image (Debian 13 "trixie", Python 3.13) with its checksum, the Debian packages and the Python packages. Early on patch day – the second Tuesday of every month – GitHub checks whether there are newer packages within this base. If so, it rebuilds without cache, tests inside the image and scans with Trivy. Only if everything passes is a security update published with the version `<version>-s<n>`, e.g. `2.0.0-s1`, and as `latest`. The changed packages are listed in `CHANGELOG-SECURITY.md`. If there is nothing new, nothing happens. The running version is shown bottom left and at `/healthz` (field `image`).
+Every component of the image has a pinned version: the base image (Debian 13 "trixie", Python 3.13) with its checksum, the Debian packages and the Python packages. Early on patch day – the second Tuesday of every month – GitHub checks whether there are newer packages within this base. If so, it rebuilds without cache, tests inside the image and scans with Trivy. Only if everything passes is a security update published with the version `<version>-s<n>`, e.g. `2.0.0-s1`, and as `latest`. **News** gets its own entry for it (e.g. "v2.0.0-s1") naming the changed packages, marked as unread like a new version; the exact versions are listed in `CHANGELOG-SECURITY.md`. If there is nothing new, nothing happens. The running version is shown bottom left and at `/healthz` (field `image`).
 
 Anyone using `latest` (container manager or `docker compose pull && docker compose up -d`) gets the update. To stay on a version, specify it explicitly.
 
